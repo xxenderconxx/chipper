@@ -1,5 +1,0 @@
-include<"core/core.stanza">
-include<"core/verse.stanza">
-include<"compiler/stanza-support.stanza">
-include("mj/mj-macros.stanza")
-include<"compiler/stanzamain.stanza">
