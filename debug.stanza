@@ -1,14 +1,14 @@
 include<"core/core.stanza">
 include<"core/verse.stanza">
-include("mj/mj-ir.stanza")
-include("mj/construct.stanza")
-include-syntax(mjolnir)
+include("ch/ch-ir.stanza")
+include("ch/ch-construct.stanza")
+include-syntax(chipper)
 
 defpackage debug :
    import core
    import verse
-   import mjolnir.mj-ir
-   import mjolnir.construct
+   import chipper.ir
+   import chipper.construct
 
 defmodule Adder (w:Int) :
    input a: IntT(w)
@@ -39,7 +39,7 @@ defmodule BigAdder (w:Int) :
 
    val operands = [a(this) b(this) c(this) d(this)
                    e(this) f(this) g(this) h(this)]
-   var accum:IntT = MInt(0)
+   var accum:IntT = CInt(0)
    for x in operands do :
       accum = accum + x
 
@@ -63,9 +63,9 @@ defmodule BigAdder (w:Int) :
 
    register temp2: IntT()
    when reset :
-      temp2 := MInt(1)
+      temp2 := CInt(1)
    when en(this) :
-      temp2 := MInt(10)
+      temp2 := CInt(10)
 
    z(this) := temp
    when en(this) :
@@ -80,7 +80,7 @@ defmodule Top () :
    b(adder) := a(this)
    c(adder) := a(this)
    d(adder) := a(this)
-   en(adder) := MInt(1)
+   en(adder) := CInt(1)
    z(this) := z(adder)
 
 defn main () :

@@ -1,0 +1,371 @@
+defpackage chipper.macros :
+   import core
+   import verse
+   import stanza.macroexpander
+   import stanza.token-eater
+   import stanza.parser
+   import stanza.core-macros
+
+val MJ-EXPANDER = MacroExpander([])
+defn new-macro (f: (List) -> List, priority:Int, pattern) -> Nil :
+   add(MJ-EXPANDER, Macro(priority, pattern, f))
+defn new-mask (priority:Int, pattern) -> Nil :
+   add(MJ-EXPANDER, Mask(priority, pattern))
+new-overlay('chipper, MJ-EXPANDER)
+
+;============== DEFMODULE MACRO ============================
+;Syntax:
+;   defmodule Adder (w:Int) :
+;      input a : IntT(w)
+;      input b : IntT(w)
+;      output z : IntT(w + 1)
+;      z(this) := a(this) + b(this)
+;Expands to:
+;   defclass Adder 
+;   defmulti a (a:Adder) -> IntT
+;   defmulti b (a:Adder) -> IntT
+;   defmulti z (a:Adder) -> IntT
+;
+;   defn Adder (name:Symbol, w:Int) :
+;      val build.a = IntT(w)
+;      val build.b = IntT(w)
+;      val build.z = IntT(w + 1)
+;      defn instance (ref:Immediate) :
+;         new Adder :
+;            defmethod a (this) : handle(build.a, Field(ref, 'a))
+;            defmethod b (this) : handle(build.b, Field(ref, 'b))
+;            defmethod z (this) : handle(build.z, Field(ref, 'z))
+;      defn module () :
+;         val ports = [
+;            Port('a, INPUT, type(build.a))
+;            Port('b, INPUT, type(build.b))
+;            Port('z, OUTPUT, type(build.z))]
+;         make-module{'Adder, ports, _} $ fn () :
+;            val this = instance(Ref('this))
+;            connect(z(this), a(this) + b(this))
+;      instance(make-instance(name, module()))
+
+new-macro{_, 0, '(defmodule)} $ fn (tokens) :
+   ;== Macro Parsing ==
+   val eater = TokenEater(tail(tokens))
+   val [name targs] = let :
+      val form = eat(eater)
+      if matches-pattern?(form, '(@of \N)) :
+         val form = unwrap-token(form)
+         [form[1] tailn(form, 2)]
+      else :
+         [form '()]
+   val args = eat-list(eater)
+   eat(eater, ':)
+   val port-dirs = Vector<Symbol>()
+   val port-names = Vector<?>()
+   val port-builders = Vector<?>()
+   val body = let :
+      val eater = TokenEater(eat-list(eater))
+      while match?(eater, '(input)) or match?(eater, '(output)) :
+         add(port-dirs, eat(eater, '(input output)))
+         add(port-names, eat-symbol(eater))
+         eat(eater, ':)
+         add(port-builders, eat(eater))
+      remaining(eater)
+   val rest = remaining(eater)
+
+   ;== Extractors ==
+   defn get-port-type (builder) :
+      if matches-pattern?(builder, '(@do \N)) : unwrap-token(builder)[1]
+      else : builder
+   defn get-port-dir (dir) :
+      switch {_ == dir} :
+         'input : 'INPUT
+         'output : 'OUTPUT
+
+   ;== Make form ==
+   val template = '(
+      defclass Name<Targs>
+      multis{defmulti port<Cargs> (x:Name<Cargs>) -> port-type}
+      defn Name<Cargs> (targs{Targ : HBuilder<?Targ>}, args...) :
+         new ModuleBuilder<Name<Targs>> :
+            defmethod handle (this, #name:Symbol) :
+               builders{val builder = builder-exp}
+               defn #instance (#ref:Immediate) :
+                  new Name<Targs> :
+                     methods{defmethod port (this) : handle(builder, Field(#ref, 'port))}
+               defn #module () :
+                  val #ports = [
+                     ports{Port('port, dir, type(builder))}]
+                  make-module{'Name, #ports, _} $ fn () :
+                     val this = #instance(Ref('this))
+                     val reset = handle(IntT(), Ref('reset))
+                     body
+               #instance(make-instance(#name, #module()))         
+   )
+   val cargs = map(list{'@cap, _}, targs)
+   val builders = map(gensym{}, port-names)
+   val filled = fill-template(template, [
+      'Name => name
+      'Targs => splice(targs)
+      'Cargs => splice(cargs)
+      'multis => collect $ [
+         'port => port-names
+         'port-type => stream(get-port-type, port-builders)]
+      '#name => gensym()
+      'args... => splice(args)
+      'targs => collect $ [
+         'Targ => targs]
+      'builders => collect $ [
+         'builder => builders
+         'builder-exp => port-builders]
+      '#instance => gensym()
+      '#ref => gensym()
+      'methods => collect $ [
+         'port => port-names
+         'builder => builders]
+      '#module => gensym()
+      '#ports => gensym()
+      'ports => collect $ [
+         'port => port-names
+         'dir => stream(get-port-dir, port-dirs)
+         'builder => builders]
+      'body => body])
+
+   ;== Result ==
+   List(filled, rest)
+
+      
+
+;============== DEFBUNDLE MACRO ============================
+;Syntax:
+;   defbundle DecoupledT<T> (w:Int) :
+;      input data: T
+;      input valid: IntT(w)
+;      output ready: IntT(w)
+;Expands to:
+;   defclass Decoupled<T> <: Handle
+;   defmulti data<?T> (x:Decoupled<?T>) -> T
+;   defmulti valid<?T> (x:Decoupled<?T>) -> IntT
+;   defmulti ready<?T> (x:Decoupled<?T>) -> IntT
+;
+;   public defn connect<?T> (h1:Decoupled<?T>, h2:Decoupled<T>) :
+;      connect-handles(h1, h2)
+;
+;   defn Decoupled<?T> (T: HBuilder<?T>, w:Int) :
+;      val builder.data = T
+;      val builder.valid = IntT(w)
+;      val builder.ready = IntT(w)
+;      new HBuilder<Decoupled<T>> :
+;         defmethod handle (this, ref:Immediate) :
+;            new Decoupled<T> :
+;               defmethod immediate (this) : ref
+;               defmethod data (this) : handle(builder.data, Field(ref, 'data))
+;               defmethod valid (this) : handle(builder.valid, Field(ref, 'valid))
+;               defmethod ready (this) : handle(builder.ready, Field(ref, 'ready))
+;         defmethod type (this) :
+;            BundleType{to-list(_)} $ [
+;               Port('data, INPUT, type(builder.data))
+;               Port('valid, INPUT, type(builder.valid))
+;               Port('ready, OUTPUT, type(builder.ready))]
+
+new-macro{_, 0, '(defbundle)} $ fn (tokens) :
+   ;== Macro Parsing ==
+   val eater = TokenEater(tail(tokens))
+   val [name targs] = let :
+      val form = eat(eater)
+      if matches-pattern?(form, '(@of \N)) :
+         val form = unwrap-token(form)
+         [form[1] tailn(form, 2)]
+      else :
+         [form '()]
+   val args = eat-list(eater)
+   eat(eater, ':)
+   val port-dirs = Vector<Symbol>()
+   val port-names = Vector<?>()
+   val port-builders = Vector<?>()
+   let :
+      val eater = TokenEater(eat-list(eater))
+      while match?(eater, '(input)) or match?(eater, '(output)) :
+         add(port-dirs, eat(eater, '(input output)))
+         add(port-names, eat-symbol(eater))
+         eat(eater, ':)
+         add(port-builders, eat(eater))
+   val rest = remaining(eater)
+
+   ;== Extractors ==
+   defn get-port-type (builder) :
+      if matches-pattern?(builder, '(@do \N)) : unwrap-token(builder)[1]
+      else : builder
+   defn get-port-dir (dir) :
+      switch {_ == dir} :
+         'input : 'INPUT
+         'output : 'OUTPUT
+
+   ;== Make form ==
+   val template = '(
+      defclass Name<Targs> <: Handle
+      multis{defmulti port<Cargs> (x:Name<Cargs>) -> port-type}
+      defn connect<Cargs> (h1:Name<Cargs>, h2:Name<Targs>) :
+         connect-handles(h1, h2)
+      defn Name<Cargs> (targs{Targ : HBuilder<?Targ>}, args...) :
+         builders{val builder = builder-exp}
+         new HBuilder<Name<Targs>> :
+            defmethod handle (this, #ref:Immediate) :
+               new Name<Targs> :
+                  defmethod immediate (this) : #ref
+                  methods{defmethod port (this) : handle(builder, Field(#ref, 'port))}
+            defmethod type (this) :
+               BundleType{to-list(_)} $ [
+                  ports{Port('port, dir, type(builder))}]
+   )
+   val cargs = map(list{'@cap, _}, targs)
+   val builders = map(gensym{}, port-names)
+   val filled = fill-template(template, [
+      'Name => name
+      'Targs => splice(targs)
+      'Cargs => splice(cargs)
+      'multis => collect $ [
+         'port => port-names
+         'port-type => stream(get-port-type, port-builders)]
+      'args... => splice(args)
+      'targs => collect $ [
+         'Targ => targs]
+      'builders => collect $ [
+         'builder => builders
+         'builder-exp => port-builders]
+      '#ref => gensym()   
+      'methods => collect $ [
+         'port => port-names
+         'builder => builders]
+      'ports => collect $ [
+         'port => port-names
+         'dir => stream(get-port-dir, port-dirs)
+         'builder => builders]])
+   
+   List(filled, rest)
+
+
+
+;=============== CONNECT MACRO ==============================
+new-macro{_, 0, '(\N :=)} $ fn (tokens) :
+   val eater = TokenEater(tokens)
+   val x = eat(eater)
+   eat(eater, ':=)
+   val y = parse-next!(eater)
+   fill-template('(connect(x, y) rest), [
+      'x => x
+      'y => y
+      'rest => remaining(eater)])
+
+
+;================ WIRE MACRO ================================
+new-macro{_, 0, '(wire)} $ fn (tokens) :
+   val eater = TokenEater(tail(tokens))
+   val name = eat-symbol(eater)
+   eat(eater, ':)
+   val type = eat(eater)
+   val value = 
+      if match?(eater, '(=)) :
+         eat(eater, '=)
+         parse-next!(eater)
+         
+   val template = '(
+      val name = make-wire('name, builder, value)
+      rest)
+   fill-template(template, [
+      'name => name
+      'builder => type
+      'value => value
+      'rest => remaining(eater)])      
+
+;================ REGISTER MACRO ===========================
+new-macro{_, 0, '(register)} $ fn (tokens) :
+   val eater = TokenEater(tail(tokens))
+   val name = eat-symbol(eater)
+   eat(eater, ':)
+   val type = eat(eater)
+   val value = 
+      if match?(eater, '(=)) :
+         eat(eater, '=)
+         parse-next!(eater)
+         
+   val template = '(
+      val name = make-register('name, builder, value)
+      rest)
+   fill-template(template, [
+      'name => name
+      'builder => type
+      'value => value
+      'rest => remaining(eater)])
+
+;================= INSTANCE MACRO ===========================
+new-macro{_, 0, '(instance)} $ fn (tokens) :
+   val eater = TokenEater(tail(tokens))
+   val name = eat-symbol(eater)
+   eat(eater, ':)
+   val module = parse-next!(eater)
+   val template = '(
+      val name = handle(module, 'name)
+      rest)
+   fill-template(template, [
+      'module => module
+      'name => name
+      'rest => remaining(eater)])
+
+
+;=============== WHEN MACRO =================================
+new-mask(0, '(\N when))
+new-macro{_, 0, '(when)} $ fn (tokens) :
+   val eater = TokenEater(tail(tokens))
+   val pred = parse-next!(eater)
+   eat(eater, ':)
+   val conseq = parse-next!(eater)
+   val alt = 
+      if match?(eater, '(else)) :
+         eat(eater, 'else)
+         eat(eater, ':) when not match?(eater, '(when))
+         parse-next!(eater)
+   val template = '(
+      conditionally(pred,
+         fn () : conseq
+         fn () : alt))
+   val filled = fill-template(template, [
+      'pred => pred
+      'conseq => conseq
+      'alt => alt])
+
+   List(filled, remaining(eater))
+
+
+;================ CONCAT OPERATOR ===========================
+defn right-assoc-operator (op:Symbol, func:Symbol, level:Int) :
+   Macro{level, list(nil, op), _} $ fn (tokens) :
+      val eater = TokenEater(tokens)
+      val a = eat(eater)
+      eat(eater, op)
+      val b = parse-next!(level + 1, eater)
+      fill-template('(op(a, b), rest), [
+         'op => func
+         'a => a
+         'b => b
+         'rest => splice(remaining(eater))])
+         
+add(MJ-EXPANDER, right-assoc-operator('#, 'bit-concat, FACTOR-LEVEL))
+add(MJ-EXPANDER, right-assoc-operator('EQV, 'bit-equal?, EXP-LEVEL))
+
+;================= CIRCUIT ==================================
+new-macro{_, 0, '(circuit)} $ fn (tokens) :
+   val eater = TokenEater(tail(tokens))
+   val name = eat-symbol(eater)
+   eat(eater, ':)
+   val module = parse-next!(eater)
+   val template = '(
+      val name = make-circuit(handle{module, gensym()})
+      rest)
+   fill-template(template, [
+      'name => name
+      'module => module
+      'rest => remaining(eater)])
+
+
+
+
+
+

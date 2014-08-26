@@ -1,0 +1,90 @@
+== Implementation List for Mjolnir ==
+- Check that there are no duplicate names in each scope.
+  - Every module must have a unique name.
+  - Every object defined within a module must have a unique name.
+
+- Check that each reference resolves to an object.
+  - Every Ref in a module must refer to an object defined on a
+    preceding line in the same module.
+  - Every instance must refer to an existing module.
+  - The top-level module refered to by the circuit must exist.
+
+- Check that the circuit is well-formed.
+  - Ensure every command is of the proper family.
+    - Ensure we do not use a memory/vector in a field immediate.
+    - Ensure we do not use a memory in a connect statement.
+    - Ensure we do not use an instance in a connect statement.
+    - Ensure we do not use a vector in a connect statement.
+    - Cannot assign to wires outside your own module.
+  
+- Calculate type of every Immediate.
+  - Carry the environment around, and compute the type of every
+    Immediate in every module.
+  - After this operation, every Immediate will be either an IntType,
+    or SIntType, or BundleType.
+  
+- Typecheck all commands and operations.
+  - All Fields must refer to either:
+    - the port of an instance.
+    - or the field of a bundle.
+  - All primitive operations must be called on arguments of the
+    appropriate type.
+  - All wires/registers/vectors must be initialized with an immediate
+    of the appropriate type.
+  - All connections must be between ports of the same type, and with
+    the proper directions.
+  - All accessor indices must be of the proper type.
+  - All condition predicates must of the proper type.
+  
+- Infer directions for all accessors.
+  - Accessor directions when created are initialized to UNKNOWN-DIR.
+  - By looking at Connect commands, we can tell whether they are read
+    or write ports.
+  
+- Infer all widths.
+  - Infer all unknown widths for all types in all immediates.
+  
+- Widthcheck all commands and operations.
+  - Check that connections are between proper widths.
+  - Check that condition predicates are single bits.
+  - Check that accessor indices are the proper widths.
+  - Check that primitive operations are the proper widths.
+
+- Collapse equivalent modules.
+  - Modules with equivalent connections, types, and widths should be
+    collapsed into the same module.
+  - Instances should be updated to refer to the new module.
+
+- Flatten all bundles.
+  - Bundles should be erased at this point.
+  - All ports will be solitary ports.
+  - Names and Directions should be expanded appropriately.
+  
+- Ensure all wires have covering assignments.
+  - All wires and ports must be guaranteed to have a value.
+  - Wires and ports cannot be assigned twice in the same scope.
+  
+- Convert reset from an implicit to explicit parameter.
+  - Make the reset line explicit. Add a reset port to every module,
+    and pass the reset signal to every instantiated child component.
+  
+- Convert whens to multiplexors
+  - Remove the when statements at this point by converting them to
+    explicit multiplexors.
+  
+- Convert vecs to multiplexors
+  - Remove vectors at this point by converting them to explicit
+    multiplexors.
+  
+- Convert signed arithmetic to signed operators on unsigned arithmetic.
+  - Remove signed types at this point by converting them to unsigned
+    arithmetic but using the appropriate signed operators.
+  
+- Ensure we do not exceed maximum number of accessors per object.
+  - Check that for each memory/vec we do not exceed the maximum number
+    of read and write ports.
+  
+- Generate Verilog!
+
+== Other ==
+- High Level IR reader from file.
