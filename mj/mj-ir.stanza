@@ -1,0 +1,287 @@
+defpackage mjolnir.mj-ir :
+   import core
+   import verse
+
+;========= Mjolnir Direction ===========
+public definterface Direction
+public val INPUT = new Direction
+public val OUTPUT = new Direction
+public val UNKNOWN-DIR = new Direction
+
+;========== Mjolnir Width ==============
+public definterface Width
+public defstruct UnknownWidth <: Width : ()
+public defstruct IntWidth <: Width :
+   value: Int
+
+;========= Mjolnir Primop ==============
+public definterface PrimOp
+public val ADD-OP = new PrimOp
+public val MINUS-OP = new PrimOp
+public val TIMES-OP = new PrimOp
+public val DIVIDE-OP = new PrimOp
+public val MOD-OP = new PrimOp
+public val SHIFT-LEFT-OP = new PrimOp
+public val SHIFT-RIGHT-OP = new PrimOp
+public val BIT-AND-OP = new PrimOp
+public val BIT-OR-OP = new PrimOp
+public val BIT-XOR-OP = new PrimOp
+public val CONCAT-OP = new PrimOp
+public val BIT-SELECT-OP = new PrimOp
+
+public val LESS-OP = new PrimOp
+public val LESS-EQ-OP = new PrimOp
+public val GREATER-OP = new PrimOp
+public val GREATER-EQ-OP = new PrimOp
+public val EQUAL-OP = new PrimOp
+public val MULTIPLEX-OP = new PrimOp
+
+;========= Mjolnir Immediate ===========
+public definterface Immediate
+public defmulti type (imm:Immediate) -> Type
+
+public defstruct Ref <: Immediate :
+   name: Symbol
+   type: Type [multi => \N]
+public defn Ref (name:Symbol) :
+   Ref(name, UnknownType())
+   
+public defstruct Field <: Immediate :
+   imm: Immediate
+   name: Symbol
+   type: Type [multi => \N]
+public defn Field (imm:Immediate, name:Symbol) :
+   Field(imm, name, UnknownType())
+
+;========== Mjolnir Port ===============
+public defstruct Port :
+   name: Symbol
+   direction: Direction
+   type: Type
+
+;========== Mjolnir Type ===============
+public definterface Type 
+
+public defstruct UnknownType <: Type : ()
+
+public defstruct IntType <: Type :
+   width: Width 
+
+public defstruct SIntType <: Type :
+   width: Width
+   
+public defstruct BundleType <: Type :
+   ports: List<Port>
+
+;========== Mjolnir Command ============
+public definterface Command
+
+public defstruct DefInt <: Command :
+   name: Symbol
+   value: Int
+public defstruct DefSInt <: Command :
+   name: Symbol
+   value: Int
+public defstruct DoPrim <: Command :
+   name: Symbol
+   op: PrimOp
+   args: List<Immediate>
+public defstruct DefWire <: Command :
+   name: Symbol
+   type: Type
+   value: Nil|Immediate
+public defstruct DefRegister <: Command :
+   name: Symbol
+   type: Type
+   value: Nil|Immediate
+public defstruct DefInstance <: Command :
+   name: Symbol
+   module: Symbol
+public defstruct DefMemory <: Command :
+   name: Symbol
+   type: Type
+   size: Int
+public defstruct DefVector <: Command :
+   name: Symbol
+   type: Type
+   args: List<Immediate>
+public defstruct DefAccessor <: Command :
+   name: Symbol
+   direction: Direction
+   index: Immediate   
+public defstruct Conditionally <: Command :
+   pred: Immediate
+   conseq: Command
+   alt: Command
+public defstruct Begin <: Command :
+   body: List<Command>
+public defstruct Connect <: Command :
+   loc: Immediate
+   exp: Immediate
+public defstruct EmptyCommand <: Command : ()
+
+;========== Mjolnir Module =============
+public defstruct Module :
+   name: Symbol
+   ports: List<Port>
+   body: Command
+
+;========== Mjolnir Circuit ============
+public defstruct Circuit :
+   modules: List<Module>
+   main: Symbol
+
+
+;========== Indentation ================
+defn IndentedStream (o:OutputStream, n:Int) :
+   var indent? = true
+   defn put (c:Char) :
+      if indent? :
+         do(print{o, " "}, 0 to n)
+         indent? = nil
+      print(o, c)
+      if c == \"\n" :
+         indent? = true
+      
+   new OutputStream :
+      defmethod print (this, s:String) : do(put, s)
+      defmethod print (this, c:Char) : put(c)
+   
+defn indented (o:OutputStream, f: () -> ?) :
+   val prev-stream = CURRENT-OUTPUT-STREAM
+   dynamic-wind(
+      fn () : CURRENT-OUTPUT-STREAM = IndentedStream(o, 3)
+      f
+      fn (f) : CURRENT-OUTPUT-STREAM = prev-stream)
+
+
+;========== Mappers and Walkers ========
+public defn map (f: (Command) -> Command, c: Command) -> Command :
+   match(c) :
+      (c:Begin) :
+         Begin(map(f, body(c)))
+      (c:Conditionally) :
+         Conditionally(pred(c), f(conseq(c)), f(alt(c)))
+      (c) :
+         c
+
+public defn children (c: Command) -> Streamable<Command> :
+   match(c) :
+      (c:Begin) : body(c)
+      (c:Conditionally) : [conseq(c) alt(c)]
+      (c) : []
+
+public defn map (f: (Command) -> Command, m: Module) :
+   Module(name(m), ports(m), f(body(m)))
+
+public defn map (f: (Module) -> Module, c: Circuit) :
+   Circuit(map(f, modules(c)), main(c))      
+
+public defn map (f: (Type) -> Type, t: Type) -> Type :
+   match(t) :
+      (t:BundleType) :
+         BundleType $
+         for p in ports(t) map :
+            Port(name(p), direction(p), f(type(p)))
+      (t) :
+         t
+
+;========== Printing ===================
+defmethod print (o:OutputStream, d:Direction) :
+   print{o, _} $
+   switch {d == _} :
+      INPUT : "input"
+      OUTPUT : "output"
+      UNKNOWN-DIR : "?"
+
+defmethod print (o:OutputStream, w:Width) :
+   print{o, _} $
+   match(w) :
+      (w:UnknownWidth) : "?"
+      (w:IntWidth) : value(w)
+
+defmethod print (o:OutputStream, op:PrimOp) :
+   print{o, _} $
+   switch {op == _} :
+      ADD-OP : "Add"
+      MINUS-OP : "Minus"
+      TIMES-OP : "Times"
+      DIVIDE-OP : "Divide"
+      MOD-OP : "Mod"
+      SHIFT-LEFT-OP : "ShiftLeft"
+      SHIFT-RIGHT-OP : "ShiftRight"
+      BIT-AND-OP : "BitAnd"
+      BIT-OR-OP : "BitOr"
+      BIT-XOR-OP : "BitXor"
+      CONCAT-OP : "Concat"
+      BIT-SELECT-OP : "Select"
+      LESS-OP : "Less"
+      LESS-EQ-OP : "LessEq"
+      GREATER-OP : "Greater"
+      GREATER-EQ-OP : "GreaterEq"
+      EQUAL-OP : "Equal"
+      MULTIPLEX-OP : "Multiplex"
+
+defmethod print (o:OutputStream, i:Immediate) :
+   match(i) :
+      (r:Ref) : print(o, name(r))
+      (f:Field) : print-all(o, [imm(f) "." name(f)])
+
+defmethod print (o:OutputStream, t:Type) :
+   match(t) :
+      (t:UnknownType) :
+         print(o, "?")
+      (t:IntType) :
+         print-all(o, ["Int(" width(t) ")"])
+      (t:BundleType) :
+         print(o, "{")
+         print-all(o, join(ports(t), ", "))
+         print(o, "}")
+
+defmethod print (o:OutputStream, p:Port) :
+   print-all(o, [direction(p) " " name(p) " : " type(p)])
+      
+defmethod print (o:OutputStream, c:Command) :
+   match(c) :
+      (c:DefInt) :
+         print-all(o, ["node " name(c) " = " value(c)])
+      (c:DoPrim) :
+         print-all(o, ["node " name(c) " = " op(c) "("])
+         print-all(o, join(args(c), ", "))
+         print(o, ")")         
+      (c:DefWire) :
+         print-all(o, ["wire " name(c) " : " type(c)])
+         print-all(o, [" = " value(c)]) when value(c)
+      (c:DefRegister) :
+         print-all(o, ["register " name(c) " : " type(c)])
+         print-all(o, [" = " value(c)]) when value(c)
+      (c:DefInstance) :
+         print-all(o, ["instance " name(c) " of " module(c)])
+      (c:Connect) :
+         print-all(o, [loc(c) " := " exp(c)])
+      (c:Conditionally) :
+         println-all(o, ["when " pred(c) " :"])
+         indented(o, print{conseq(c)})
+         if alt(c) not-typeof EmptyCommand :
+            println(o, "\nelse :")
+            indented(o, print{alt(c)})
+      (c:Begin) :
+         do(print, join(body(c), "\n"))
+      (c:EmptyCommand) :
+         print(o, "skip")
+
+defmethod print (o:OutputStream, m:Module) :
+   println-all(o, ["module " name(m) " :"])
+   indented{o, _} $ fn () :
+      do(println, ports(m))
+      print(body(m))
+
+defmethod print (o:OutputStream, c:Circuit) :
+   println-all(o, ["circuit " main(c) " :"])
+   indented(o, do{println, modules(c)})
+
+
+
+
+
+

@@ -1,0 +1,51 @@
+Expression e =
+   | Int(value)
+   | Primop(op, e ...)
+   | Ref(name)
+   | Field(e, name)
+   | {a: e1, b: e2, ...}
+   
+Command c =
+   | Conditionally(e, c)
+   | Begin(c ...)
+   | Connect(loc, e)
+   | Def(name, o)
+
+Object o =
+   | Wire(name, t, e?)
+   | Reg(name, t, e)
+   | Instance(name, module)
+   | Port(name, direction, type)
+
+Location loc =
+   | Ref(name)
+   | Field(loc, name)
+   | {a: loc, b: loc, ...}
+
+Module m = Module(name, p ..., c)
+   
+Type t =
+   | Int(w)
+   | {a: t1, b: t2}
+
+
+========================================
+
+module mymodule :
+   a: port
+   b: port
+body :
+   a := 40
+   b := 30
+   wire c = a + b
+   inst b = Adder
+   a.c := b.d.e
+   a.e := b.d.f
+
+
+========= Construction Handles =========
+wire x : type = MInt(11)
+when x < MInt(42) :
+   reg y : type = MInt(10)
+   reg y : Decoupled = MInt(10)
+   MInt(42) + MInt(10) + fasdf(x)

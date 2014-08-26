@@ -1,0 +1,90 @@
+include<"core/core.stanza">
+include<"core/verse.stanza">
+include("mj/mj-ir.stanza")
+include("mj/construct.stanza")
+include-syntax(mjolnir)
+
+defpackage debug :
+   import core
+   import verse
+   import mjolnir.mj-ir
+   import mjolnir.construct
+
+defmodule Adder (w:Int) :
+   input a: IntT(w)
+   input b: IntT(w)
+   output z: IntT(w + 1)
+   z(this) := a(this) + b(this)
+
+defbundle Decoupled<T> () :
+   input data: T
+   input valid: IntT(1)
+   output ready: IntT(1)
+
+defmodule BigAdder (w:Int) :
+   input din: Decoupled(IntT(8))
+   output dout: Decoupled(IntT(8))
+   input a: IntT(w)
+   input b: IntT(w)
+   input c: IntT(w)
+   input d: IntT(w)
+   input e: IntT(w)
+   input f: IntT(w)
+   input g: IntT(w)
+   input h: IntT(w)
+   input en: IntT(1)
+   output z: IntT(w + 2)
+
+   data(dout(this)) := data(din(this))
+
+   val operands = [a(this) b(this) c(this) d(this)
+                   e(this) f(this) g(this) h(this)]
+   var accum:IntT = MInt(0)
+   for x in operands do :
+      accum = accum + x
+
+   instance ab: Adder(w)
+   a(ab) := a(this)
+   b(ab) := b(this)
+
+   instance cd: Adder(w)
+   a(cd) := c(this)
+   b(cd) := d(this)
+
+   instance abcd: Adder(w + 1)
+   a(abcd) := z(ab)
+   b(abcd) := z(cd)
+
+   wire temp : IntT()
+   when en(this) :
+      temp := a(this) + b(this)
+   else :
+      temp := b(this)
+
+   register temp2: IntT()
+   when reset :
+      temp2 := MInt(1)
+   when en(this) :
+      temp2 := MInt(10)
+
+   z(this) := temp
+   when en(this) :
+      z(this) := z(abcd)
+
+defmodule Top () :
+   input a: IntT(10)
+   output z: IntT(12)
+
+   instance adder: BigAdder(10)
+   a(adder) := a(this)
+   b(adder) := a(this)
+   c(adder) := a(this)
+   d(adder) := a(this)
+   en(adder) := MInt(1)
+   z(this) := z(adder)
+
+defn main () :
+   circuit c: Top()
+   println(c)
+
+main()

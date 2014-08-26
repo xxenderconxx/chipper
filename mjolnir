@@ -1,0 +1,1 @@
+mj/mjolnir -i $1.stanza -o $1.s -path ~/Docs/Programming/stanza/trunk
