@@ -1,0 +1,129 @@
+defpackage chipper.passes:
+  import core
+  import verse
+  import chipper.ir
+
+defclass PassException <: Exception
+defn PassException (msg:String) :
+   new PassException :
+      defmethod print (o:OutputStream, this) :
+         print(o, msg)
+
+defn check-duplicate-symbols (names: Streamable<Symbol>, msg: String) :
+  val dict = HashTable<Symbol, True>(symbol-hash)
+  for name in names do:
+    if key?(dict, name):
+      throw(PassException(string-join([msg, " ", name])))
+    else:
+      dict[name] = true
+
+defn check-duplicates (c: Circuit):
+  val names = map(name, modules(c))
+  check-duplicate-symbols(names, "duplicate module name")
+  do(check-duplicates, modules(c))
+  println("check-duplicates succeeded!")
+
+defn check-duplicates (m: Module):
+  val names = generate<Symbol> :
+     do(yield{name(_)}, ports(m))
+     defn loop (c:Command) :
+       match(c) :
+         (c:Command&HasName) : yield(name(c))
+         (c) : do(loop, children(c))
+     loop(body(m))
+  check-duplicate-symbols(
+     names, string-join(["module ", name(m), " duplicate definition name "]))
+
+defn infer-types (c: Circuit) -> Circuit:
+  defn infer (i: Immediate, e: List<KeyValue<Symbol, Type>>) -> Immediate :
+    match(i) :
+      (i:Ref) :
+         val type = lookup!(e, name(i))
+         Ref(name(i), type)
+      (i:Field) :
+         val it = infer(imm(i), e)
+         match(type(it)) :
+            (t:BundleType) :
+               val ft = for port in ports(t) search :
+                          if name(port) == name(i) :
+                            type(port)
+               error("No port!") when not ft             
+               Field(it, name(i), ft as Type)
+            (t) : error("!!!!")
+
+  defn infer (p:PrimOp, arg-types: List<Type>) -> Type :
+    if p == MULTIPLEX-OP : 
+      if arg-types[1] != arg-types[2] :
+        throw(PassException("infer type mismatch on mux args 1 and 2"))
+      if arg-types[0] not-typeof IntType :
+        throw(PassException("infer bad type on mux condition"))
+      arg-types[1]
+    else :
+      if length(arg-types) != 2 :
+        throw(PassException("wrong number of arguments to primop"))
+      if arg-types[0] not-typeof IntType :
+        throw(PassException("infer type mismatch on primop arg 0"))
+      if arg-types[1] not-typeof IntType :
+        throw(PassException("infer type mismatch on primop arg 1"))
+      IntType(UnknownWidth())
+
+  defn infer (c:Command, e: List<KeyValue<Symbol,Type>>) -> [Command, List<KeyValue<Symbol,Type>>] :
+    defn push-e (name: Symbol, t: Type) : List(name => t, e)
+    match(c) :
+      (c:DefInt|DefSInt) :
+        val t = IntType(UnknownWidth())          
+        [c, push-e(name(c), t)]
+      (c:DefWire) :
+        val value* = infer(value(c) as Immediate, e) when value(c)
+        [DefWire(name(c), type(c), value*), push-e(name(c), type(c))]
+      (c:DefRegister) :
+        val value* = infer(value(c) as Immediate, e) when value(c)
+        [DefRegister(name(c), type(c), value*), push-e(name(c), type(c))]
+      (c:DefMemory) :
+        [DefMemory(name(c), type(c), size(c)), push-e(name(c), type(c))]
+      (c:DefVector) :
+        val args* = map({infer(_, e)}, args(c))
+        [DefVector(name(c), type(c), args*), push-e(name(c), type(c))]
+      (c:DefAccessor) :
+        val type = lookup!(e, source(c))
+        val index* = infer(index(c), e)
+        [DefAccessor(name(c), source(c), direction(c), index*), push-e(name(c), type)]
+      (c:DefInstance) :
+        val type = lookup!(e, module(c))
+        [c, push-e(name(c), type)]
+      (c:Conditionally) :
+        val pred* = infer(pred(c), e)
+        val [con*, con-e] = infer(conseq(c), e)
+        val [alt*, alt-e] = infer(alt(c), e)
+        [Conditionally(pred*, con*, alt*), e]
+      (c:Begin) :        
+        var current-e: List<KeyValue<Symbol,Type>> = e
+        val body* = for c in body(c) map :
+          val [c*, e] = infer(c, current-e)
+          current-e = e
+          c*
+        [Begin(body*), current-e]   
+      (c:Connect) :
+        [Connect(infer(loc(c), e), infer(exp(c), e)), e]
+      (c:DoPrim) :
+        val args* = map(infer{_, e}, args(c))
+        val type* = infer(op(c), map(type, args*))
+        [DoPrim(name(c), op(c), args*), push-e(name(c), type*)]
+      (c:EmptyCommand) : [c, e]
+
+  defn infer (m: Module, e: List<KeyValue<Symbol,Type>>) -> Module :
+    val m-env = List(
+      'this => BundleType(ports(m)),
+      'reset => IntType(IntWidth(1)),
+      e)
+    val [body*, e*] = infer(body(m), m-env)
+    Module(name(m), ports(m), body*)
+
+  val e =   
+    for m in modules(c) map :
+      name(m) => BundleType(ports(m))
+  Circuit(map({infer(_, e)}, modules(c)), main(c))
+
+public defn run-passes (c: Circuit) -> Circuit :
+   check-duplicates(c)
+   infer-types(c)

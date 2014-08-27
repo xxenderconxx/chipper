@@ -76,37 +76,41 @@ public defstruct BundleType <: Type :
 ;========== Mjolnir Command ============
 public definterface Command
 
-public defstruct DefInt <: Command :
-   name: Symbol
+public definterface HasName
+public defmulti name (x:HasName) -> Symbol
+
+public defstruct DefInt <: Command & HasName :
+   name: Symbol [multi => \N]
    value: Int
-public defstruct DefSInt <: Command :
-   name: Symbol
+public defstruct DefSInt <: Command & HasName :
+   name: Symbol [multi => \N]
    value: Int
-public defstruct DoPrim <: Command :
-   name: Symbol
+public defstruct DoPrim <: Command & HasName :
+   name: Symbol [multi => \N]
    op: PrimOp
    args: List<Immediate>
-public defstruct DefWire <: Command :
-   name: Symbol
+public defstruct DefWire <: Command & HasName :
+   name: Symbol [multi => \N]
    type: Type
    value: Nil|Immediate
-public defstruct DefRegister <: Command :
-   name: Symbol
+public defstruct DefRegister <: Command & HasName :
+   name: Symbol [multi => \N]
    type: Type
    value: Nil|Immediate
-public defstruct DefInstance <: Command :
-   name: Symbol
+public defstruct DefInstance <: Command & HasName :
+   name: Symbol [multi => \N]
    module: Symbol
-public defstruct DefMemory <: Command :
-   name: Symbol
+public defstruct DefMemory <: Command & HasName :
+   name: Symbol [multi => \N]
    type: Type
    size: Int
-public defstruct DefVector <: Command :
-   name: Symbol
+public defstruct DefVector <: Command & HasName :
+   name: Symbol [multi => \N]
    type: Type
    args: List<Immediate>
-public defstruct DefAccessor <: Command :
-   name: Symbol
+public defstruct DefAccessor <: Command & HasName :
+   name: Symbol [multi => \N]
+   source: Symbol
    direction: Direction
    index: Immediate   
 public defstruct Conditionally <: Command :
