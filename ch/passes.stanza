@@ -47,7 +47,7 @@ defn infer-types (c: Circuit) -> Circuit:
                val ft = for port in ports(t) search :
                           if name(port) == name(i) :
                             type(port)
-               error("No port!") when not ft             
+               error("No port!") when ft == false             
                Field(it, name(i), ft as Type)
             (t) : error("!!!!")
 
@@ -74,10 +74,10 @@ defn infer-types (c: Circuit) -> Circuit:
         val t = IntType(UnknownWidth())          
         [c, push-e(name(c), t)]
       (c:DefWire) :
-        val value* = infer(value(c) as Immediate, e) when value(c)
+        val value* = infer(value(c) as Immediate, e) when value(c) == false
         [DefWire(name(c), type(c), value*), push-e(name(c), type(c))]
       (c:DefRegister) :
-        val value* = infer(value(c) as Immediate, e) when value(c)
+        val value* = infer(value(c) as Immediate, e) when value(c) == false
         [DefRegister(name(c), type(c), value*), push-e(name(c), type(c))]
       (c:DefMemory) :
         [DefMemory(name(c), type(c), size(c)), push-e(name(c), type(c))]

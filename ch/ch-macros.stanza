@@ -7,9 +7,9 @@ defpackage chipper.macros :
    import stanza.core-macros
 
 val MJ-EXPANDER = MacroExpander([])
-defn new-macro (f: (List) -> List, priority:Int, pattern) -> Nil :
+defn new-macro (f: (List) -> List, priority:Int, pattern) -> False :
    add(MJ-EXPANDER, Macro(priority, pattern, f))
-defn new-mask (priority:Int, pattern) -> Nil :
+defn new-mask (priority:Int, pattern) -> False :
    add(MJ-EXPANDER, Mask(priority, pattern))
 new-overlay('chipper, MJ-EXPANDER)
 
@@ -50,7 +50,7 @@ new-macro{_, 0, '(defmodule)} $ fn (tokens) :
    val eater = TokenEater(tail(tokens))
    val [name targs] = let :
       val form = eat(eater)
-      if matches-pattern?(form, '(@of \N)) :
+      if matches-pattern?(form, '(@of \false)) :
          val form = unwrap-token(form)
          [form[1] tailn(form, 2)]
       else :
@@ -72,7 +72,7 @@ new-macro{_, 0, '(defmodule)} $ fn (tokens) :
 
    ;== Extractors ==
    defn get-port-type (builder) :
-      if matches-pattern?(builder, '(@do \N)) : unwrap-token(builder)[1]
+      if matches-pattern?(builder, '(@do \false)) : unwrap-token(builder)[1]
       else : builder
    defn get-port-dir (dir) :
       switch {_ == dir} :
@@ -170,7 +170,7 @@ new-macro{_, 0, '(defbundle)} $ fn (tokens) :
    val eater = TokenEater(tail(tokens))
    val [name targs] = let :
       val form = eat(eater)
-      if matches-pattern?(form, '(@of \N)) :
+      if matches-pattern?(form, '(@of \false)) :
          val form = unwrap-token(form)
          [form[1] tailn(form, 2)]
       else :
@@ -191,7 +191,7 @@ new-macro{_, 0, '(defbundle)} $ fn (tokens) :
 
    ;== Extractors ==
    defn get-port-type (builder) :
-      if matches-pattern?(builder, '(@do \N)) : unwrap-token(builder)[1]
+      if matches-pattern?(builder, '(@do \false)) : unwrap-token(builder)[1]
       else : builder
    defn get-port-dir (dir) :
       switch {_ == dir} :
@@ -244,7 +244,7 @@ new-macro{_, 0, '(defbundle)} $ fn (tokens) :
 
 
 ;=============== CONNECT MACRO ==============================
-new-macro{_, 0, '(\N :=)} $ fn (tokens) :
+new-macro{_, 0, '(\false :=)} $ fn (tokens) :
    val eater = TokenEater(tokens)
    val x = eat(eater)
    eat(eater, ':=)
@@ -311,7 +311,7 @@ new-macro{_, 0, '(instance)} $ fn (tokens) :
 
 
 ;=============== WHEN MACRO =================================
-new-mask(0, '(\N when))
+new-mask(0, '(\false when))
 new-macro{_, 0, '(when)} $ fn (tokens) :
    val eater = TokenEater(tail(tokens))
    val pred = parse-next!(eater)
@@ -336,7 +336,7 @@ new-macro{_, 0, '(when)} $ fn (tokens) :
 
 ;================ CONCAT OPERATOR ===========================
 defn right-assoc-operator (op:Symbol, func:Symbol, level:Int) :
-   Macro{level, list(nil, op), _} $ fn (tokens) :
+   Macro{level, list(false, op), _} $ fn (tokens) :
       val eater = TokenEater(tokens)
       val a = eat(eater)
       eat(eater, op)

@@ -42,14 +42,14 @@ public defmulti type (imm:Immediate) -> Type
 
 public defstruct Ref <: Immediate :
    name: Symbol
-   type: Type [multi => \N]
+   type: Type [multi => \false]
 public defn Ref (name:Symbol) :
    Ref(name, UnknownType())
    
 public defstruct Field <: Immediate :
    imm: Immediate
    name: Symbol
-   type: Type [multi => \N]
+   type: Type [multi => \false]
 public defn Field (imm:Immediate, name:Symbol) :
    Field(imm, name, UnknownType())
 
@@ -80,36 +80,36 @@ public definterface HasName
 public defmulti name (x:HasName) -> Symbol
 
 public defstruct DefInt <: Command & HasName :
-   name: Symbol [multi => \N]
+   name: Symbol [multi => \false]
    value: Int
 public defstruct DefSInt <: Command & HasName :
-   name: Symbol [multi => \N]
+   name: Symbol [multi => \false]
    value: Int
 public defstruct DoPrim <: Command & HasName :
-   name: Symbol [multi => \N]
+   name: Symbol [multi => \false]
    op: PrimOp
    args: List<Immediate>
 public defstruct DefWire <: Command & HasName :
-   name: Symbol [multi => \N]
+   name: Symbol [multi => \false]
    type: Type
-   value: Nil|Immediate
+   value: False|Immediate
 public defstruct DefRegister <: Command & HasName :
-   name: Symbol [multi => \N]
+   name: Symbol [multi => \false]
    type: Type
-   value: Nil|Immediate
+   value: False|Immediate
 public defstruct DefInstance <: Command & HasName :
-   name: Symbol [multi => \N]
+   name: Symbol [multi => \false]
    module: Symbol
 public defstruct DefMemory <: Command & HasName :
-   name: Symbol [multi => \N]
+   name: Symbol [multi => \false]
    type: Type
    size: Int
 public defstruct DefVector <: Command & HasName :
-   name: Symbol [multi => \N]
+   name: Symbol [multi => \false]
    type: Type
    args: List<Immediate>
 public defstruct DefAccessor <: Command & HasName :
-   name: Symbol [multi => \N]
+   name: Symbol [multi => \false]
    source: Symbol
    direction: Direction
    index: Immediate   
@@ -142,7 +142,7 @@ defn IndentedStream (o:OutputStream, n:Int) :
    defn put (c:Char) :
       if indent? :
          do(print{o, " "}, 0 to n)
-         indent? = nil
+         indent? = false
       print(o, c)
       if c == \"\n" :
          indent? = true
@@ -255,10 +255,10 @@ defmethod print (o:OutputStream, c:Command) :
          print(o, ")")         
       (c:DefWire) :
          print-all(o, ["wire " name(c) " : " type(c)])
-         print-all(o, [" = " value(c)]) when value(c)
+         print-all(o, [" = " value(c)]) when value(c) != false
       (c:DefRegister) :
          print-all(o, ["register " name(c) " : " type(c)])
-         print-all(o, [" = " value(c)]) when value(c)
+         print-all(o, [" = " value(c)]) when value(c) != false
       (c:DefInstance) :
          print-all(o, ["instance " name(c) " of " module(c)])
       (c:Connect) :

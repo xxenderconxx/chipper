@@ -80,19 +80,19 @@ public defn make-circuit (f: () -> ?) :
    Circuit(to-list(MODULE-LIST), top-module)   
 
 ;=========== Wires =====================
-public defn make-wire<?T> (name:Symbol, builder:HBuilder<?T>, value:Nil|Handle) -> T :
+public defn make-wire<?T> (name:Symbol, builder:HBuilder<?T>, value:False|Handle) -> T :
    push-command{DefWire(name, type(builder), _)} $
       match(value) :
          (v:Handle) : immediate(v)
-         (v:Nil) : nil
+         (v:False) : false
    handle(builder, Ref(name))
 
 ;============ Registers ================
-public defn make-register<?T> (name:Symbol, builder:HBuilder<?T>, value:Nil|Handle) -> T :
+public defn make-register<?T> (name:Symbol, builder:HBuilder<?T>, value:False|Handle) -> T :
    push-command{DefRegister(name, type(builder), _)} $
       match(value) :
          (v:Handle) : immediate(v)
-         (v:Nil) : nil
+         (v:False) : false
    handle(builder, Ref(name))      
 
 ;=========== Builders ==================
