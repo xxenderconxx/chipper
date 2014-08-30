@@ -8,6 +8,12 @@ public val INPUT = new Direction
 public val OUTPUT = new Direction
 public val UNKNOWN-DIR = new Direction
 
+public defn flip (d:Direction) :
+   switch {d == _} :
+      INPUT : OUTPUT
+      OUTPUT : INPUT
+      UNKNOWN-DIR : UNKNOWN-DIR
+
 ;========== Mjolnir Width ==============
 public definterface Width
 public defstruct UnknownWidth <: Width : ()
@@ -58,6 +64,9 @@ public defstruct Port :
    name: Symbol
    direction: Direction
    type: Type
+
+public defn flip (p:Port) :
+   Port(name(p), flip(direction(p)), type(p))
 
 ;========== Mjolnir Type ===============
 public definterface Type 
@@ -190,6 +199,22 @@ public defn map (f: (Type) -> Type, t: Type) -> Type :
       (t) :
          t
 
+;======== Port Type Equal ==============
+public defn type-equal? (p1:Port, p2:Port) :
+   name(p1) == name(p2) and
+   direction(p1) == direction(p2) and
+   type-equal?(type(p1), type(p2))
+
+;======== Type Similarity ==============
+public defn type-equal? (t1:Type, t2:Type) :
+   match(t1, t2) :
+      (t1:UnknownType, t2:UnknownType) : true
+      (t1:IntType, t2:IntType) : true
+      (t1:SIntType, t2:SIntType) : true
+      (t1:BundleType, t2:BundleType) :
+         length(ports(t1)) == length(ports(t2)) and
+         all?(type-equal?, ports(t1), ports(t2))
+
 ;========== Printing ===================
 defmethod print (o:OutputStream, d:Direction) :
    print{o, _} $
@@ -228,10 +253,20 @@ defmethod print (o:OutputStream, op:PrimOp) :
       MULTIPLEX-OP : "Multiplex"
       else : error("Unable to print Primop")
 
-defmethod print (o:OutputStream, i:Immediate) :
-   match(i) :
-      (r:Ref) : print(o, name(r))
-      (f:Field) : print-all(o, [imm(f) "." name(f)])
+if-not-defined(PRINT-TYPES) :
+   defmethod print (o:OutputStream, i:Immediate) :
+      match(i) :
+         (r:Ref) : print(o, name(r))
+         (f:Field) : print-all(o, [imm(f) "." name(f)])
+else : 
+   defmethod print (o:OutputStream, i:Immediate) :
+      match(i) :
+         (r:Ref) :
+            print-all{o, _} $ [
+               name(r) "(" type(r) ")"]
+         (f:Field) :
+            print-all{o, _} $ [
+               imm(f) "." name(f) "(" type(f) ")"]
 
 defmethod print (o:OutputStream, t:Type) :
    match(t) :

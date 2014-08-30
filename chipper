@@ -1,1 +1,3 @@
-ch/chipper -i $1.stanza -o $1.s -path ~/Docs/Programming/stanza/trunk
+name=$1
+shift
+ch/chipper -i $name.stanza -o $name.s -path ~/Docs/Programming/stanza/trunk $@

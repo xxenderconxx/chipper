@@ -61,6 +61,7 @@ defmodule Top () :
 defn main () :
    circuit c: Top()
    println(c)
-   run-passes(c)
+   println("==== INFER ====")
+   println(run-passes(c))
 
 main()
