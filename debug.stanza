@@ -10,16 +10,16 @@ defpackage debug :
    import chipper.ir
    import chipper.construct
 
+defbundle Decoupled<T> () :
+   input data: T
+   input valid: IntT(1)
+   output ready: IntT(1)
+
 defmodule Adder (w:Int) :
    input a: IntT(w)
    input b: IntT(w)
    output z: IntT(w + 1)
    z(this) := a(this) + b(this)
-
-defbundle Decoupled<T> () :
-   input data: T
-   input valid: IntT(1)
-   output ready: IntT(1)
 
 defmodule BigAdder (w:Int) :
    input din: Decoupled(IntT(8))
@@ -34,8 +34,6 @@ defmodule BigAdder (w:Int) :
    input h: IntT(w)
    input en: IntT(1)
    output z: IntT(w + 2)
-
-   data(dout(this)) := data(din(this))
 
    val operands = [a(this) b(this) c(this) d(this)
                    e(this) f(this) g(this) h(this)]
@@ -54,6 +52,7 @@ defmodule BigAdder (w:Int) :
    instance abcd: Adder(w + 1)
    a(abcd) := z(ab)
    b(abcd) := z(cd)
+   reset(abcd) := CInt(1)
 
    wire temp : IntT()
    when en(this) :
@@ -62,8 +61,7 @@ defmodule BigAdder (w:Int) :
       temp := b(this)
 
    register temp2: IntT()
-   when reset :
-      temp2 := CInt(1)
+   init(temp2) := CInt(1)
    when en(this) :
       temp2 := CInt(10)
 
@@ -81,7 +79,7 @@ defmodule Top () :
    c(adder) := a(this)
    d(adder) := a(this)
    en(adder) := CInt(1)
-   z(this) := z(adder)
+   z(this) := z(adder)  
 
 defn main () :
    circuit c: Top()

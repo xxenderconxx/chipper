@@ -13,6 +13,56 @@ defn new-mask (priority:Int, pattern) -> False :
    add(MJ-EXPANDER, Mask(priority, pattern))
 new-overlay('chipper, MJ-EXPANDER)
 
+;=============== EXPANSION EXCEPTION =======================
+defn ChipperMacroException (msg:String) :
+   new Exception :
+      defmethod print (o:OutputStream, this) :
+         print(o, msg)
+
+defn macro-exception (args:Streamable) :
+   throw $ ChipperMacroException $ string-join $ args
+
+;============== CHIPPER TYPE REGISTRY ======================
+defstruct ChipperType :
+   name: Symbol
+   num-params: Int
+val CHIPPER-TYPES = Vector<ChipperType>()
+new-chipper-type('IntT, 0)
+
+defn new-chipper-type (name: Symbol, num-params: Int) :
+   add(CHIPPER-TYPES, ChipperType(name, num-params))
+
+defn get-type-entry (type-name) :
+   for t in CHIPPER-TYPES find :
+      name(t) == unwrap-token(type-name)
+
+defn extract-type (form, param-names:List) :
+   if matches-pattern?(form, '(@do)) :
+      val form = unwrap-token(form)
+      val type-name = form[1]
+      match(get-type-entry(type-name)) :
+         (entry:ChipperType) :
+            val args = tailn(form, 2)
+            if num-params(entry) == 0 :
+               type-name
+            else if length(args) >= num-params(entry) :
+               val params = map(extract-type{_, param-names}, headn(args, num-params(entry)))
+               List('@of, type-name, params)
+            else :
+               macro-exception $ [
+               "Chipper type " type-name " expects " num-params(entry) " type parameters."]
+         (entry:False) :
+            macro-exception $ [
+            "No chipper type defined with name: " type-name]            
+   else :
+      val names = unwrap-all(param-names)
+      if contains?(names, unwrap-token(form)) :
+         form
+      else :
+         macro-exception $ [
+         "No type parameter with name: " form]
+               
+
 ;============== DEFMODULE MACRO ============================
 ;Syntax:
 ;   defmodule Adder (w:Int) :
@@ -25,16 +75,19 @@ new-overlay('chipper, MJ-EXPANDER)
 ;   defmulti a (a:Adder) -> IntT
 ;   defmulti b (a:Adder) -> IntT
 ;   defmulti z (a:Adder) -> IntT
+;   defmulti reset (a:Adder) -> IntT
 ;
 ;   defn Adder (name:Symbol, w:Int) :
 ;      val build.a = IntT(w)
 ;      val build.b = IntT(w)
 ;      val build.z = IntT(w + 1)
+;      val build.reset = IntT(1)
 ;      defn instance (ref:Immediate) :
 ;         new Adder :
 ;            defmethod a (this) : handle(build.a, Field(ref, 'a))
 ;            defmethod b (this) : handle(build.b, Field(ref, 'b))
 ;            defmethod z (this) : handle(build.z, Field(ref, 'z))
+;            defmethod reset (this) : handle(build.reset, Field(ref, 'reset))
 ;      defn module () :
 ;         val ports = [
 ;            Port('a, INPUT, type(build.a))
@@ -50,7 +103,7 @@ new-macro{_, 0, '(defmodule)} $ fn (tokens) :
    val eater = TokenEater(tail(tokens))
    val [name targs] = let :
       val form = eat(eater)
-      if matches-pattern?(form, '(@of \false)) :
+      if matches-pattern?(form, '(@of false)) :
          val form = unwrap-token(form)
          [form[1] tailn(form, 2)]
       else :
@@ -71,9 +124,6 @@ new-macro{_, 0, '(defmodule)} $ fn (tokens) :
    val rest = remaining(eater)
 
    ;== Extractors ==
-   defn get-port-type (builder) :
-      if matches-pattern?(builder, '(@do \false)) : unwrap-token(builder)[1]
-      else : builder
    defn get-port-dir (dir) :
       switch {_ == dir} :
          'input : 'INPUT
@@ -83,19 +133,21 @@ new-macro{_, 0, '(defmodule)} $ fn (tokens) :
    val template = '(
       defclass Name<Targs>
       multis{defmulti port<Cargs> (x:Name<Cargs>) -> port-type}
+      defmulti reset (x:Name) -> IntT
       defn Name<Cargs> (targs{Targ : HBuilder<?Targ>}, args...) :
          new ModuleBuilder<Name<Targs>> :
             defmethod handle (this, #name:Symbol) :
                builders{val builder = builder-exp}
+               val #reset-builder = IntT(1)
                defn #instance (#ref:Immediate) :
                   new Name<Targs> :
                      methods{defmethod port (this) : handle(builder, Field(#ref, 'port))}
+                     defmethod reset (this) : handle(#reset-builder, Field(#ref, 'reset))
                defn #module () :
                   val #ports = [
                      ports{Port('port, dir, type(builder))}]
                   make-module{'Name, #ports, _} $ fn () :
                      val this = #instance(Ref('this))
-                     val reset = handle(IntT(), Ref('reset))
                      body
                #instance(make-instance(#name, #module()))         
    )
@@ -107,7 +159,7 @@ new-macro{_, 0, '(defmodule)} $ fn (tokens) :
       'Cargs => splice(cargs)
       'multis => collect $ [
          'port => port-names
-         'port-type => stream(get-port-type, port-builders)]
+         'port-type => stream(extract-type{_, targs}, port-builders)]
       '#name => gensym()
       'args... => splice(args)
       'targs => collect $ [
@@ -117,6 +169,7 @@ new-macro{_, 0, '(defmodule)} $ fn (tokens) :
          'builder-exp => port-builders]
       '#instance => gensym()
       '#ref => gensym()
+      '#reset-builder => gensym()
       'methods => collect $ [
          'port => port-names
          'builder => builders]
@@ -148,6 +201,19 @@ new-macro{_, 0, '(defmodule)} $ fn (tokens) :
 ;   public defn connect<?T> (h1:Decoupled<?T>, h2:Decoupled<T>) :
 ;      connect-handles(h1, h2)
 ;
+;   public defn data<?T> (x:Reghandle<Decoupled<?T>>) -> T :
+;      data(register-data(x))
+;   public defn valid<?T> (x:Reghandle<Decoupled<?T>>) -> T :
+;      data(register-data(x))
+;   public defn ready<?T> (x:Reghandle<Decoupled<?T>>) -> T :
+;      data(register-data(x))
+;   public defn connect<?T> (h1:RegHandle<Decoupled<?T>>, h2:Decoupled<T>) :
+;      connect(register-data(h1), h2)
+;   public defn connect<?T> (h1:Decoupled<?T>, h2:RegHandle<Decoupled<T>>) :
+;      connect(h1, register-data(h2))
+;   public defn connect<?T> (h1:RegHandle<Decoupled<?T>>, h2:RegHandle<Decoupled<T>>) :
+;      connect(register-data(h1), register-data(h2))
+;
 ;   defn Decoupled<?T> (T: HBuilder<?T>, w:Int) :
 ;      val builder.data = T
 ;      val builder.valid = IntT(w)
@@ -170,7 +236,7 @@ new-macro{_, 0, '(defbundle)} $ fn (tokens) :
    val eater = TokenEater(tail(tokens))
    val [name targs] = let :
       val form = eat(eater)
-      if matches-pattern?(form, '(@of \false)) :
+      if matches-pattern?(form, '(@of false)) :
          val form = unwrap-token(form)
          [form[1] tailn(form, 2)]
       else :
@@ -189,10 +255,15 @@ new-macro{_, 0, '(defbundle)} $ fn (tokens) :
          add(port-builders, eat(eater))
    val rest = remaining(eater)
 
+   ;== Syntax Check ==
+   if unwrap-token(name) not-typeof Symbol :
+      macro-exception $ [
+      "Name given to defbundle " name " is not a symbol!"]
+
+   ;== Register Type ==   
+   new-chipper-type(unwrap-token(name), length(targs))
+
    ;== Extractors ==
-   defn get-port-type (builder) :
-      if matches-pattern?(builder, '(@do \false)) : unwrap-token(builder)[1]
-      else : builder
    defn get-port-dir (dir) :
       switch {_ == dir} :
          'input : 'INPUT
@@ -201,12 +272,24 @@ new-macro{_, 0, '(defbundle)} $ fn (tokens) :
    ;== Make form ==
    val template = '(
       defclass Name<Targs> <: Handle
+      defclass #Builder<Targs> <: HBuilder<Name<Targs>>
       multis{defmulti port<Cargs> (x:Name<Cargs>) -> port-type}
       defn connect<Cargs> (h1:Name<Cargs>, h2:Name<Targs>) :
          connect-handles(h1, h2)
+         
+      regports{   
+         defn port<Cargs> (x:RegHandle<Name<Cargs>>) -> port-type :
+            port(register-data(x))}
+      defn connect<Cargs> (h1:RegHandle<Name<Cargs>>, h2:Name<Targs>) :
+         connect(register-data(h1), h2)
+      defn connect<Cargs> (h1:Name<Cargs>, h2:RegHandle<Name<Targs>>) :
+         connect(h1, register-data(h2))
+      defn connect<Cargs> (h1:RegHandle<Name<Cargs>>, h2:RegHandle<Name<Targs>>) :
+         connect(register-data(h1), register-data(h2))
+      
       defn Name<Cargs> (targs{Targ : HBuilder<?Targ>}, args...) :
          builders{val builder = builder-exp}
-         new HBuilder<Name<Targs>> :
+         new #Builder<Targs> :
             defmethod handle (this, #ref:Immediate) :
                new Name<Targs> :
                   defmethod immediate (this) : #ref
@@ -217,13 +300,18 @@ new-macro{_, 0, '(defbundle)} $ fn (tokens) :
    )
    val cargs = map(list{'@cap, _}, targs)
    val builders = map(gensym{}, port-names)
+   val port-types = map(extract-type{_, targs}, port-builders)
    val filled = fill-template(template, [
       'Name => name
       'Targs => splice(targs)
       'Cargs => splice(cargs)
+      '#Builder => gensym(string-join([name "Builder"]))
       'multis => collect $ [
          'port => port-names
-         'port-type => stream(get-port-type, port-builders)]
+         'port-type => port-types]
+      'regports => collect $ [
+         'port => port-names
+         'port-type => port-types]
       'args... => splice(args)
       'targs => collect $ [
          'Targ => targs]
@@ -244,7 +332,7 @@ new-macro{_, 0, '(defbundle)} $ fn (tokens) :
 
 
 ;=============== CONNECT MACRO ==============================
-new-macro{_, 0, '(\false :=)} $ fn (tokens) :
+new-macro{_, 0, '(false :=)} $ fn (tokens) :
    val eater = TokenEater(tokens)
    val x = eat(eater)
    eat(eater, ':=)
@@ -311,7 +399,7 @@ new-macro{_, 0, '(instance)} $ fn (tokens) :
 
 
 ;=============== WHEN MACRO =================================
-new-mask(0, '(\false when))
+new-mask(0, '(false when))
 new-macro{_, 0, '(when)} $ fn (tokens) :
    val eater = TokenEater(tail(tokens))
    val pred = parse-next!(eater)

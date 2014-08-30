@@ -1,7 +1,7 @@
 defpackage chipper.construct :
    import core
    import verse
-   import chipper.ir   
+   import chipper.ir
 
 ;========== Namespaces =================
 val MODULE-NAMES = HashTable<Symbol,True>(symbol-hash)
@@ -88,12 +88,12 @@ public defn make-wire<?T> (name:Symbol, builder:HBuilder<?T>, value:False|Handle
    handle(builder, Ref(name))
 
 ;============ Registers ================
-public defn make-register<?T> (name:Symbol, builder:HBuilder<?T>, value:False|Handle) -> T :
+public defn make-register<?T> (name:Symbol, builder:HBuilder<?T>, value:False|Handle) -> RegHandle<T> :
    push-command{DefRegister(name, type(builder), _)} $
       match(value) :
          (v:Handle) : immediate(v)
          (v:False) : false
-   handle(builder, Ref(name))      
+   RegHandle<T>(Ref(name), builder)      
 
 ;=========== Builders ==================
 public definterface HBuilder<T>
@@ -107,14 +107,32 @@ public defmulti immediate (h:Handle) -> Immediate
 public defn connect-handles (h1:Handle, h2:Handle) :
    push-command(Connect(immediate(h1), immediate(h2)))
 
+;========== Register Handles ===========
+public defstruct RegHandle<T> <: Handle :
+   ref: Immediate
+   data-builder: HBuilder<T>
+
+public defn init (r:RegHandle) :
+   handle(IntT(), Field(ref(r), 'init))
+
+public defn register-data<?T> (r:RegHandle<?T>) :
+   handle(data-builder(r), Field(ref(r), 'data))
+
 ;========== Int Handles ================
 public defclass IntT <: Handle
+public defclass IntTBuilder <: HBuilder<IntT>
 
 public defn connect (h1:IntT, h2:IntT) :
    connect-handles(h1, h2)
+public defn connect (r1:RegHandle<IntT>, h2:IntT) :
+   connect(register-data(r1), h2)
+public defn connect (h1:IntT, r2:RegHandle<IntT>) :
+   connect(h1, register-data(r2))
+public defn connect (r1:RegHandle<IntT>, r2:RegHandle<IntT>) :
+   connect(register-data(r1), register-data(r2))
 
 public defn IntT (width:Width) :
-   new HBuilder<IntT> :
+   new IntTBuilder :
       defmethod handle (this, ref:Immediate) :
          new IntT :
             defmethod immediate (this) : ref
@@ -126,6 +144,13 @@ public defn IntT (width:Int) :
 
 public defn IntT () :
    IntT(UnknownWidth())
+
+
+
+
+
+
+
 
 ;=========== Int Operators =============
 defn do-op (op:PrimOp, h1:IntT, h2:IntT) :

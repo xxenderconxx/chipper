@@ -42,14 +42,14 @@ public defmulti type (imm:Immediate) -> Type
 
 public defstruct Ref <: Immediate :
    name: Symbol
-   type: Type [multi => \false]
+   type: Type [multi => false]
 public defn Ref (name:Symbol) :
    Ref(name, UnknownType())
    
 public defstruct Field <: Immediate :
    imm: Immediate
    name: Symbol
-   type: Type [multi => \false]
+   type: Type [multi => false]
 public defn Field (imm:Immediate, name:Symbol) :
    Field(imm, name, UnknownType())
 
@@ -80,36 +80,36 @@ public definterface HasName
 public defmulti name (x:HasName) -> Symbol
 
 public defstruct DefInt <: Command & HasName :
-   name: Symbol [multi => \false]
+   name: Symbol [multi => false]
    value: Int
 public defstruct DefSInt <: Command & HasName :
-   name: Symbol [multi => \false]
+   name: Symbol [multi => false]
    value: Int
 public defstruct DoPrim <: Command & HasName :
-   name: Symbol [multi => \false]
+   name: Symbol [multi => false]
    op: PrimOp
    args: List<Immediate>
 public defstruct DefWire <: Command & HasName :
-   name: Symbol [multi => \false]
+   name: Symbol [multi => false]
    type: Type
    value: False|Immediate
 public defstruct DefRegister <: Command & HasName :
-   name: Symbol [multi => \false]
+   name: Symbol [multi => false]
    type: Type
    value: False|Immediate
 public defstruct DefInstance <: Command & HasName :
-   name: Symbol [multi => \false]
+   name: Symbol [multi => false]
    module: Symbol
 public defstruct DefMemory <: Command & HasName :
-   name: Symbol [multi => \false]
+   name: Symbol [multi => false]
    type: Type
    size: Int
 public defstruct DefVector <: Command & HasName :
-   name: Symbol [multi => \false]
+   name: Symbol [multi => false]
    type: Type
    args: List<Immediate>
 public defstruct DefAccessor <: Command & HasName :
-   name: Symbol [multi => \false]
+   name: Symbol [multi => false]
    source: Symbol
    direction: Direction
    index: Immediate   
