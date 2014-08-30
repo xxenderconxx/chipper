@@ -2,6 +2,7 @@ include<"core/core.stanza">
 include<"core/verse.stanza">
 include("ch/ch-ir.stanza")
 include("ch/ch-construct.stanza")
+include("ch/passes.stanza")
 include-syntax(chipper)
 
 defpackage debug :
@@ -9,11 +10,7 @@ defpackage debug :
    import verse
    import chipper.ir
    import chipper.construct
-
-defbundle Decoupled<T> () :
-   input data: T
-   input valid: IntT(1)
-   output ready: IntT(1)
+   import chipper.passes
 
 defmodule Adder (w:Int) :
    input a: IntT(w)
@@ -22,8 +19,6 @@ defmodule Adder (w:Int) :
    z(this) := a(this) + b(this)
 
 defmodule BigAdder (w:Int) :
-   input din: Decoupled(IntT(8))
-   output dout: Decoupled(IntT(8))
    input a: IntT(w)
    input b: IntT(w)
    input c: IntT(w)
@@ -34,12 +29,6 @@ defmodule BigAdder (w:Int) :
    input h: IntT(w)
    input en: IntT(1)
    output z: IntT(w + 2)
-
-   val operands = [a(this) b(this) c(this) d(this)
-                   e(this) f(this) g(this) h(this)]
-   var accum:IntT = CInt(0)
-   for x in operands do :
-      accum = accum + x
 
    instance ab: Adder(w)
    a(ab) := a(this)
@@ -52,20 +41,8 @@ defmodule BigAdder (w:Int) :
    instance abcd: Adder(w + 1)
    a(abcd) := z(ab)
    b(abcd) := z(cd)
-   reset(abcd) := CInt(1)
 
-   wire temp : IntT()
-   when en(this) :
-      temp := a(this) + b(this)
-   else :
-      temp := b(this)
-
-   register temp2: IntT()
-   init(temp2) := CInt(1)
-   when en(this) :
-      temp2 := CInt(10)
-
-   z(this) := temp
+   z(this) := CInt(0)
    when en(this) :
       z(this) := z(abcd)
 
@@ -84,5 +61,6 @@ defmodule Top () :
 defn main () :
    circuit c: Top()
    println(c)
+   run-passes(c)
 
 main()

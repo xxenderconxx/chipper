@@ -145,13 +145,6 @@ public defn IntT (width:Int) :
 public defn IntT () :
    IntT(UnknownWidth())
 
-
-
-
-
-
-
-
 ;=========== Int Operators =============
 defn do-op (op:PrimOp, h1:IntT, h2:IntT) :
    val name = gen-scope-name('n)

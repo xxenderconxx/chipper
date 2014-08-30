@@ -203,6 +203,7 @@ defmethod print (o:OutputStream, w:Width) :
    match(w) :
       (w:UnknownWidth) : "?"
       (w:IntWidth) : value(w)
+      (w) : error("Unable to print Width")
 
 defmethod print (o:OutputStream, op:PrimOp) :
    print{o, _} $
@@ -225,6 +226,7 @@ defmethod print (o:OutputStream, op:PrimOp) :
       GREATER-EQ-OP : "GreaterEq"
       EQUAL-OP : "Equal"
       MULTIPLEX-OP : "Multiplex"
+      else : error("Unable to print Primop")
 
 defmethod print (o:OutputStream, i:Immediate) :
    match(i) :
@@ -241,6 +243,8 @@ defmethod print (o:OutputStream, t:Type) :
          print(o, "{")
          print-all(o, join(ports(t), ", "))
          print(o, "}")
+      (t) :
+         error("Unable to print type")
 
 defmethod print (o:OutputStream, p:Port) :
    print-all(o, [direction(p) " " name(p) " : " type(p)])
@@ -273,6 +277,8 @@ defmethod print (o:OutputStream, c:Command) :
          do(print, join(body(c), "\n"))
       (c:EmptyCommand) :
          print(o, "skip")
+      (c) :
+         error("Unable to print command")
 
 defmethod print (o:OutputStream, m:Module) :
    println-all(o, ["module " name(m) " :"])
