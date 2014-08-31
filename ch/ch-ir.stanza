@@ -176,6 +176,20 @@ defn indented (o:OutputStream, f: () -> ?) :
 
 
 ;========== Mappers and Walkers ========
+public defn map (f: (Immediate) -> Immediate, c: Command) -> Command :
+   defn f? (i:False|Immediate) : f(i as Immediate) when i != false
+   match(c) :
+      (c:DoPrim) : DoPrim(name(c), op(c), map(f, args(c)))
+      (c:DefWire) : DefWire(name(c), type(c), f?(value(c)))
+      (c:DefRegister) : DefRegister(name(c), type(c), f?(value(c)))
+      (c:DefVector) : DefVector(name(c), type(c), map(f, args(c)))
+      (c:DefAccessor) : DefAccessor(name(c), source(c), direction(c), f(index(c)))
+      (c:Select) : Select(name(c), f(idx(c)), map(f, args(c)))
+      (c:SelectivelyConnect) : SelectivelyConnect(f(idx(c)), map(f, locs(c)), f(exp(c)))
+      (c:Conditionally) : Conditionally(f(pred(c)), conseq(c), alt(c))
+      (c:Connect) : Connect(f(loc(c)), f(exp(c)))
+      (c) : c
+
 public defn map (f: (Command) -> Command, c: Command) -> Command :
    match(c) :
       (c:Begin) :

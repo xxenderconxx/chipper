@@ -16,13 +16,14 @@
     - Ensure we do not use an instance in a connect statement.
     - Ensure we do not use a vector in a connect statement.
     - Cannot assign to wires outside your own module.
+    - Ensure no infinite recursion of inst and modules
   
 * Calculate type of every Immediate.
   - Carry the environment around, and compute the type of every
     Immediate in every module.
   - After this operation, every Immediate will be either an IntType,
     or SIntType, or BundleType.
-  
+
 - Typecheck all commands and operations.
   - All Fields must refer to either:
     - the port of an instance.
@@ -35,6 +36,10 @@
     the proper directions.
   - All accessor indices must be of the proper type.
   - All condition predicates must of the proper type.
+
+* Expand all vectors and associated accessors.
+  - OUTPUT accessors become Select commands
+  - INPUT accessors become SelectivelyUpdate commands.
   
 * Infer directions for all accessors.
   - Accessor directions when created are initialized to UNKNOWN-DIR.

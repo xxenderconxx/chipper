@@ -170,7 +170,100 @@ defn infer-types (c: Circuit) -> Circuit:
   val modules* = map(infer{_, env}, modules(c))                      
   Circuit(modules*, main(c))  
 
+
+;============== EXPAND VECS ================================
+defn* root-ref (i:Immediate) :
+   match(i) :
+      (f:Field) : root-ref(imm(f))
+      (r:Ref) : r
+
+defn replace-root (i:Immediate, root:Immediate) :
+   match(i) :
+      (r:Ref) : root
+      (f:Field) :
+         Field{_, name(f), type(f)} $
+         replace-root(imm(f), root)
+
+defn lookup-accessor (e: List<KeyValue<Symbol, DefVector|DefAccessor>>, exp: Immediate) :
+   val ref = root-ref(exp)
+   match(lookup(e, name(ref))) :
+     (acc:DefAccessor) :
+       val vec = lookup!(e, source(acc)) as DefVector
+       val args* = map(replace-root{exp, _}, args(vec))
+       [index(acc), args*]
+     (x) :
+       false
+
+defn expand-imm (imm: Immediate,
+                 e: List<KeyValue<Symbol, DefVector|DefAccessor>>,
+                 cs:Vector<Command>) :
+  match(lookup-accessor(e, imm)) :
+    ([idx args]:[Immediate, List<Immediate>]) :
+      val c = Select(gensym(), idx, args)
+      add(cs, c)
+      Ref(name(c), type(imm))
+    (f:False) :
+      imm
+
+defn expand-connect (c: Connect,
+                     e: List<KeyValue<Symbol, DefVector|DefAccessor>>,
+                     cs: Vector<Command>) :
+  val exp* = expand-imm(exp(c), e, cs)  
+  match(lookup-accessor(e, loc(c))) :
+    ([idx args]:[Immediate, List<Immediate>]) :
+      SelectivelyConnect(idx, args, exp*)
+    (f:False) :
+      Connect(loc(c), exp*)                       
+
+public defn expand-vecs (c: Command,
+                         e: List<KeyValue<Symbol, DefVector|DefAccessor>>) ->
+                        [Command, List<KeyValue<Symbol, DefVector|DefAccessor>>] :
+  val cs = Vector<Command>()
+  val env = 
+    if c typeof Connect :
+      add(cs, expand-connect(c as Connect, e, cs))
+      e
+    else :
+      match(map(expand-imm{_, e, cs}, c)) :
+        (c:DefVector) :
+          List(name(c) => c, e)
+        (c:DefAccessor) :
+          if lookup(e, source(c)) != false :
+            List(name(c) => c, e)
+          else :
+            add(cs, c)
+            e
+        (c:Begin) :
+          var current-e: List<KeyValue<Symbol,DefVector|DefAccessor>> = e
+          for c in body(c) do :
+            val [c*, e*] = expand-vecs(c, current-e)
+            current-e = e*
+            add(cs, c*)
+          current-e
+        (c:Conditionally) :
+          val [con*, con-e] = expand-vecs(conseq(c), e)
+          val [alt*, alt-e] = expand-vecs(alt(c), e)
+          add(cs, Conditionally(pred(c), con*, alt*))
+          e
+        (c) :
+          add(cs, c)
+          e
+
+  switch {length(cs) == _} :
+    0 : [EmptyCommand(), env]
+    1 : [cs[0], env]
+    else : [Begin(to-list(cs)), env]        
+
+public defn expand-vecs (c: Circuit) :
+  Circuit{_, main(c)} $
+  for m in modules(c) map :
+    val [body*, env] = expand-vecs(body(m), List())
+    Module(name(m), ports(m), body*)      
+
 ;============= DRIVER ======================================
 public defn run-passes (c: Circuit) :
-   check-duplicates(c)
-   infer-types(c)
+  var c*:Circuit = c
+  check-duplicates(c*)
+  c* = infer-types(c*)
+  c* = expand-vecs(c*)
+  c*
