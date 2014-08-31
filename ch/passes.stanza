@@ -260,10 +260,70 @@ public defn expand-vecs (c: Circuit) :
     val [body*, env] = expand-vecs(body(m), List())
     Module(name(m), ports(m), body*)      
 
+
+
+;========= INFER DIRECTIONS OF MEMORY PORTS ================
+defn find-accessor-uses (c:Command) :
+  to-list $ generate<KeyValue<Symbol,Direction>> :
+    val accessors = Vector<Symbol>()
+    defn find-use (imm:Immediate, dir:Direction) :
+      val root = root-ref(imm)
+      if contains?(accessors, name(root)) :
+        yield(name(root) => dir)
+      imm  
+        
+    defn find-use (c:Command) -> ? :
+      match(c) :
+        (c:DefAccessor) :
+          add(accessors, name(c))
+          find-use(index(c), OUTPUT)
+        (c:Connect) :
+          find-use(loc(c), INPUT)
+          find-use(exp(c), OUTPUT)
+        (c) :
+          map(find-use{_, OUTPUT}, c) ;Find uses in immediates
+          do(find-use, children(c)) ;Find uses in subcommands
+
+    find-use(c)
+
+defn fold-accessor-uses (uses: List<KeyValue<Symbol,Direction>>) :
+  val table = HashTable<Symbol,Direction>(symbol-hash)
+  for use in uses do :
+    match(get?(table, key(use), false)) :
+      (d:Direction) :
+        if d != value(use) :
+          throw $ PassException $ string-join $
+          ["Accessor " key(use) " is used both as an INPUT and an OUTPUT."]          
+      (f:False) :
+        table[key(use)] = value(use)
+  to-list(table)      
+
+defn fill-accessor-dirs (c:Command, uses:List<KeyValue<Symbol,Direction>>) -> Command :
+  match(c) :
+    (c:DefAccessor) :
+      val dir =
+        match(lookup(uses, name(c))) :
+          (d:Direction) : d
+          (d:False) : throw $ PassException $ string-join $
+                      ["Accessor " name(c) " is never used. Unable to infer direction."]
+      DefAccessor(name(c), source(c), dir, index(c))
+    (c:Command) :
+      map(fill-accessor-dirs{_, uses}, c)
+
+defn infer-accessor-dirs (c:Circuit) :
+  val modules* =
+    for m in modules(c) map :
+      val uses = fold-accessor-uses(find-accessor-uses(body(m)))
+      val body* = fill-accessor-dirs(body(m), uses)
+      Module(name(m), ports(m), body*)
+  Circuit(modules*, main(c))
+
+
 ;============= DRIVER ======================================
 public defn run-passes (c: Circuit) :
   var c*:Circuit = c
   check-duplicates(c*)
   c* = infer-types(c*)
   c* = expand-vecs(c*)
+  c* = infer-accessor-dirs(c*)
   c*
