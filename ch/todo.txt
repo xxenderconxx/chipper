@@ -45,6 +45,10 @@
   - Accessor directions when created are initialized to UNKNOWN-DIR.
   - By looking at Connect commands, we can tell whether they are read
     or write ports.
+
+* Convert reset from an implicit to explicit parameter.
+  - Make the reset line explicit. Add a reset port to every module,
+    and pass the reset signal to every instantiated child component.
   
 * Infer all widths.
   - Infer all unknown widths for all types in all immediates.
@@ -68,16 +72,13 @@
 - Ensure all wires have covering assignments.
   - All wires and ports must be guaranteed to have a value.
   - Wires and ports cannot be assigned twice in the same scope.
-  
-* Convert reset from an implicit to explicit parameter.
-  - Make the reset line explicit. Add a reset port to every module,
-    and pass the reset signal to every instantiated child component.
+ 
   
 * Convert whens to multiplexors
   - Remove the when statements at this point by converting them to
     explicit multiplexors.
   
-* Convert vecs to multiplexors
+* Convert select/selectivelyconnect commands to multiplexors
   - Remove vectors at this point by converting them to explicit
     multiplexors.
   
