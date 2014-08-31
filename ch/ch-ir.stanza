@@ -320,6 +320,12 @@ defmethod print (o:OutputStream, c:Command) :
          print-all(o, [" = " value(c)]) when value(c) != false
       (c:DefInstance) :
          print-all(o, ["instance " name(c) " of " module(c)])
+      (c:DefVector) :
+         print-all(o, ["vec " name(c) " : " type(c) " of ("])
+         print-all(o, join(args(c), ", "))
+         print(o, ")")
+      (c:DefAccessor) :
+         print-all(o, ["accessor " name(c) " = " source(c) "[" index(c) "]"])
       (c:Connect) :
          print-all(o, [loc(c) " := " exp(c)])
       (c:Conditionally) :
@@ -333,7 +339,7 @@ defmethod print (o:OutputStream, c:Command) :
       (c:EmptyCommand) :
          print(o, "skip")
       (c:Select) :
-         print(o, "(")
+         print-all(o, ["node " name(c) " = ("])
          print-all(o, join(args(c), ", "))
          print(o, ")")
          print-all(o, ["[" idx(c) "]"])

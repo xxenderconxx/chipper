@@ -397,6 +397,44 @@ new-macro{_, 0, '(instance)} $ fn (tokens) :
       'name => name
       'rest => remaining(eater)])
 
+;================= VEC MACRO ================================
+new-macro{_, 0, '(vec)} $ fn (tokens) :
+   val eater = TokenEater(tail(tokens))
+   val name = eat-symbol(eater)
+   eat(eater, ':)
+   val type = eat(eater)
+   eat(eater, 'of)
+   val args = parse-next!(eater)
+   val rest = remaining(eater)
+   val template = '(val name = Vec('name, type, args))
+   val filled = fill-template(template, [
+      'name => name
+      'type => type
+      'args => args])
+   List(filled, rest)   
+
+new-macro{_, 0, '(vec(false))} $ fn (tokens) :
+   val eater = TokenEater(tokens)
+   val len = eat-list(eater)[2]
+   val name = eat-symbol(eater)
+   eat(eater, ':)
+   val type = eat(eater)
+   eat(eater, 'of)
+   val func =
+      if match?(eater, '(:)) :
+         fill-template('(fn () body), [
+            'body => parse-next!(eater)])
+      else :
+         parse-next!(eater)
+   val rest = remaining(eater)
+   val template = '(
+      val name = Vec('name, size, type, func)
+      rest)
+   fill-template(template, [
+      'name => name
+      'size => len
+      'type => type
+      'func => func])
 
 ;=============== WHEN MACRO =================================
 new-mask(0, '(false when))

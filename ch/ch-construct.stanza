@@ -98,32 +98,28 @@ public defn make-register<?T> (name:Symbol, builder:HBuilder<?T>, value:False|Ha
 ;============ Vecs =====================
 public defclass Vec<T>
 public defmulti get<?T> (v:Vec<?T>, i:Int) -> T
-public defmulti get<?T> (v:Vec<?T>, h:IntT) -> T
+public defmulti get<?T> (v:Vec<?T>, h:IntT|RegHandle<IntT>) -> T
 
-public defn Vec<?T> (builder:HBuilder<?T>, vec-args: Streamable<T>) :
+public defn Vec<?T> (vec-name:Symbol, builder:HBuilder<?T>, vec-args: Streamable<T>) :
    ;Convert to array
    val args = to-array(vec-args)
-   
-   ;Check type
-   for a in args do :
-      match(a) :
-         (a:Immediate) : false
-         (a) : error("All vec arguments must be immediates.")
 
    ;Create vector command
-   val vec-name = gensym()
-   push-command(DefVector(vec-name, type(builder), to-list(args) as List<Immediate>))   
+   val vec-name* = gen-scope-name(vec-name)
+   val args* = map(immediate, to-list(args) as List)
+   push-command(DefVector(vec-name*, type(builder), args*))   
    
    new Vec<T> :
       defmethod get (this, i:Int) :
          args[i]
-      defmethod get (this, idx:IntT) :
+      defmethod get (this, idx:IntT|RegHandle<IntT>) :
          val name = gen-scope-name('n)
-         push-command(DefAccessor(name, vec-name, UNKNOWN-DIR, idx))
+         val idx-imm = immediate(unwrap-register<IntT>(idx))
+         push-command(DefAccessor(name, vec-name*, UNKNOWN-DIR, idx-imm))
          handle(builder, Ref(name, UnknownType()))
 
-public defn Vec<?T> (n:Int, builder:HBuilder<?T>, f: () -> T) :
-   Vec(builder, stream(f{}, 0 to n))
+public defn Vec<?T> (vec-name:Symbol, n:Int, builder:HBuilder<?T>, f: () -> T) :
+   Vec(vec-name, builder, stream(f{}, 0 to n))
 
 ;=========== Builders ==================
 public definterface HBuilder<T>
@@ -142,24 +138,25 @@ public defstruct RegHandle<T> <: Handle :
    ref: Immediate
    data-builder: HBuilder<T>
 
-public defn init (r:RegHandle) :
-   handle(IntT(), Field(ref(r), 'init))
+public defn init<?T> (r:RegHandle<?T>) :
+   handle(data-builder(r), Field(ref(r), 'init))
 
 public defn register-data<?T> (r:RegHandle<?T>) :
    handle(data-builder(r), Field(ref(r), 'data))
+
+public defn unwrap-register<T> (r:RegHandle<T>|T) -> T :
+   match(r) :
+      (r:RegHandle<T>) : register-data(r)
+      (r:T) : r
 
 ;========== Int Handles ================
 public defclass IntT <: Handle
 public defclass IntTBuilder <: HBuilder<IntT>
 
-public defn connect (h1:IntT, h2:IntT) :
-   connect-handles(h1, h2)
-public defn connect (r1:RegHandle<IntT>, h2:IntT) :
-   connect(register-data(r1), h2)
-public defn connect (h1:IntT, r2:RegHandle<IntT>) :
-   connect(h1, register-data(r2))
-public defn connect (r1:RegHandle<IntT>, r2:RegHandle<IntT>) :
-   connect(register-data(r1), register-data(r2))
+public defn connect (h1:IntT|RegHandle<IntT>, h2:IntT|RegHandle<IntT>) :
+   match(h1, h2) :
+      (h1:IntT, h2:IntT) : connect-handles(h1, h2)
+      (h1, h2) : connect(unwrap-register<IntT>(h1), unwrap-register<IntT>(h2))
 
 public defn IntT (width:Width) :
    new IntTBuilder :
@@ -176,29 +173,49 @@ public defn IntT () :
    IntT(UnknownWidth())
 
 ;=========== Int Operators =============
-defn do-op (op:PrimOp, h1:IntT, h2:IntT) :
+defn do-op (op:PrimOp, h1:IntT|RegHandle<IntT>, h2:IntT|RegHandle<IntT>) :
    val name = gen-scope-name('n)
-   push-command(DoPrim(name, op, list(immediate(h1), immediate(h2))))
+   val args = list(immediate(unwrap-register<IntT>(h1)),
+                   immediate(unwrap-register<IntT>(h2)))
+   push-command(DoPrim(name, op, args))
    handle(IntT(), Ref(name, UnknownType()))
 
-public defn plus (h1:IntT, h2:IntT) : do-op(ADD-OP, h1, h2)
-public defn minus (h1:IntT, h2:IntT) : do-op(MINUS-OP, h1, h2)
-public defn times (h1:IntT, h2:IntT) : do-op(TIMES-OP, h1, h2)
-public defn divide (h1:IntT, h2:IntT) : do-op(DIVIDE-OP, h1, h2)
-public defn modulo (h1:IntT, h2:IntT) : do-op(MOD-OP, h1, h2)
-public defn shift-left (h1:IntT, h2:IntT) : do-op(SHIFT-LEFT-OP, h1, h2)
-public defn shift-right (h1:IntT, h2:IntT) : do-op(SHIFT-RIGHT-OP, h1, h2)
-public defn bit-and (h1:IntT, h2:IntT) : do-op(BIT-AND-OP, h1, h2)
-public defn bit-or (h1:IntT, h2:IntT) : do-op(BIT-OR-OP, h1, h2)
-public defn bit-xor (h1:IntT, h2:IntT) : do-op(BIT-XOR-OP, h1, h2)
-public defn bit-concat (h1:IntT, h2:IntT) : do-op(CONCAT-OP, h1, h2)
-public defn less? (h1:IntT, h2:IntT) : do-op(LESS-OP, h1, h2)
-public defn less-eq? (h1:IntT, h2:IntT) : do-op(LESS-EQ-OP, h1, h2)
-public defn greater? (h1:IntT, h2:IntT) : do-op(GREATER-OP, h1, h2)
-public defn greater-eq? (h1:IntT, h2:IntT) : do-op(GREATER-EQ-OP, h1, h2)
-public defn bit-equal? (h1:IntT, h2:IntT) : do-op(EQUAL-OP, h1, h2)
-public defn get (h1:IntT, h2:IntT) : do-op(BIT-SELECT-OP, h1, h2)
-public defn get (h1:IntT, i:Int) : do-op(BIT-SELECT-OP, h1, CInt(i))
+public defn plus (h1:IntT|RegHandle<IntT>, h2:IntT|RegHandle<IntT>) :
+   do-op(ADD-OP, h1, h2)
+public defn minus (h1:IntT|RegHandle<IntT>, h2:IntT|RegHandle<IntT>) :
+   do-op(MINUS-OP, h1, h2)
+public defn times (h1:IntT|RegHandle<IntT>, h2:IntT|RegHandle<IntT>) :
+   do-op(TIMES-OP, h1, h2)
+public defn divide (h1:IntT|RegHandle<IntT>, h2:IntT|RegHandle<IntT>) :
+   do-op(DIVIDE-OP, h1, h2)
+public defn modulo (h1:IntT|RegHandle<IntT>, h2:IntT|RegHandle<IntT>) :
+   do-op(MOD-OP, h1, h2)
+public defn shift-left (h1:IntT|RegHandle<IntT>, h2:IntT|RegHandle<IntT>) :
+   do-op(SHIFT-LEFT-OP, h1, h2)
+public defn shift-right (h1:IntT|RegHandle<IntT>, h2:IntT|RegHandle<IntT>) :
+   do-op(SHIFT-RIGHT-OP, h1, h2)
+public defn bit-and (h1:IntT|RegHandle<IntT>, h2:IntT|RegHandle<IntT>) :
+   do-op(BIT-AND-OP, h1, h2)
+public defn bit-or (h1:IntT|RegHandle<IntT>, h2:IntT|RegHandle<IntT>) :
+   do-op(BIT-OR-OP, h1, h2)
+public defn bit-xor (h1:IntT|RegHandle<IntT>, h2:IntT|RegHandle<IntT>) :
+   do-op(BIT-XOR-OP, h1, h2)
+public defn bit-concat (h1:IntT|RegHandle<IntT>, h2:IntT|RegHandle<IntT>) :
+   do-op(CONCAT-OP, h1, h2)
+public defn less? (h1:IntT|RegHandle<IntT>, h2:IntT|RegHandle<IntT>) :
+   do-op(LESS-OP, h1, h2)
+public defn less-eq? (h1:IntT|RegHandle<IntT>, h2:IntT|RegHandle<IntT>) :
+   do-op(LESS-EQ-OP, h1, h2)
+public defn greater? (h1:IntT|RegHandle<IntT>, h2:IntT|RegHandle<IntT>) :
+   do-op(GREATER-OP, h1, h2)
+public defn greater-eq? (h1:IntT|RegHandle<IntT>, h2:IntT|RegHandle<IntT>) :
+   do-op(GREATER-EQ-OP, h1, h2)
+public defn bit-equal? (h1:IntT|RegHandle<IntT>, h2:IntT|RegHandle<IntT>) :
+   do-op(EQUAL-OP, h1, h2)
+public defn get (h1:IntT|RegHandle<IntT>, h2:IntT|RegHandle<IntT>) :
+   do-op(BIT-SELECT-OP, h1, h2)
+public defn get (h1:IntT|RegHandle<IntT>, i:Int) :
+   do-op(BIT-SELECT-OP, h1, CInt(i))
 
 ;========= Constructors ================
 public defn CInt (value:Int) :

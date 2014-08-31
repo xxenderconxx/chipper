@@ -12,6 +12,11 @@ defpackage debug :
    import chipper.construct
    import chipper.passes
 
+defbundle Decoupled<T> () :
+   output data: T
+   output valid: IntT(1)
+   input ready: IntT(1)
+
 defmodule Adder (w:Int) :
    input a: IntT(w)
    input b: IntT(w)
@@ -28,7 +33,7 @@ defmodule BigAdder (w:Int) :
    input g: IntT(w)
    input h: IntT(w)
    input en: IntT(1)
-   output z: IntT(w + 2)
+   output z: IntT(w + 2)   
 
    instance ab: Adder(w)
    a(ab) := a(this)
@@ -56,7 +61,22 @@ defmodule Top () :
    c(adder) := a(this)
    d(adder) := a(this)
    en(adder) := CInt(1)
-   z(this) := z(adder)  
+   z(this) := z(adder)
+
+   ;== TESTING ==
+   register r : Decoupled(IntT())
+   data(r) := a(adder)
+   z(this) := ready(r)
+   data(init(r)) := b(adder)
+
+   vec v : IntT() of [a(adder), b(adder), c(adder), d(adder)]
+   v[0] := CInt(0)
+   v[1] := CInt(1)
+   v[2] := CInt(2)
+   v[3] := CInt(3)
+   v[CInt(0)] := CInt(42)
+
+   v[CInt(4)] := CInt(42) + v[CInt(0)]
 
 defn main () :
    circuit c: Top()
