@@ -95,6 +95,36 @@ public defn make-register<?T> (name:Symbol, builder:HBuilder<?T>, value:False|Ha
          (v:False) : false
    RegHandle<T>(Ref(name), builder)      
 
+;============ Vecs =====================
+public defclass Vec<T>
+public defmulti get<?T> (v:Vec<?T>, i:Int) -> T
+public defmulti get<?T> (v:Vec<?T>, h:IntT) -> T
+
+public defn Vec<?T> (builder:HBuilder<?T>, vec-args: Streamable<T>) :
+   ;Convert to array
+   val args = to-array(vec-args)
+   
+   ;Check type
+   for a in args do :
+      match(a) :
+         (a:Immediate) : false
+         (a) : error("All vec arguments must be immediates.")
+
+   ;Create vector command
+   val vec-name = gensym()
+   push-command(DefVector(vec-name, type(builder), to-list(args) as List<Immediate>))   
+   
+   new Vec<T> :
+      defmethod get (this, i:Int) :
+         args[i]
+      defmethod get (this, idx:IntT) :
+         val name = gen-scope-name('n)
+         push-command(DefAccessor(name, vec-name, UNKNOWN-DIR, idx))
+         handle(builder, Ref(name, UnknownType()))
+
+public defn Vec<?T> (n:Int, builder:HBuilder<?T>, f: () -> T) :
+   Vec(builder, stream(f{}, 0 to n))
+
 ;=========== Builders ==================
 public definterface HBuilder<T>
 public defmulti handle<?T> (b:HBuilder<?T>, ref:Immediate) -> T
