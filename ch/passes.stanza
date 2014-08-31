@@ -10,6 +10,7 @@ defn PassException (msg:String) :
     defmethod print (o:OutputStream, this) :
       print(o, msg)
 
+
 ;============ CHECK IF NAMES ARE UNIQUE ====================
 defn check-duplicate-symbols (names: Streamable<Symbol>, msg: String) :
   val dict = HashTable<Symbol, True>(symbol-hash)
@@ -85,41 +86,16 @@ defn infer (i: Immediate, e: List<KeyValue<Symbol, Type>>) -> Immediate :
       Ref(name(r), type)
     (f:Field) :
       val imm* = infer(imm(f), e)
-      match(type(imm*)) :
-        (t:BundleType) :
-          val type = type(lookup-port!(ports(t), name(f)))
-          Field(imm*, name(f), type)
-        (t) :
-          throw $ PassException $ string-join $
-          ["Type " t " has no fields."]
+      val type = match(type(imm*)) :
+                   (t:BundleType) :
+                     match(lookup-port(ports(t), name(f))) :
+                       (p:Port) : type(p)
+                       (p) : type(f)
+                   (t) : type(f)
+      Field(imm*, name(f), type)             
 
 defn infer (p:PrimOp, arg-types: List<Type>) -> Type :
-  switch {p == _} :
-    MULTIPLEX-OP :
-      if length(arg-types) < 2 :
-        throw(PassException("Multiplexor requires minimum two arguments."))
-      if arg-types[0] not-typeof IntType :
-        throw(PassException("Bad type on mux condition."))
-      if any?({not type-equal?(arg-types[1], _)}, tailn(arg-types, 2)) :
-        throw(PassException("Type mismatch on mux arguments."))
-      arg-types[1]
-    EQUAL-OP :
-      if length(arg-types) != 2 :
-        throw(PassException("Equality operator requires two arguments."))
-      if not type-equal?(arg-types[0], arg-types[1]) :
-        throw(PassException("Type mismatch on equality operator."))
-      arg-types[0]  
-    else :  
-      if length(arg-types) != 2 :
-        throw $ PassException $ string-join $
-          ["Wrong number of arguments to primop: " p "."]
-      if arg-types[0] not-typeof IntType :
-        throw $ PassException $ string-join $
-          ["First argument to primop " p " is not an integer."]
-      if arg-types[1] not-typeof IntType :
-        throw $ PassException $ string-join $
-          ["Second argument to primop " p " is not an integer."]
-      IntType(UnknownWidth())
+  IntType(UnknownWidth()) 
 
 defn infer (c:Command, e: List<KeyValue<Symbol,Type>>) -> [Command, List<KeyValue<Symbol,Type>>] :
   defn push-e (name: Symbol, t: Type) : List(name => t, e)
@@ -165,6 +141,16 @@ defn infer (c:Command, e: List<KeyValue<Symbol,Type>>) -> [Command, List<KeyValu
       val args* = map(infer{_, e}, args(c))
       val type* = infer(op(c), map(type, args*))
       [DoPrim(name(c), op(c), args*), push-e(name(c), type*)]
+    (c:Select) :
+      val idx* = infer(idx(c), e)      
+      val args* = map(infer{_, e}, args(c))
+      val type* = type(args(c)[0])
+      [Select(name(c), idx*, args*), push-e(name(c), type*)]        
+    (c:SelectivelyConnect) :
+      val idx* = infer(idx(c), e)
+      val locs* = map(infer{_, e}, locs(c))
+      val exp* = infer(exp(c), e)
+      [SelectivelyConnect(idx*, locs*, exp*), e]
     (c:EmptyCommand) : [c, e]          
 
 defn infer (m: Module, e: List<KeyValue<Symbol,Type>>) -> Module :

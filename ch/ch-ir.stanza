@@ -40,7 +40,6 @@ public val LESS-EQ-OP = new PrimOp
 public val GREATER-OP = new PrimOp
 public val GREATER-EQ-OP = new PrimOp
 public val EQUAL-OP = new PrimOp
-public val MULTIPLEX-OP = new PrimOp
 
 ;========= Mjolnir Immediate ===========
 public definterface Immediate
@@ -122,6 +121,14 @@ public defstruct DefAccessor <: Command & HasName :
    source: Symbol
    direction: Direction
    index: Immediate   
+public defstruct Select <: Command & HasName :
+   name: Symbol [multi => false]
+   idx: Immediate
+   args: List<Immediate>
+public defstruct SelectivelyConnect <: Command :
+   idx: Immediate
+   locs: List<Immediate>
+   exp: Immediate
 public defstruct Conditionally <: Command :
    pred: Immediate
    conseq: Command
@@ -250,7 +257,6 @@ defmethod print (o:OutputStream, op:PrimOp) :
       GREATER-OP : "Greater"
       GREATER-EQ-OP : "GreaterEq"
       EQUAL-OP : "Equal"
-      MULTIPLEX-OP : "Multiplex"
       else : error("Unable to print Primop")
 
 if-not-defined(PRINT-TYPES) :
@@ -312,6 +318,16 @@ defmethod print (o:OutputStream, c:Command) :
          do(print, join(body(c), "\n"))
       (c:EmptyCommand) :
          print(o, "skip")
+      (c:Select) :
+         print(o, "(")
+         print-all(o, join(args(c), ", "))
+         print(o, ")")
+         print-all(o, ["[" idx(c) "]"])
+      (c:SelectivelyConnect) :
+         print(o, "(")
+         print-all(o, join(locs(c), ", "))
+         print(o, ")")
+         print-all(o, ["[" idx(c) "] := " exp(c)])         
       (c) :
          error("Unable to print command")
 
