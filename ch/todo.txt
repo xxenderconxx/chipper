@@ -49,6 +49,8 @@
 * Convert reset from an implicit to explicit parameter.
   - Make the reset line explicit. Add a reset port to every module,
     and pass the reset signal to every instantiated child component.
+
+* Convert .init for registers to when statements, and remove .data field.
   
 * Infer all widths.
   - Infer all unknown widths for all types in all immediates.

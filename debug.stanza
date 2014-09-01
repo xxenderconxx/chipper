@@ -96,7 +96,7 @@ defmodule Test () :
       d := CInt(42) + y(this)
 
 defn main () :
-   circuit c: Test()
+   circuit c: Top()
    println(c)
    println("==== INFER ====")
    println(run-passes(c))

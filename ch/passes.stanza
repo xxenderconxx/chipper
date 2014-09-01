@@ -169,6 +169,26 @@ defn infer-types (c: Circuit) -> Circuit:
   Circuit(modules*, main(c))  
 
 
+;=============== MAKE RESET EXPLICIT =======================
+defn make-explicit-reset (c: Command) -> Command :
+   match(c) :
+      (c:DefInstance) :
+         val c2 = Connect(Field(Ref(name(c)), 'reset),
+                          Field(Ref('this), 'reset))
+         Begin(list(c, c2))
+      (c) :
+         map(make-explicit-reset{_ as Command}, c)
+
+defn make-explicit-reset (m: Module) :
+   val reset = Port('reset, INPUT, IntType(IntWidth(1)))
+   Module(name(m),
+          List(reset, ports(m)),
+          make-explicit-reset(body(m)))
+
+defn make-explicit-reset (c: Circuit) :
+   val modules* = map(make-explicit-reset, modules(c))
+   Circuit(modules*, main(c))
+
 ;============== EXPAND VECS ================================
 defn* root-ref (i:Immediate) :
    match(i) :
@@ -470,7 +490,8 @@ public defn run-passes (c: Circuit) :
   var c*:Circuit = c
   check-duplicates(c*)
   c* = infer-types(c*)
-  c* = expand-vecs(c*)
-  c* = infer-accessor-dirs(c*)
-  c* = expand-whens(c)
+  c* = make-explicit-reset(c*)
+;  c* = expand-vecs(c*)
+;  c* = infer-accessor-dirs(c*)
+;  c* = expand-whens(c)
   c*
