@@ -444,6 +444,27 @@ defn expand-whens (c:Command,
       1 : cs[0]
       else : Begin(to-list(cs))
 
+defn expand-whens (m:Module,
+                   modules: List<KeyValue<Symbol, BundleType>>) :
+   
+   val env = let :
+      val in-ports = filter({direction(_) == OUTPUT}, ports(m))
+      to-list $
+      for p in in-ports stream :
+         val ref = Field(Ref('this, UnknownType()), name(p), type(p))
+         ref => VoidValue()
+   val body* = expand-whens(body(m), modules, env)
+   Module(name(m), ports(m), body*)
+
+defn expand-whens (c:Circuit) :
+   val module-ports =
+      for m in modules(c) map :
+         name(m) => BundleType(ports(m))
+   val modules* =
+      for m in modules(c) map :
+         expand-whens(m, module-ports)
+   Circuit(modules*, main(c))         
+
 ;============= DRIVER ======================================
 public defn run-passes (c: Circuit) :
   var c*:Circuit = c
@@ -451,4 +472,5 @@ public defn run-passes (c: Circuit) :
   c* = infer-types(c*)
   c* = expand-vecs(c*)
   c* = infer-accessor-dirs(c*)
+  c* = expand-whens(c)
   c*
