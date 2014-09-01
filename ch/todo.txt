@@ -37,6 +37,12 @@
   - All accessor indices must be of the proper type.
   - All condition predicates must of the proper type.
 
+* Convert reset from an implicit to explicit parameter.
+  - Make the reset line explicit. Add a reset port to every module,
+    and pass the reset signal to every instantiated child component.
+
+* Convert .init for registers to when statements, and remove .data field.
+
 * Expand all vectors and associated accessors.
   - OUTPUT accessors become Select commands
   - INPUT accessors become SelectivelyUpdate commands.
@@ -45,12 +51,6 @@
   - Accessor directions when created are initialized to UNKNOWN-DIR.
   - By looking at Connect commands, we can tell whether they are read
     or write ports.
-
-* Convert reset from an implicit to explicit parameter.
-  - Make the reset line explicit. Add a reset port to every module,
-    and pass the reset signal to every instantiated child component.
-
-* Convert .init for registers to when statements, and remove .data field.
   
 * Infer all widths.
   - Infer all unknown widths for all types in all immediates.

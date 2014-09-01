@@ -10,6 +10,34 @@ defn PassException (msg:String) :
     defmethod print (o:OutputStream, this) :
       print(o, msg)
 
+;================ UTILITIES ================================
+defn lookup<?T> (e: Streamable<KeyValue<Immediate,?T>>, i:Immediate) :
+   for entry in e search :
+      if eqv?(key(entry), i) :
+         value(entry)
+
+defn* root-ref (i:Immediate) :
+   match(i) :
+      (f:Field) : root-ref(imm(f))
+      (r:Ref) : r
+
+defn replace-root (i:Immediate, root:Immediate) :
+   match(i) :
+      (r:Ref) : root
+      (f:Field) :
+         Field{_, name(f), type(f)} $
+         replace-root(imm(f), root)
+
+defn replace-root (i:Immediate, old-root:Immediate, new-root:Immediate) :
+   match(i, old-root) :
+      (i:Field, r:Field) :
+         if eqv?(i, r) : new-root
+         else :
+            val imm* = replace-root(imm(i), r, new-root)
+            Field(imm*, name(i))
+      (i:Ref, r:Ref) :
+         if eqv?(i, r) : new-root
+         else : i
 
 ;============ CHECK IF NAMES ARE UNIQUE ====================
 defn check-duplicate-symbols (names: Streamable<Symbol>, msg: String) :
@@ -189,19 +217,33 @@ defn make-explicit-reset (c: Circuit) :
    val modules* = map(make-explicit-reset, modules(c))
    Circuit(modules*, main(c))
 
+
+;======= MAKE EXPLICIT REGISTER INITIALIZATION =============
+;e is a mapping of (register => init wire)
+defn initialize-registers (c: Command
+                           e: List<KeyValue<Immediate,Immediate>>) ->
+                           [Command, List<KeyValue<Immediate,Immediate>>] :
+                           
+   defn replace-reg-ports (i:Immediate) :
+      root-ref(i)
+      
+   match(c) :
+      (c:DefRegister) :
+         val reg = Ref(name(c))
+         val init = Ref $ gensym $ string-join $ [name(c) "-init"]
+         val c* = Begin(list(c, Connect(init, reg)))
+         [c*, list(reg => init)]         
+      (c) :
+         [map(replace-reg-ports, c), List()]
+         
+         
+         
+
+
+
+
+
 ;============== EXPAND VECS ================================
-defn* root-ref (i:Immediate) :
-   match(i) :
-      (f:Field) : root-ref(imm(f))
-      (r:Ref) : r
-
-defn replace-root (i:Immediate, root:Immediate) :
-   match(i) :
-      (r:Ref) : root
-      (f:Field) :
-         Field{_, name(f), type(f)} $
-         replace-root(imm(f), root)
-
 defn lookup-accessor (e: List<KeyValue<Symbol, DefVector|DefAccessor>>, exp: Immediate) :
   val ref = root-ref(exp)
   match(lookup(e, name(ref))) :
@@ -360,12 +402,7 @@ defn eqv? (v1:SymbolicValue, v2:SymbolicValue) :
 
 defn merge-env (pred:Immediate,
                 con-env: List<KeyValue<Immediate,SymbolicValue>>,
-                alt-env: List<KeyValue<Immediate,SymbolicValue>>) :
-   defn lookup (e: Streamable<KeyValue<Immediate,SymbolicValue>>, i:Immediate) :
-      for entry in e search :
-         if eqv?(key(entry), i) :
-            value(entry)
-         
+                alt-env: List<KeyValue<Immediate,SymbolicValue>>) :         
    val env = Vector<KeyValue<Immediate, SymbolicValue>>()
    for entry in con-env do :
       if lookup(env, key(entry)) == false :
