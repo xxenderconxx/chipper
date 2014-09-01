@@ -81,19 +81,17 @@ public defn make-circuit (f: () -> ?) :
 
 ;=========== Wires =====================
 public defn make-wire<?T> (name:Symbol, builder:HBuilder<?T>, value:False|Handle) -> T :
-   push-command{DefWire(name, type(builder), _)} $
-      match(value) :
-         (v:Handle) : immediate(v)
-         (v:False) : false
-   handle(builder, Ref(name))
+   val wire-name = gen-scope-name(name)
+   push-command(DefWire(wire-name, type(builder)))
+   push-command(Connect(Ref(wire-name), immediate(value as Handle))) when value != false
+   handle(builder, Ref(wire-name))
 
 ;============ Registers ================
 public defn make-register<?T> (name:Symbol, builder:HBuilder<?T>, value:False|Handle) -> RegHandle<T> :
-   push-command{DefRegister(name, type(builder), _)} $
-      match(value) :
-         (v:Handle) : immediate(v)
-         (v:False) : false
-   RegHandle<T>(Ref(name), builder)      
+   val reg-name = gen-scope-name(name)
+   push-command(DefRegister(reg-name, type(builder)))
+   push-command(Connect(Ref(reg-name), immediate(value as Handle))) when value != false
+   RegHandle<T>(Ref(reg-name), builder)
 
 ;============ Vecs =====================
 public defclass Vec<T>

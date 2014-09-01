@@ -103,14 +103,12 @@ defn infer (c:Command, e: List<KeyValue<Symbol,Type>>) -> [Command, List<KeyValu
     (c:DefInt|DefSInt) :
       [c, push-e(name(c), IntType(UnknownWidth()))]
     (c:DefWire) :
-      val value* = infer(value(c) as Immediate, e) when value(c) != false
-      [DefWire(name(c), type(c), value*), push-e(name(c), type(c))]
+      [c, push-e(name(c), type(c))]
     (c:DefRegister) :
-      val value* = infer(value(c) as Immediate, e) when value(c) != false
       val type* = BundleType $ to-list $ [
                     Port('data, OUTPUT, type(c))
                     Port('init, INPUT, type(c))]
-      [DefRegister(name(c), type(c), value*), push-e(name(c), type*)]
+      [c, push-e(name(c), type*)]
     (c:DefMemory) :
       [DefMemory(name(c), type(c), size(c)), push-e(name(c), type(c))]
     (c:DefVector) :
@@ -185,14 +183,14 @@ defn replace-root (i:Immediate, root:Immediate) :
          replace-root(imm(f), root)
 
 defn lookup-accessor (e: List<KeyValue<Symbol, DefVector|DefAccessor>>, exp: Immediate) :
-   val ref = root-ref(exp)
-   match(lookup(e, name(ref))) :
-     (acc:DefAccessor) :
-       val vec = lookup!(e, source(acc)) as DefVector
-       val args* = map(replace-root{exp, _}, args(vec))
-       [index(acc), args*]
-     (x) :
-       false
+  val ref = root-ref(exp)
+  match(lookup(e, name(ref))) :
+    (acc:DefAccessor) :
+      val vec = lookup!(e, source(acc)) as DefVector
+      val args* = map(replace-root{exp, _}, args(vec))
+      [index(acc), args*]
+    (x) :
+      false
 
 defn expand-imm (imm: Immediate,
                  e: List<KeyValue<Symbol, DefVector|DefAccessor>>,
@@ -318,6 +316,133 @@ defn infer-accessor-dirs (c:Circuit) :
       Module(name(m), ports(m), body*)
   Circuit(modules*, main(c))
 
+
+;================ EXPAND WHENS =============================
+definterface SymbolicValue 
+defstruct ImmediateValue <: SymbolicValue :
+  imm: Immediate
+defstruct WhenValue <: SymbolicValue :
+  pred: Immediate
+  conseq: SymbolicValue
+  alt: SymbolicValue
+defstruct VoidValue <: SymbolicValue
+
+defn eqv? (v1:SymbolicValue, v2:SymbolicValue) :
+   match(v1, v2) :
+      (v1:ImmediateValue, v2:ImmediateValue) :
+         eqv?(imm(v1), imm(v2))
+      (v1:WhenValue, v2:WhenValue) :
+         eqv?(pred(v1), pred(v2)) and
+         eqv?(conseq(v1), conseq(v2)) and
+         eqv?(alt(v1), alt(v2))
+      (v1:VoidValue, v2:VoidValue) : true
+      (v1, v2) : false
+
+defn merge-env (pred:Immediate,
+                con-env: List<KeyValue<Immediate,SymbolicValue>>,
+                alt-env: List<KeyValue<Immediate,SymbolicValue>>) :
+   defn lookup (e: Streamable<KeyValue<Immediate,SymbolicValue>>, i:Immediate) :
+      for entry in e search :
+         if eqv?(key(entry), i) :
+            value(entry)
+         
+   val env = Vector<KeyValue<Immediate, SymbolicValue>>()
+   for entry in con-env do :
+      if lookup(env, key(entry)) == false :
+         match(lookup(alt-env, key(entry))) :
+            (sv:SymbolicValue) :
+               if eqv?(sv, value(entry)) : add(env, entry)
+               else : add(env, key(entry) => WhenValue(pred, value(entry), sv))
+            (f:False) : add(env, entry)
+   for entry in alt-env do :
+      if lookup(env, key(entry)) == false :
+         add(env, entry)
+   to-list(env)      
+
+defn simplify-env (env: List<KeyValue<Immediate,SymbolicValue>>) :
+   val seen = Vector<Immediate>()
+   defn seen? (i:Immediate) :
+      find(eqv?{i, _}, seen) != false
+      
+   to-list $
+   for entry in env filter :
+      if not seen?(key(entry)) :
+         add(seen, key(entry))
+         true
+
+defn expand-whens (c:Command,
+                   modules: List<KeyValue<Symbol, BundleType>>,
+                   env:List<KeyValue<Immediate,SymbolicValue>>) :                   
+   val cs = Vector<Command>()
+   defn eval (c:Command, env:List<KeyValue<Immediate,SymbolicValue>>) ->
+              List<KeyValue<Immediate,SymbolicValue>> :
+      match(c) :
+         (c:DefInt|DefSInt|DoPrim) :
+            add(cs, c)
+            env
+         (c:DefWire) :
+            add(cs, c)
+            List(Ref(name(c), type(c)) => VoidValue(), env)
+         (c:DefRegister) :
+            add(cs, c)
+            val ref = Ref(name(c), type(c))
+            List(ref => ImmediateValue(ref), env)
+         (c:DefInstance) :
+            add(cs, c)
+            val port-type = lookup!(modules, module(c))
+            val ports* = 
+               for p in ports(port-type) filter :
+                  direction(p) == INPUT
+            to-list{concat(_, env)} $      
+            for p in ports* stream :
+               val ref = Field(Ref(name(c), port-type), name(p), type(p))
+               ref => VoidValue()
+         (c:DefMemory) :
+            add(cs, c)
+            env
+         (c:DefAccessor) :
+            add(cs, c)
+            if direction(c) == INPUT :         
+               List(Ref(name(c), UnknownType()) => VoidValue(), env)
+            else :
+               env
+         (c:Conditionally) :
+            val con-env = eval(conseq(c), env)
+            val alt-env = eval(alt(c), env)
+            merge-env(pred(c), con-env, alt-env)
+         (c:Begin) :
+            var current-env:List<KeyValue<Immediate,SymbolicValue>> = env
+            for c in body(c) do :
+               current-env = eval(c, current-env)
+            current-env
+         (c:Connect) :
+            List(loc(c) => ImmediateValue(exp(c)), env)
+         (c:EmptyCommand) :
+            env
+
+   defn convert-symbolic (sv:SymbolicValue) :
+      match(sv) :
+         (sv:VoidValue) :
+            throw $ PassException $ string-join $
+            ["Uninitialized Connection."]
+         (sv:ImmediateValue) :
+            imm(sv)
+         (sv:WhenValue) :
+            val name = gensym()
+            add{cs, _} $
+            Select(name, pred(sv),
+                   list(convert-symbolic(alt(sv)),
+                        convert-symbolic(conseq(sv))))
+            Ref(name, UnknownType())       
+         
+   val env* = simplify-env(eval(c, env))
+   for entry in env* do :
+      add(cs, Connect(key(entry), convert-symbolic(value(entry))))
+
+   switch {length(cs) == _} :
+      0 : EmptyCommand()
+      1 : cs[0]
+      else : Begin(to-list(cs))
 
 ;============= DRIVER ======================================
 public defn run-passes (c: Circuit) :

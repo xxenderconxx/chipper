@@ -58,6 +58,12 @@ public defstruct Field <: Immediate :
 public defn Field (imm:Immediate, name:Symbol) :
    Field(imm, name, UnknownType())
 
+public defn eqv? (i1:Immediate, i2:Immediate) :
+   match(i1, i2) :
+      (i1:Field, i2:Field) : eqv?(imm(i1), imm(i2)) and name(i1) == name(i2)
+      (i1:Ref, i2:Ref) : name(i1) == name(i2)
+      (i1, i2) : false
+
 ;========== Mjolnir Port ===============
 public defstruct Port :
    name: Symbol
@@ -100,11 +106,9 @@ public defstruct DoPrim <: Command & HasName :
 public defstruct DefWire <: Command & HasName :
    name: Symbol [multi => false]
    type: Type
-   value: False|Immediate
 public defstruct DefRegister <: Command & HasName :
    name: Symbol [multi => false]
    type: Type
-   value: False|Immediate
 public defstruct DefInstance <: Command & HasName :
    name: Symbol [multi => false]
    module: Symbol
@@ -177,11 +181,10 @@ defn indented (o:OutputStream, f: () -> ?) :
 
 ;========== Mappers and Walkers ========
 public defn map (f: (Immediate) -> Immediate, c: Command) -> Command :
-   defn f? (i:False|Immediate) : f(i as Immediate) when i != false
    match(c) :
       (c:DoPrim) : DoPrim(name(c), op(c), map(f, args(c)))
-      (c:DefWire) : DefWire(name(c), type(c), f?(value(c)))
-      (c:DefRegister) : DefRegister(name(c), type(c), f?(value(c)))
+      (c:DefWire) : c
+      (c:DefRegister) : c
       (c:DefVector) : DefVector(name(c), type(c), map(f, args(c)))
       (c:DefAccessor) : DefAccessor(name(c), source(c), direction(c), f(index(c)))
       (c:Select) : Select(name(c), f(idx(c)), map(f, args(c)))
@@ -314,10 +317,8 @@ defmethod print (o:OutputStream, c:Command) :
          print(o, ")")         
       (c:DefWire) :
          print-all(o, ["wire " name(c) " : " type(c)])
-         print-all(o, [" = " value(c)]) when value(c) != false
       (c:DefRegister) :
          print-all(o, ["register " name(c) " : " type(c)])
-         print-all(o, [" = " value(c)]) when value(c) != false
       (c:DefInstance) :
          print-all(o, ["instance " name(c) " of " module(c)])
       (c:DefVector) :
