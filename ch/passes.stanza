@@ -38,6 +38,8 @@ defn replace-root (i:Immediate, old-root:Immediate, new-root:Immediate) :
       (i:Ref, r:Ref) :
          if eqv?(i, r) : new-root
          else : i
+      (i, r) :
+         i
 
 ;============ CHECK IF NAMES ARE UNIQUE ====================
 defn check-duplicate-symbols (names: Streamable<Symbol>, msg: String) :
@@ -219,28 +221,67 @@ defn make-explicit-reset (c: Circuit) :
 
 
 ;======= MAKE EXPLICIT REGISTER INITIALIZATION =============
+defn reg-inits (e: List<KeyValue<Immediate,Immediate>>) :
+   if empty?(e) :
+      EmptyCommand()
+   else :
+      Begin $ to-list $
+      for entry in e map :
+         Connect(key(entry), value(entry))
+            
 ;e is a mapping of (register => init wire)
 defn initialize-registers (c: Command
                            e: List<KeyValue<Immediate,Immediate>>) ->
                            [Command, List<KeyValue<Immediate,Immediate>>] :
                            
    defn replace-reg-ports (i:Immediate) :
-      root-ref(i)
+      match(lookup(e, root-ref(i))) :
+         (wire:Immediate) :
+            val reg = root-ref(i)
+            var imm:Immediate = replace-root(i, Field(reg, 'data), reg)
+            imm = replace-root(imm, Field(reg, 'init), wire)
+            imm
+         (f:False) :
+            i
       
    match(c) :
       (c:DefRegister) :
          val reg = Ref(name(c))
          val init = Ref $ gensym $ string-join $ [name(c) "-init"]
          val c* = Begin(list(c, Connect(init, reg)))
-         [c*, list(reg => init)]         
+         [c*, list(reg => init)]
+      (c:Conditionally) :
+         val pred* = replace-reg-ports(pred(c))
+         val [conseq* con-e] = initialize-registers(conseq(c), e)
+         val [alt* alt-e] = initialize-registers(alt(c), e)
+         val c* = 
+            Conditionally(
+               pred*
+               Begin(list(conseq*, reg-inits(con-e)))
+               Begin(list(alt*, reg-inits(alt-e))))
+         [c*, List()]      
+      (c:Begin) :
+         var current-e: List<KeyValue<Immediate,Immediate>> = e
+         val defined = Vector<KeyValue<Immediate,Immediate>>()
+         val body* = 
+            for c in body(c) map :
+               val [c* e*] = initialize-registers(c, current-e)
+               current-e = append(e*, current-e)
+               do(add{defined, _}, e*)
+               c*
+         [Begin(body*), to-list(defined)]
       (c) :
-         [map(replace-reg-ports, c), List()]
+         [map(replace-reg-ports, c), List()]         
          
-         
-         
+defn initialize-registers (m:Module) :
+   val body* = let :
+      val [body* regs] = initialize-registers(body(m), List())
+      Begin(list(body*, reg-inits(regs)))
+   Module(name(m), ports(m), body*)
 
-
-
+defn initialize-registers (c:Circuit) :
+   val modules* = map(initialize-registers, modules(c))
+   Circuit(modules*, main(c))
 
 
 ;============== EXPAND VECS ================================
@@ -528,6 +569,8 @@ public defn run-passes (c: Circuit) :
   check-duplicates(c*)
   c* = infer-types(c*)
   c* = make-explicit-reset(c*)
+  c* = initialize-registers(c*)
+
 ;  c* = expand-vecs(c*)
 ;  c* = infer-accessor-dirs(c*)
 ;  c* = expand-whens(c)
