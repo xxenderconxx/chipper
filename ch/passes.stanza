@@ -225,9 +225,13 @@ defn reg-inits (e: List<KeyValue<Immediate,Immediate>>) :
    if empty?(e) :
       EmptyCommand()
    else :
-      Begin $ to-list $
-      for entry in e map :
-         Connect(key(entry), value(entry))
+      val connections = Begin $ to-list $
+         for entry in e map :
+            Connect(key(entry), value(entry))
+      Conditionally(
+         Field(Ref('this), 'reset),
+         connections,
+         EmptyCommand())
             
 ;e is a mapping of (register => init wire)
 defn initialize-registers (c: Command
@@ -237,10 +241,9 @@ defn initialize-registers (c: Command
    defn replace-reg-ports (i:Immediate) :
       match(lookup(e, root-ref(i))) :
          (wire:Immediate) :
-            val reg = root-ref(i)
-            var imm:Immediate = replace-root(i, Field(reg, 'data), reg)
-            imm = replace-root(imm, Field(reg, 'init), wire)
-            imm
+            val reg = root-ref(i)            
+            replace-root{_, Field(reg, 'data), reg} $
+               replace-root(i, Field(reg, 'init), wire)
          (f:False) :
             i
       
@@ -248,7 +251,10 @@ defn initialize-registers (c: Command
       (c:DefRegister) :
          val reg = Ref(name(c))
          val init = Ref $ gensym $ string-join $ [name(c) "-init"]
-         val c* = Begin(list(c, Connect(init, reg)))
+         val c* = Begin $ to-list $ [
+            c,
+            DefWire(name(init), type(c))
+            Connect(init, reg)]
          [c*, list(reg => init)]
       (c:Conditionally) :
          val pred* = replace-reg-ports(pred(c))
