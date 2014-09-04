@@ -1,0 +1,13 @@
+=== Features of Chipper ===
+"When" respects scope:
+   Thus now you can now actually use generating functions within conditionals.
+   
+Constraint-Based Width Solver:
+   This allows for operations (such as addition) to grow in width, without causing width inference to run forever.
+
+Reset can be explicitly assigned and retrieved:
+   Users can now route custom logic to the reset signal of instances.
+   Users can also retrieve the reset signal of the current module and write a custom handler.
+
+Registers can be partially initialized:
+   Registers have an init field that can be fully or partially assigned.

@@ -8,19 +8,19 @@
 ;   Max: max(a, b)
 
 ;Simple Feedforward Example
-a = 10
-b = 3
-c = plus(a, b)
-d = max(a, c)
+;a = 10
+;b = 3
+;c = plus(a, b)
+;d = max(a, c)
 
 ;Compound Expressions
 ;a = plus(10, 10)
 ;b = max(a, plus(a, max(10, 3)))
 
 ;Counter Example
-;a = 1
-;b = plus(a, c)
-;c = b
+a = 1
+b = plus(a, c)
+c = b
 
 ;Andrew's OR Example
 ;a = 10
