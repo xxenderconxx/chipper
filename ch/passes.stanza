@@ -579,7 +579,46 @@ defn cleanup-circuit (c:Circuit) :
       for m in modules(c) map :
          Module(name(m), ports(m), cleanup-command(body(m)))
    Circuit(modules*, main(c))                              
-                     
+
+
+;=========== CONVERT MULTI CONNECTS to WHEN ================
+defn convert-connect-many (c:ConnectMany|ManyConnect) :
+   Begin{to-list(_)} $
+   generate<Command> :
+      defn make-int (i:Int) :
+         val name = gensym()
+         yield(DefInt(name, i))
+         Ref(name)
+      defn compare (x:Immediate, i:Int) :
+         val name = gensym()
+         yield(DoPrim(name, EQUAL-OP, list(x, make-int(i))))
+         Ref(name)
+      match(c) :
+         (c:ConnectMany) :
+            for (i in 0 to false, exp in exps(c)) do :
+               yield $
+               Conditionally(compare(idx(c), i),
+                  Connect(loc(c), exp)
+                  EmptyCommand())
+         (c:ManyConnect) :
+            for (i in 0 to false, loc in locs(c)) do :
+               yield $
+               Conditionally(compare(idx(c), i),
+                  Connect(loc, exp(c))
+                  EmptyCommand())
+
+defn expand-command-multi-connects (c:Command) :
+   match(c) :
+      (c:ConnectMany) : convert-connect-many(c)
+      (c:ManyConnect) : convert-connect-many(c)
+      (c) : map(expand-command-multi-connects, c)
+
+defn expand-multi-connects (c:Circuit) :
+   val modules* =
+      for m in modules(c) map :
+         val body* = expand-command-multi-connects(body(m))
+         Module(name(m), ports(m), body*)
+   Circuit(modules*, main(c))                     
 
 ;================ EXPAND WHENS =============================
 definterface SymbolicValue 
@@ -725,6 +764,8 @@ public defn run-passes (c: Circuit) :
   c* = infer-types(c*)
   c* = expand-circuit-bundles(c*)
   c* = cleanup-circuit(c*)
+  c* = expand-multi-connects(c*)
+  c* = expand-whens(c*)
   
 
 
