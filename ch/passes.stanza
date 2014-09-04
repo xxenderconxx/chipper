@@ -437,19 +437,29 @@ defn flatten-bundles (c: Circuit) :
 
 
 ;================== BUNDLE EXPANSION =======================
-defn expand-imm-bundles (i:Immediate) -> List<Immediate> :
-   val cname = collapsed-name(i) where :
-      defn collapsed-name (i:Immediate) :
-         match(i) :
-            (i:Ref) : name(i)
-            (i:Field) : symbol-join $ [collapsed-name(imm(i)) "/" name(i)]      
+defn expand-imm-bundles (i:Immediate, instances:Vector<Symbol>) -> List<Immediate> :
+   defn* collapse-ref (i:Immediate) :
+      match(i) :
+         (i:Ref) : i
+         (i:Field) :
+            match(imm(i)) :
+               (r:Ref) :
+                  if contains?(instances, name(r)) :
+                     i
+                  else :
+                     val name = symbol-join $ [name(r) "/" name(i)]
+                     Ref(name, direction(i), type(i))
+               (f:Field) :
+                  val fname = symbol-join $ [name(f) "/" name(i)]
+                  collapse-ref(Field(imm(f), fname, direction(i), type(i)))
+
    match(type(i)) :
       (t:BundleType) :
          for port in ports(t) map :
-            val name = symbol-join $ [cname "/" name(port)]
-            Ref(name, direction(i) * direction(port), type(port))
+            val dir* = direction(i) * direction(port)
+            collapse-ref(Field(i, name(port), dir*, type(port)))
       (t) :
-         list(i)
+         list(collapse-ref(i))
 
 defn expand-mem-bundles (m: DefMemory) -> Command :
    match(type(m)) :
@@ -461,10 +471,10 @@ defn expand-mem-bundles (m: DefMemory) -> Command :
       (t) :
          m
 
-defn expand-accessor-bundles (a: DefAccessor) -> Command :
+defn expand-accessor-bundles (a: DefAccessor, instances:Vector<Symbol>) -> Command :
    match(type(source(a))) :
       (t:BundleType) :
-         val sources = expand-imm-bundles(source(a))
+         val sources = expand-imm-bundles(source(a), instances)
          Begin $
          for (p in ports(t), s in sources) map :
             val name = symbol-join $ [name(a) "/" name(p)]
@@ -472,27 +482,27 @@ defn expand-accessor-bundles (a: DefAccessor) -> Command :
       (t) :
          a
 
-defn expand-connect-many (c:ConnectMany) -> Command :
-   val locs = expand-imm-bundles(loc(c))
-   val exps-list = transpose(map(expand-imm-bundles, exps(c)))
+defn expand-connect-many (c:ConnectMany, instances:Vector<Symbol>) -> Command :
+   val locs = expand-imm-bundles(loc(c), instances)
+   val exps-list = transpose(map(expand-imm-bundles{_, instances}, exps(c)))
    Begin $
    for (loc in locs, exps in exps-list) map :
       switch {direction(loc) == _} :
          INPUT : ConnectMany(idx(c), loc, exps)
          OUTPUT : ManyConnect(idx(c), exps, loc)
 
-defn expand-many-connect (c:ManyConnect) -> Command :
-   val locs-list = transpose(map(expand-imm-bundles, locs(c)))
-   val exps = expand-imm-bundles(exp(c))
+defn expand-many-connect (c:ManyConnect, instances:Vector<Symbol>) -> Command :
+   val locs-list = transpose(map(expand-imm-bundles{_, instances}, locs(c)))
+   val exps = expand-imm-bundles(exp(c), instances)
    Begin $
    for (locs in locs-list, exp in exps) map :
       switch {direction(exp) == _} :
          OUTPUT : ManyConnect(idx(c), locs, exp)
          INPUT : ConnectMany(idx(c), exp, locs)
 
-defn expand-connect (c:Connect) -> Command :
-   val locs = expand-imm-bundles(loc(c))
-   val exps = expand-imm-bundles(exp(c))
+defn expand-connect (c:Connect, instances:Vector<Symbol>) -> Command :
+   val locs = expand-imm-bundles(loc(c), instances)
+   val exps = expand-imm-bundles(exp(c), instances)
    Begin $
    for (loc in locs, exp in exps) map :
       switch {direction(loc) == _} :
@@ -519,37 +529,33 @@ defn expand-registers (c:DefRegister) -> Command :
       (t) :
          c
 
-defn expand-instance (c:DefInstance) -> Command :
-   Begin{to-list(_)} $
-   generate<Command> :
-      yield(c)
-      val module-type = type(module(c)) as BundleType
-      for p in ports(module-type) do :
-         val wire-name = symbol-join $ [name(c) "/" name(p)]
-         yield(DefWire(wire-name, type(p)))
-         switch {direction(p) == _} :
-            INPUT : yield(Connect(Field(Ref(name(c)), name(p)), Ref(wire-name)))
-            OUTPUT : yield(Connect(Ref(wire-name), Field(Ref(name(c)), name(p))))
-
-defn expand-bundles (c:Command) -> Command :
+defn expand-bundles (c:Command, instances:Vector<Symbol>) -> Command :
    match(c) :
       (c:DefWire) : expand-wires(c)
       (c:DefRegister) : expand-registers(c)
-      (c:DefInstance) : expand-instance(c)
       (c:DefMemory) : expand-mem-bundles(c)
-      (c:DefAccessor) : expand-accessor-bundles(c)
-      (c:ConnectMany) : expand-connect-many(c)
-      (c:ManyConnect) : expand-many-connect(c)
-      (c:Connect) : expand-connect(c)
-      (c) : map(expand-bundles, c)
+      (c:DefAccessor) : expand-accessor-bundles(c, instances)
+      (c:ConnectMany) : expand-connect-many(c, instances)
+      (c:ManyConnect) : expand-many-connect(c, instances)
+      (c:Connect) : expand-connect(c, instances)
+      (c) : map(expand-bundles{_, instances}, c)
+
+defn expand-bundles (m:Module) :
+   ;Find all instances
+   val instances = Vector<Symbol>()
+   add(instances, 'this)
+   loop(body(m)) where :
+      defn loop (c:Command) :
+         match(c) :
+            (c:DefInstance) : add(instances, name(c))
+            (c) : do(loop, children(c))
+   ;Expand body
+   val body* = expand-bundles(body(m), instances)
+   Module(name(m), ports(m), body*)
 
 defn expand-circuit-bundles (c:Circuit) :
    val c* = flatten-bundles(c)
-   val modules* =
-      for m in modules(c*) map :
-         Module(name(m), ports(m), expand-bundles(body(m)))
-   Circuit(modules*, main(c))      
-
+   Circuit(map(expand-bundles, modules(c*)), main(c*))
 
 ;================ CLEANUP COMMANDS =========================
 defn cleanup-command (c:Command) :
@@ -623,8 +629,7 @@ defn simplify-env (env: List<KeyValue<Immediate,SymbolicValue>>) :
          add(seen, key(entry))
          true
 
-defn expand-whens (c:Command,
-                   modules: List<KeyValue<Symbol, BundleType>>,
+defn expand-whens (c:Command,                   
                    env:List<KeyValue<Immediate,SymbolicValue>>) :                   
    val cs = Vector<Command>()
    defn eval (c:Command, env:List<KeyValue<Immediate,SymbolicValue>>) ->
@@ -635,20 +640,20 @@ defn expand-whens (c:Command,
             env
          (c:DefWire) :
             add(cs, c)
-            List(Ref(name(c), type(c)) => VoidValue(), env)
+            List(Ref(name(c)) => VoidValue(), env)
          (c:DefRegister) :
             add(cs, c)
-            val ref = Ref(name(c), type(c))
+            val ref = Ref(name(c))
             List(ref => ImmediateValue(ref), env)
          (c:DefInstance) :
             add(cs, c)
-            val port-type = lookup!(modules, module(c))
-            val ports* = 
-               for p in ports(port-type) filter :
+            val module-type = type(module(c)) as BundleType
+            val in-ports =
+               for p in ports(module-type) filter :
                   direction(p) == INPUT
             to-list{concat(_, env)} $      
-            for p in ports* stream :
-               val ref = Field(Ref(name(c), port-type), name(p), type(p))
+            for p in in-ports stream :
+               val ref = Field(Ref(name(c)), name(p))
                ref => VoidValue()
          (c:DefMemory) :
             add(cs, c)
@@ -656,7 +661,7 @@ defn expand-whens (c:Command,
          (c:DefAccessor) :
             add(cs, c)
             if direction(c) == INPUT :         
-               List(Ref(name(c), UnknownType()) => VoidValue(), env)
+               List(Ref(name(c)) => VoidValue(), env)
             else :
                env
          (c:Conditionally) :
@@ -683,39 +688,29 @@ defn expand-whens (c:Command,
          (sv:WhenValue) :
             val name = gensym()
             add{cs, _} $
-            Select(name, pred(sv),
-                   list(convert-symbolic(alt(sv)),
-                        convert-symbolic(conseq(sv))))
-            Ref(name, UnknownType())       
+            DoPrim(name, MULTIPLEX-OP,
+                   list(pred(sv),
+                        convert-symbolic(conseq(sv)),
+                        convert-symbolic(alt(sv))))
+            Ref(name)       
          
    val env* = simplify-env(eval(c, env))
    for entry in env* do :
       add(cs, Connect(key(entry), convert-symbolic(value(entry))))
+   Begin(to-list(cs))
 
-   switch {length(cs) == _} :
-      0 : EmptyCommand()
-      1 : cs[0]
-      else : Begin(to-list(cs))
-
-defn expand-whens (m:Module,
-                   modules: List<KeyValue<Symbol, BundleType>>) :
-   
+defn expand-whens (m:Module) :   
    val env = let :
-      val in-ports = filter({direction(_) == OUTPUT}, ports(m))
+      val out-ports = filter({direction(_) == OUTPUT}, ports(m))
       to-list $
-      for p in in-ports stream :
-         val ref = Field(Ref('this, UnknownType()), name(p), type(p))
+      for p in out-ports stream :
+         val ref = Field(Ref('this), name(p))
          ref => VoidValue()
-   val body* = expand-whens(body(m), modules, env)
+   val body* = expand-whens(body(m), env)
    Module(name(m), ports(m), body*)
 
 defn expand-whens (c:Circuit) :
-   val module-ports =
-      for m in modules(c) map :
-         name(m) => BundleType(ports(m))
-   val modules* =
-      for m in modules(c) map :
-         expand-whens(m, module-ports)
+   val modules* = map(expand-whens, modules(c))
    Circuit(modules*, main(c))         
 
 ;============= DRIVER ======================================

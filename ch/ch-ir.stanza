@@ -38,6 +38,7 @@ public val BIT-OR-OP = new PrimOp
 public val BIT-XOR-OP = new PrimOp
 public val CONCAT-OP = new PrimOp
 public val BIT-SELECT-OP = new PrimOp
+public val MULTIPLEX-OP = new PrimOp
 
 public val LESS-OP = new PrimOp
 public val LESS-EQ-OP = new PrimOp
@@ -274,6 +275,7 @@ defmethod print (o:OutputStream, op:PrimOp) :
       GREATER-OP : "Greater"
       GREATER-EQ-OP : "GreaterEq"
       EQUAL-OP : "Equal"
+      MULTIPLEX-OP : "Multiplex"
       else : error("Unable to print Primop")
 
 if-not-defined(PRINT-TYPES) :
