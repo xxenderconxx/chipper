@@ -57,8 +57,8 @@ public defn make-module (name:Symbol, ports: Streamable<Port>, f: () -> ?) :
 
 public defn make-instance (name:Symbol, module:Symbol) :
    val name* = gen-scope-name(name)
-   push-command(DefInstance(name*, module))
-   Ref(name*, UnknownType())
+   push-command(DefInstance(name*, Ref(module)))
+   Ref(name*)
 
 public definterface ModuleBuilder<T>
 public defmulti handle<?T> (m:ModuleBuilder<?T>, name:Symbol) -> T
@@ -77,7 +77,7 @@ public defn make-circuit (f: () -> ?) :
    f()
    val top-module = module(last-command) where :
       val last-command = COMMAND-LIST[length(COMMAND-LIST) - 1] as DefInstance
-   Circuit(to-list(MODULE-LIST), top-module)   
+   Circuit(to-list(MODULE-LIST), name(top-module as Ref))   
 
 ;=========== Wires =====================
 public defn make-wire<?T> (name:Symbol, builder:HBuilder<?T>, value:False|Handle) -> T :
@@ -113,8 +113,8 @@ public defn Vec<?T> (vec-name:Symbol, builder:HBuilder<?T>, vec-args: Streamable
       defmethod get (this, idx:IntT|RegHandle<IntT>) :
          val name = gen-scope-name('n)
          val idx-imm = immediate(unwrap-register<IntT>(idx))
-         push-command(DefAccessor(name, vec-name*, UNKNOWN-DIR, idx-imm))
-         handle(builder, Ref(name, UnknownType()))
+         push-command(DefAccessor(name, Ref(vec-name*), UNKNOWN-DIR, idx-imm))
+         handle(builder, Ref(name))
 
 public defn Vec<?T> (vec-name:Symbol, n:Int, builder:HBuilder<?T>, f: () -> T) :
    Vec(vec-name, builder, stream(f{}, 0 to n))
@@ -176,7 +176,7 @@ defn do-op (op:PrimOp, h1:IntT|RegHandle<IntT>, h2:IntT|RegHandle<IntT>) :
    val args = list(immediate(unwrap-register<IntT>(h1)),
                    immediate(unwrap-register<IntT>(h2)))
    push-command(DoPrim(name, op, args))
-   handle(IntT(), Ref(name, UnknownType()))
+   handle(IntT(), Ref(name))
 
 public defn plus (h1:IntT|RegHandle<IntT>, h2:IntT|RegHandle<IntT>) :
    do-op(ADD-OP, h1, h2)
@@ -219,4 +219,4 @@ public defn get (h1:IntT|RegHandle<IntT>, i:Int) :
 public defn CInt (value:Int) :
    val name = gen-scope-name('n)
    push-command(DefInt(name, value))
-   handle(IntT(), Ref(name, UnknownType()))
+   handle(IntT(), Ref(name))

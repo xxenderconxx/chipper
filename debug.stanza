@@ -79,24 +79,19 @@ defmodule Top () :
    v[CInt(4)] := CInt(42) + v[CInt(0)]
 
 defmodule Test () :
-   input a: IntT(1)
-   input x: IntT(1)
+   input a: Decoupled(IntT(1))
+   input x: Decoupled(IntT(1))
    input y: IntT(1)
    output c: IntT(3)
 
-   
-   c(this) := CInt(0)
-   wire d: IntT() = a(this)
-   register r: IntT() = a(this)
-   when x(this) :
-      when y(this) :
-         c(this) := CInt(42)         
-   else :
-      c(this) := CInt(2)
-      d := CInt(42) + y(this)
+   register r : Decoupled(IntT())
+   wire w : Decoupled(IntT())
+   r := w
+   init(r) := w
+
 
 defn main () :
-   circuit c: Top()
+   circuit c: Test()
    println(c)
    println("==== INFER ====")
    println(run-passes(c))

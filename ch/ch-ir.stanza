@@ -14,6 +14,10 @@ public defn flip (d:Direction) :
       OUTPUT : INPUT
       UNKNOWN-DIR : UNKNOWN-DIR
 
+public defn times (x:Direction, y:Direction) :
+   if x == INPUT : flip(y)
+   else : y   
+
 ;========== Mjolnir Width ==============
 public definterface Width
 public defstruct UnknownWidth <: Width : ()
@@ -44,19 +48,22 @@ public val EQUAL-OP = new PrimOp
 ;========= Mjolnir Immediate ===========
 public definterface Immediate
 public defmulti type (imm:Immediate) -> Type
+public defmulti direction (imm:Immediate) -> Direction
 
 public defstruct Ref <: Immediate :
    name: Symbol
+   direction: Direction [multi => false]
    type: Type [multi => false]
 public defn Ref (name:Symbol) :
-   Ref(name, UnknownType())
+   Ref(name, UNKNOWN-DIR, UnknownType())
    
 public defstruct Field <: Immediate :
    imm: Immediate
    name: Symbol
+   direction: Direction [multi => false]
    type: Type [multi => false]
 public defn Field (imm:Immediate, name:Symbol) :
-   Field(imm, name, UnknownType())
+   Field(imm, name, UNKNOWN-DIR, UnknownType())
 
 public defn eqv? (i1:Immediate, i2:Immediate) :
    match(i1, i2) :
@@ -111,7 +118,7 @@ public defstruct DefRegister <: Command & HasName :
    type: Type
 public defstruct DefInstance <: Command & HasName :
    name: Symbol [multi => false]
-   module: Symbol
+   module: Immediate
 public defstruct DefMemory <: Command & HasName :
    name: Symbol [multi => false]
    type: Type
@@ -122,7 +129,7 @@ public defstruct DefVector <: Command & HasName :
    args: List<Immediate>
 public defstruct DefAccessor <: Command & HasName :
    name: Symbol [multi => false]
-   source: Symbol
+   source: Immediate
    direction: Direction
    index: Immediate   
 public defstruct Select <: Command & HasName :
@@ -183,10 +190,9 @@ defn indented (o:OutputStream, f: () -> ?) :
 public defn map (f: (Immediate) -> Immediate, c: Command) -> Command :
    match(c) :
       (c:DoPrim) : DoPrim(name(c), op(c), map(f, args(c)))
-      (c:DefWire) : c
-      (c:DefRegister) : c
+      (c:DefInstance) : DefInstance(name(c), f(module(c)))
       (c:DefVector) : DefVector(name(c), type(c), map(f, args(c)))
-      (c:DefAccessor) : DefAccessor(name(c), source(c), direction(c), f(index(c)))
+      (c:DefAccessor) : DefAccessor(name(c), f(source(c)), direction(c), f(index(c)))
       (c:Select) : Select(name(c), f(idx(c)), map(f, args(c)))
       (c:SelectivelyConnect) : SelectivelyConnect(f(idx(c)), map(f, locs(c)), f(exp(c)))
       (c:Conditionally) : Conditionally(f(pred(c)), conseq(c), alt(c))
@@ -207,12 +213,6 @@ public defn children (c: Command) -> Streamable<Command> :
       (c:Begin) : body(c)
       (c:Conditionally) : [conseq(c) alt(c)]
       (c) : []
-
-public defn map (f: (Command) -> Command, m: Module) :
-   Module(name(m), ports(m), f(body(m)))
-
-public defn map (f: (Module) -> Module, c: Circuit) :
-   Circuit(map(f, modules(c)), main(c))      
 
 public defn map (f: (Type) -> Type, t: Type) -> Type :
    match(t) :
@@ -310,6 +310,8 @@ defmethod print (o:OutputStream, p:Port) :
 defmethod print (o:OutputStream, c:Command) :
    match(c) :
       (c:DefInt) :
+         print-all(o, ["node " name(c) " = " value(c)])
+      (c:DefSInt) :
          print-all(o, ["node " name(c) " = " value(c)])
       (c:DoPrim) :
          print-all(o, ["node " name(c) " = " op(c) "("])
