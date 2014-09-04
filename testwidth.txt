@@ -18,9 +18,9 @@
 ;b = max(a, plus(a, max(10, 3)))
 
 ;Counter Example
-a = 1
-b = plus(a, c)
-c = b
+;a = 1
+;b = plus(a, c)
+;c = b
 
 ;Andrew's OR Example
 ;a = 10
@@ -51,7 +51,7 @@ c = b
 ;b = max(max(b, a), 10)
 
 ;Fixed Point Solver Feeding into Dataflow:
-;a = max(a, b)
-;b = max(max(b, a), 10)
-;c = plus(a, b)
-;d = plus(c, c)
+a = max(a, b)
+b = max(max(b, a), 10)
+c = plus(a, b)
+d = plus(c, c)

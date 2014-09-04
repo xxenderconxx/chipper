@@ -3,7 +3,6 @@ include<"core/verse.stanza">
 include<"core/stringeater.stanza">
 include<"compiler/lexer.stanza">
 
-
 defpackage widthsolver :
    import core
    import verse
