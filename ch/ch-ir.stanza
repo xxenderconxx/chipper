@@ -118,7 +118,7 @@ public defstruct DefRegister <: Command & HasName :
    type: Type
 public defstruct DefInstance <: Command & HasName :
    name: Symbol [multi => false]
-   module: Immediate
+   module: Ref
 public defstruct DefMemory <: Command & HasName :
    name: Symbol [multi => false]
    type: Type
@@ -129,7 +129,7 @@ public defstruct DefVector <: Command & HasName :
    args: List<Immediate>
 public defstruct DefAccessor <: Command & HasName :
    name: Symbol [multi => false]
-   source: Immediate
+   source: Ref
    direction: Direction
    index: Immediate
 public defstruct ConnectMany <: Command :
@@ -190,9 +190,9 @@ defn indented (o:OutputStream, f: () -> ?) :
 public defn map (f: (Immediate) -> Immediate, c: Command) -> Command :
    match(c) :
       (c:DoPrim) : DoPrim(name(c), op(c), map(f, args(c)))
-      (c:DefInstance) : DefInstance(name(c), f(module(c)))
+      (c:DefInstance) : DefInstance(name(c), f(module(c)) as Ref)
       (c:DefVector) : DefVector(name(c), type(c), map(f, args(c)))
-      (c:DefAccessor) : DefAccessor(name(c), f(source(c)), direction(c), f(index(c)))
+      (c:DefAccessor) : DefAccessor(name(c), f(source(c)) as Ref, direction(c), f(index(c)))
       (c:ConnectMany) : ConnectMany(f(idx(c)), f(loc(c)), map(f, exps(c)))
       (c:ManyConnect) : ManyConnect(f(idx(c)), map(f, locs(c)), f(exp(c)))
       (c:Conditionally) : Conditionally(f(pred(c)), conseq(c), alt(c))

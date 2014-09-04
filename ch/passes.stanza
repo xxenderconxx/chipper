@@ -259,7 +259,7 @@ defn infer (c:Command, in-e: List<Ref>, out-e: List<Ref>) -> [Command, List<Ref>
          val out-ref = Ref(name(c), OUTPUT, type(source*))
          [DefAccessor(name(c), source*, UNKNOWN-DIR, index*), List(in-ref, in-e), List(out-ref, out-e)]
       (c:DefInstance) :
-         val module* = infer(module(c), out-e)
+         val module* = infer(module(c), out-e) as Ref
          val ref = Ref(name(c), direction(module*), type(module*))
          [DefInstance(name(c), module*), List(ref, in-e), List(ref, out-e)]
       (c:Conditionally) :
@@ -357,82 +357,43 @@ defn infer-accessor-dirs (c:Circuit) :
    Circuit(modules*, main(c))
 
 
-;;============== EXPAND VECS ================================
-;defn lookup-accessor (e: List<KeyValue<Symbol, DefVector|DefAccessor>>, exp: Immediate) :
-;  val ref = root-ref(exp)
-;  match(lookup(e, name(ref))) :
-;    (acc:DefAccessor) :
-;      val vec = lookup!(e, source(acc)) as DefVector
-;      val args* = map(replace-root{exp, _}, args(vec))
-;      [index(acc), args*]
-;    (x) :
-;      false
-;
-;defn expand-imm (imm: Immediate,
-;                 e: List<KeyValue<Symbol, DefVector|DefAccessor>>,
-;                 cs:Vector<Command>) :
-;  match(lookup-accessor(e, imm)) :
-;    ([idx args]:[Immediate, List<Immediate>]) :
-;      val c = Select(gensym(), idx, args)
-;      add(cs, c)
-;      Ref(name(c), type(imm))
-;    (f:False) :
-;      imm
-;
-;defn expand-connect (c: Connect,
-;                     e: List<KeyValue<Symbol, DefVector|DefAccessor>>,
-;                     cs: Vector<Command>) :
-;  val exp* = expand-imm(exp(c), e, cs)  
-;  match(lookup-accessor(e, loc(c))) :
-;    ([idx args]:[Immediate, List<Immediate>]) :
-;      SelectivelyConnect(idx, args, exp*)
-;    (f:False) :
-;      Connect(loc(c), exp*)                       
-;
-;public defn expand-vecs (c: Command,
-;                         e: List<KeyValue<Symbol, DefVector|DefAccessor>>) ->
-;                        [Command, List<KeyValue<Symbol, DefVector|DefAccessor>>] :
-;  val cs = Vector<Command>()
-;  val env = 
-;    if c typeof Connect :
-;      add(cs, expand-connect(c as Connect, e, cs))
-;      e
-;    else :
-;      match(map(expand-imm{_, e, cs}, c)) :
-;        (c:DefVector) :
-;          List(name(c) => c, e)
-;        (c:DefAccessor) :
-;          if lookup(e, source(c)) != false :
-;            List(name(c) => c, e)
-;          else :
-;            add(cs, c)
-;            e
-;        (c:Begin) :
-;          var current-e: List<KeyValue<Symbol,DefVector|DefAccessor>> = e
-;          for c in body(c) do :
-;            val [c*, e*] = expand-vecs(c, current-e)
-;            current-e = e*
-;            add(cs, c*)
-;          current-e
-;        (c:Conditionally) :
-;          val [con*, con-e] = expand-vecs(conseq(c), e)
-;          val [alt*, alt-e] = expand-vecs(alt(c), e)
-;          add(cs, Conditionally(pred(c), con*, alt*))
-;          e
-;        (c) :
-;          add(cs, c)
-;          e
-;
-;  switch {length(cs) == _} :
-;    0 : [EmptyCommand(), env]
-;    1 : [cs[0], env]
-;    else : [Begin(to-list(cs)), env]        
-;
-;public defn expand-vecs (c: Circuit) :
-;  Circuit{_, main(c)} $
-;  for m in modules(c) map :
-;    val [body*, env] = expand-vecs(body(m), List())
-;    Module(name(m), ports(m), body*)      
+;============== EXPAND VECS ================================
+defn lookup-vector (vecs: Streamable<DefVector>, n:Symbol) :
+   for v in vecs find :
+      name(v) == n
+      
+defn expand-vecs (c: Command) :
+   val vecs = Vector<DefVector>()
+   defn expand (c:Command) :
+      match(c) :
+         (c:DefAccessor) :
+            match(lookup-vector(vecs, name(source(c)))) :
+               (vec:DefVector) :
+                  switch {direction(c) == _} :
+                     OUTPUT :
+                        Begin $ to-list $ [
+                           DefWire(name(c), type(source(c)))
+                           ConnectMany(index(c), Ref(name(c)), args(vec))]
+                     INPUT :
+                        Begin $ to-list $ [
+                           DefWire(name(c), type(source(c)))
+                           ManyConnect(index(c), args(vec), Ref(name(c)))]
+               (vec:False) :
+                  c
+         (c:DefVector) :
+            add(vecs, c)
+            EmptyCommand()
+         (c) :
+            map(expand, c)
+   expand(c)         
+
+defn expand-vecs (c:Circuit) :
+   val modules* =
+      for m in modules(c) map :
+         Module(name(m), ports(m), expand-vecs(body(m)))
+   Circuit(modules*, main(c))      
+
+
 
 ;;=============== BUNDLE FLATTENING =========================
 ;defn flatten-ports (p:Port) -> List<Port> :
@@ -713,7 +674,8 @@ public defn run-passes (c: Circuit) :
   c* = initialize-registers(c*)
   c* = infer-types(c*)
   c* = infer-accessor-dirs(c*)
-;  c* = expand-vecs(c*)
+  c* = expand-vecs(c*)
+  c* = infer-types(c*)
   
 ;  c* = flatten-bundles(c*)
 
