@@ -131,15 +131,15 @@ public defstruct DefAccessor <: Command & HasName :
    name: Symbol [multi => false]
    source: Immediate
    direction: Direction
-   index: Immediate   
-public defstruct Select <: Command & HasName :
-   name: Symbol [multi => false]
+   index: Immediate
+public defstruct ConnectMany <: Command :
    idx: Immediate
-   args: List<Immediate>
-public defstruct SelectivelyConnect <: Command :
+   loc: Immediate
+   exps: List<Immediate>
+public defstruct ManyConnect <: Command :
    idx: Immediate
    locs: List<Immediate>
-   exp: Immediate
+   exp: Immediate   
 public defstruct Conditionally <: Command :
    pred: Immediate
    conseq: Command
@@ -193,8 +193,8 @@ public defn map (f: (Immediate) -> Immediate, c: Command) -> Command :
       (c:DefInstance) : DefInstance(name(c), f(module(c)))
       (c:DefVector) : DefVector(name(c), type(c), map(f, args(c)))
       (c:DefAccessor) : DefAccessor(name(c), f(source(c)), direction(c), f(index(c)))
-      (c:Select) : Select(name(c), f(idx(c)), map(f, args(c)))
-      (c:SelectivelyConnect) : SelectivelyConnect(f(idx(c)), map(f, locs(c)), f(exp(c)))
+      (c:ConnectMany) : ConnectMany(f(idx(c)), f(loc(c)), map(f, exps(c)))
+      (c:ManyConnect) : ManyConnect(f(idx(c)), map(f, locs(c)), f(exp(c)))
       (c:Conditionally) : Conditionally(f(pred(c)), conseq(c), alt(c))
       (c:Connect) : Connect(f(loc(c)), f(exp(c)))
       (c) : c
@@ -341,16 +341,14 @@ defmethod print (o:OutputStream, c:Command) :
          do(print, join(body(c), "\n"))
       (c:EmptyCommand) :
          print(o, "skip")
-      (c:Select) :
-         print-all(o, ["node " name(c) " = ("])
-         print-all(o, join(args(c), ", "))
-         print(o, ")")
-         print-all(o, ["[" idx(c) "]"])
-      (c:SelectivelyConnect) :
-         print(o, "(")
+      (c:ConnectMany) :
+         print-all(o, [loc(c) " := ("])
+         print-all(o, join(exps(c), ", "))
+         print-all(o, [")[" idx(c) "]"])
+      (c:ManyConnect) :
+         print-all(o, ["("])
          print-all(o, join(locs(c), ", "))
-         print(o, ")")
-         print-all(o, ["[" idx(c) "] := " exp(c)])         
+         print-all(o, [")[" idx(c) "] := " exp(c)])
       (c) :
          error("Unable to print command")
 

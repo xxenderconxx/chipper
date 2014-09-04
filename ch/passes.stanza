@@ -285,17 +285,16 @@ defn infer (c:Command, in-e: List<Ref>, out-e: List<Ref>) -> [Command, List<Ref>
          val type* = infer(op(c), map(type, args*))
          val ref = Ref(name(c), OUTPUT, type*)
          [DoPrim(name(c), op(c), args*), List(ref, in-e), List(ref, out-e)]
-      (c:Select) :
-         val idx* = infer(idx(c), out-e)      
-         val args* = map(infer{_, out-e}, args(c))
-         val type* = type(head(args*))
-         val ref = Ref(name(c), OUTPUT, type*)
-         [Select(name(c), idx*, args*), List(ref, in-e), List(ref, out-e)]        
-      (c:SelectivelyConnect) :
-         val locs* = map(infer{_, in-e}, locs(c))
+      (c:ConnectMany) :
          val idx* = infer(idx(c), out-e)
-         val exp* = infer(exp(c), out-e)      
-         [SelectivelyConnect(idx*, locs*, exp*), in-e, out-e]
+         val loc* = infer(loc(c), in-e)
+         val exps* = map(infer{_, out-e}, exps(c))
+         [ConnectMany(idx*, loc*, exps*), in-e, out-e]
+      (c:ManyConnect) :
+         val idx* = infer(idx(c), out-e)
+         val locs* = map(infer{_, in-e}, locs(c))
+         val exp* = infer(exp(c), out-e)
+         [ManyConnect(idx*, locs*, exp*), in-e, out-e]
       (c:EmptyCommand) : [c, in-e, out-e]          
 
 defn infer (m: Module, e: List<Ref>) -> Module :
@@ -311,97 +310,53 @@ defn infer-types (c: Circuit) -> Circuit :
    val modules* = map(infer{_, env}, modules(c))                      
    Circuit(modules*, main(c))  
 
+;========= INFER DIRECTIONS OF ACCESSORS ===================
+defn find-accessor-uses (c:Command) :
+   to-list $ generate<Ref> :
+      val accessors = Vector<Symbol>()
+      defn find-use (imm:Immediate) :
+         val root = root-ref(imm)
+         yield(root) when contains?(accessors, name(root))        
+         imm
+      loop(c) where :  
+         defn loop (c:Command) :
+            match(map(find-use, c)) :
+               (c:DefAccessor) : add(accessors, name(c))
+               (c) : do(loop, children(c))
 
-;;=============== BUNDLE FLATTENING =========================
-;defn flatten-ports (p:Port) -> List<Port> :
-;   match(type(p)) :
-;      (t:BundleType) :
-;         val ports = map-append(flatten-ports, ports(t))
-;         for port in ports map :
-;            val name* = symbol-join([name(p) "." name(port)])
-;            val dir* = switch {direction(p) == _} :
-;                         OUTPUT : direction(port)
-;                         INPUT : flip(direction(port))
-;            Port(name*, dir*, type(port))             
-;      (t:Type) :
-;         list(p)
-;
-;defn flatten-type (t:Type) -> Type :
-;   match(t) :
-;      (t:BundleType) :
-;         BundleType $
-;         map-append(flatten-ports, ports(t))
-;      (t:Type) :
-;         t         
-;
-;defn flatten-imm (i:Immediate) -> Immediate :
-;   match(i) :
-;      (r:Ref) : Ref(name(r), flatten-type(type(r)))
-;      (f:Field) : Field(name(f), direction(f), flatten-type(type(f)))
-;      
-;defn flatten-command (c: Command) -> Command :
-;   match(map(flatten-imm, c)) :
-;      (c:DefWire) : DefWire(name(c), flatten-type(type(c)))
-;      (c:DefRegister) : DefRegister(name(c), flatten-type(type(c)))
-;      (c:DefMemory) : DefMemory(name(c), flatten-type(type(c)), size(c))
-;      (c:DefVector) : DefVector(name(c), flatten-type(type(c)), args(c))
-;      (c) : map(flatten-command, c)
-;
-;defn flatten-bundles (m: Module) :
-;   val ports* = map-append(flatten-ports, ports(m))
-;   val body* = flatten-command(body(m))
-;   Module(name(m), ports*, body*)
-;   
-;defn flatten-bundles (c: Circuit) :
-;   Circuit(map(flatten-bundles, modules(c)), main(c))
-;
-;;================== BUNDLE EXPANSION =======================
-;defn expand-bundles (i: Immediate) -> List<Port> :
-;   val cname = collapsed-name(i) where :
-;      defn collapsed-name (i:Immediate) :
-;         match(i) :
-;            (i:Ref) : name(i)
-;            (i:Field) : symbol-join $ [collapsed-name(imm(i)) "." name(i)]
-;   match(type(i)) :
-;      (t:BundleType) :
-;         for port in ports(t) map :
-;            val name = symbol-join $ [cname "." name(port)]
-;            Port(name, direction(port), type(port))
-;      (t) :
-;         list(Port(cname, OUTPUT, t))
-;
-;defn expand-mem-bundles (m: DefMemory) -> Command :
-;   match(type(m)) :
-;      (t:BundleType) :
-;         Begin $
-;         for p in ports(t) map :
-;            val name = symbol-join $ [name(m) "." name(p)]
-;            DefMemory(name, type(p), size(m))
-;      (t) :
-;         m
-;
-;defn expand-accessor-bundles (a: DefAccessor) -> Command :
-;   match(type(source(a))) :
-;      (t:BundleType) :
-;         Begin $
-;         for (p in ports(t), mem-port in expand-bundles(source(a))) map :
-;            val name = symbol-join $ [name(a) "." name(p)]
-;            val mem = Ref(name(mem-port), type(mem-port))
-;            DefAccessor(name, mem, direction(a), index(a))
-;      (t) :
-;         a
-;   
-;defn expand-bundles (c: Command) -> Command :
-;   match(c) :
-;      (c:DefMemory) :
-;         expand-mem-bundles(c)
-;      (c:DefAccessor) :
-;         expand-accessor-bundles(c)
-;      (c:Select) :
-;         val arg-ports = transpose(map(expand-bundles, args(c)))
-;         
-;
-;
+defn fold-accessor-uses (uses: List<Ref>) :
+   val table = HashTable<Symbol,Ref>(symbol-hash)
+   for use in uses do :
+      match(get?(table, name(use), false)) :
+         (r:Ref) :
+            if direction(r) != direction(use) :
+               throw $ PassException $ string-join $
+               ["Accessor " name(use) " is used both as an INPUT and an OUTPUT."]          
+         (f:False) :
+            table[name(use)] = use
+   to-list(stream(value, table))
+
+defn fill-accessor-dirs (c:Command, uses:List<Ref>) -> Command :
+   match(c) :
+      (c:DefAccessor) :
+         val dir =
+            match(lookup-ref(uses, name(c))) :
+               (r:Ref) : direction(r)
+               (d:False) : throw $ PassException $ string-join $
+                           ["Accessor " name(c) " is never used. Unable to infer direction."]
+         DefAccessor(name(c), source(c), dir, index(c))
+      (c:Command) :
+         map(fill-accessor-dirs{_, uses}, c)
+
+defn infer-accessor-dirs (c:Circuit) :
+   val modules* =
+      for m in modules(c) map :
+         val uses = fold-accessor-uses(find-accessor-uses(body(m)))
+         val body* = fill-accessor-dirs(body(m), uses)
+         Module(name(m), ports(m), body*)
+   Circuit(modules*, main(c))
+
+
 ;;============== EXPAND VECS ================================
 ;defn lookup-accessor (e: List<KeyValue<Symbol, DefVector|DefAccessor>>, exp: Immediate) :
 ;  val ref = root-ref(exp)
@@ -478,66 +433,135 @@ defn infer-types (c: Circuit) -> Circuit :
 ;  for m in modules(c) map :
 ;    val [body*, env] = expand-vecs(body(m), List())
 ;    Module(name(m), ports(m), body*)      
+
+;;=============== BUNDLE FLATTENING =========================
+;defn flatten-ports (p:Port) -> List<Port> :
+;   match(type(p)) :
+;      (t:BundleType) :
+;         val ports = map-append(flatten-ports, ports(t))
+;         for port in ports map :
+;            val name* = symbol-join([name(p) "." name(port)])
+;            Port(name*, direction(p) * direction(port), type(port))             
+;      (t:Type) :
+;         list(p)
 ;
+;defn flatten-type (t:Type) -> Type :
+;   match(t) :
+;      (t:BundleType) :
+;         BundleType $
+;         map-append(flatten-ports, ports(t))
+;      (t:Type) :
+;         t         
 ;
+;defn flatten-imm (i:Immediate) -> Immediate :
+;   match(i) :
+;      (r:Ref) : Ref(name(r), flatten-type(type(r)))
+;      (f:Field) : Field(name(f), direction(f), flatten-type(type(f)))
+;      
+;defn flatten-command (c: Command) -> Command :
+;   match(map(flatten-imm, c)) :
+;      (c:DefWire) : DefWire(name(c), flatten-type(type(c)))
+;      (c:DefRegister) : DefRegister(name(c), flatten-type(type(c)))
+;      (c:DefMemory) : DefMemory(name(c), flatten-type(type(c)), size(c))
+;      (c:DefVector) : DefVector(name(c), flatten-type(type(c)), args(c))
+;      (c) : map(flatten-command, c)
 ;
-;;========= INFER DIRECTIONS OF MEMORY PORTS ================
-;defn find-accessor-uses (c:Command) :
-;  to-list $ generate<KeyValue<Symbol,Direction>> :
-;    val accessors = Vector<Symbol>()
-;    defn find-use (imm:Immediate, dir:Direction) :
-;      val root = root-ref(imm)
-;      if contains?(accessors, name(root)) :
-;        yield(name(root) => dir)
-;      imm  
-;        
-;    defn find-use (c:Command) -> ? :
-;      match(c) :
-;        (c:DefAccessor) :
-;          add(accessors, name(c))
-;          find-use(index(c), OUTPUT)
-;        (c:Connect) :
-;          find-use(loc(c), INPUT)
-;          find-use(exp(c), OUTPUT)
-;        (c) :
-;          map(find-use{_, OUTPUT}, c) ;Find uses in immediates
-;          do(find-use, children(c)) ;Find uses in subcommands
+;defn flatten-bundles (m: Module) :
+;   val ports* = map-append(flatten-ports, ports(m))
+;   val body* = flatten-command(body(m))
+;   Module(name(m), ports*, body*)
+;   
+;defn flatten-bundles (c: Circuit) :
+;   Circuit(map(flatten-bundles, modules(c)), main(c))
 ;
-;    find-use(c)
+;;================== BUNDLE EXPANSION =======================
+;defn expand-imm-bundles (i:Immediate) -> List<Immediate> :
+;   val cname = collapsed-name(i) where :
+;      defn collapsed-name (i:Immediate) :
+;         match(i) :
+;            (i:Ref) : name(i)
+;            (i:Field) : symbol-join $ [collapsed-name(imm(i)) "." name(i)]      
+;   match(type(i)) :
+;      (t:BundleType) :
+;         for port in ports(t) map :
+;            val name = symbol-join $ [cname "." name(port)]
+;            Ref(name, direction(i) * direction(port), type(port))
+;      (t) :
+;         list(i)
 ;
-;defn fold-accessor-uses (uses: List<KeyValue<Symbol,Direction>>) :
-;  val table = HashTable<Symbol,Direction>(symbol-hash)
-;  for use in uses do :
-;    match(get?(table, key(use), false)) :
-;      (d:Direction) :
-;        if d != value(use) :
-;          throw $ PassException $ string-join $
-;          ["Accessor " key(use) " is used both as an INPUT and an OUTPUT."]          
-;      (f:False) :
-;        table[key(use)] = value(use)
-;  to-list(table)      
+;defn expand-mem-bundles (m: DefMemory) -> Command :
+;   match(type(m)) :
+;      (t:BundleType) :
+;         Begin $
+;         for p in ports(t) map :
+;            val name = symbol-join $ [name(m) "." name(p)]
+;            DefMemory(name, type(p), size(m))
+;      (t) :
+;         m
 ;
-;defn fill-accessor-dirs (c:Command, uses:List<KeyValue<Symbol,Direction>>) -> Command :
-;  match(c) :
-;    (c:DefAccessor) :
-;      val dir =
-;        match(lookup(uses, name(c))) :
-;          (d:Direction) : d
-;          (d:False) : throw $ PassException $ string-join $
-;                      ["Accessor " name(c) " is never used. Unable to infer direction."]
-;      DefAccessor(name(c), source(c), dir, index(c))
-;    (c:Command) :
-;      map(fill-accessor-dirs{_, uses}, c)
+;defn expand-vec-bundles (v: DefVector) -> Command :
+;   match(type(v)) :
+;      (t:BundleType) :
+;         val args = transpose(map(expand-imm-bundles, args(v)))
+;         Begin $
+;         for (p in ports(t), a in args) map :
+;            val name = symbol-join $ [name(v) "." name(p)]
+;            DefVector(name, type(p), a)                    ;IS DIRECTION(p) USED??
+;      (t) :
+;         v
 ;
-;defn infer-accessor-dirs (c:Circuit) :
-;  val modules* =
-;    for m in modules(c) map :
-;      val uses = fold-accessor-uses(find-accessor-uses(body(m)))
-;      val body* = fill-accessor-dirs(body(m), uses)
-;      Module(name(m), ports(m), body*)
-;  Circuit(modules*, main(c))
+;defn expand-accessor-bundles (a: DefAccessor) -> Command :
+;   match(type(source(a))) :
+;      (t:BundleType) :
+;         val sources = expand-imm-bundles(source(a))
+;         Begin $
+;         for (p in ports(t), s in sources) map :
+;            val name = symbol-join $ [name(a) "." name(p)]
+;            DefAccessor(name, s, direction(a), index(a))    ;IS DIRECTION(p) USED?
+;      (t) :
+;         a
 ;
+;defn expand-select-bundles (s:Select) -> Command :
+;   match(type(head(args))) :
+;      (t:BundleType) :
+;         val args = transpose(map(expand-imm-bundles, args(s)))
+;         Begin $
+;         for (p in ports(t), a in args) map :
+;            val name = symbol-join $ [name(s) "." name(p)]
+;            Select(name, idx(s), a)
+;      (t) :
+;         s
 ;
+;defn expand-selectively-connect-bundles (s:SelectivelyConnect) -> Command :
+;   match(type(exp(s))) :
+;      (t:BundleType) :
+;         val locs-list = transpose(map(expand-imm-bundles, locs(s)))
+;         val exps = expand-imm-bundles(exp(s))
+;         Begin $
+;         for (exp in exps, locs in locs-list) map :
+;            switch {direction(exp) == _} :
+;               OUTPUT : SelectivelyConnect(idx(s), locs, exp)
+;               INPUT : SelectivelyConnect(
+;      (t) :
+;         s
+;   
+;defn expand-bundles (c: Command) -> Command :
+;   match(c) :
+;      (c:DefMemory) :
+;         expand-mem-bundles(c)
+;      (c:DefVector) :
+;         expand-vec-bundles(c)
+;      (c:DefAccessor) :
+;         expand-accessor-bundles(c)
+;      (c:Select) :
+;         val arg-ports = transpose(map(expand-bundles, args(c)))
+         
+
+
+
+
+
+
 ;;================ EXPAND WHENS =============================
 ;definterface SymbolicValue 
 ;defstruct ImmediateValue <: SymbolicValue :
@@ -688,11 +712,14 @@ public defn run-passes (c: Circuit) :
   c* = make-explicit-reset(c*)
   c* = initialize-registers(c*)
   c* = infer-types(c*)
+  c* = infer-accessor-dirs(c*)
+;  c* = expand-vecs(c*)
+  
 ;  c* = flatten-bundles(c*)
 
 
 
-;  c* = expand-vecs(c*)
-;  c* = infer-accessor-dirs(c*)
+
+
 ;  c* = expand-whens(c)
   c*
