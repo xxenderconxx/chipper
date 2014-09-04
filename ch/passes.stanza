@@ -395,276 +395,328 @@ defn expand-vecs (c:Circuit) :
 
 
 
-;;=============== BUNDLE FLATTENING =========================
-;defn flatten-ports (p:Port) -> List<Port> :
-;   match(type(p)) :
-;      (t:BundleType) :
-;         val ports = map-append(flatten-ports, ports(t))
-;         for port in ports map :
-;            val name* = symbol-join([name(p) "." name(port)])
-;            Port(name*, direction(p) * direction(port), type(port))             
-;      (t:Type) :
-;         list(p)
-;
-;defn flatten-type (t:Type) -> Type :
-;   match(t) :
-;      (t:BundleType) :
-;         BundleType $
-;         map-append(flatten-ports, ports(t))
-;      (t:Type) :
-;         t         
-;
-;defn flatten-imm (i:Immediate) -> Immediate :
-;   match(i) :
-;      (r:Ref) : Ref(name(r), flatten-type(type(r)))
-;      (f:Field) : Field(name(f), direction(f), flatten-type(type(f)))
-;      
-;defn flatten-command (c: Command) -> Command :
-;   match(map(flatten-imm, c)) :
-;      (c:DefWire) : DefWire(name(c), flatten-type(type(c)))
-;      (c:DefRegister) : DefRegister(name(c), flatten-type(type(c)))
-;      (c:DefMemory) : DefMemory(name(c), flatten-type(type(c)), size(c))
-;      (c:DefVector) : DefVector(name(c), flatten-type(type(c)), args(c))
-;      (c) : map(flatten-command, c)
-;
-;defn flatten-bundles (m: Module) :
-;   val ports* = map-append(flatten-ports, ports(m))
-;   val body* = flatten-command(body(m))
-;   Module(name(m), ports*, body*)
-;   
-;defn flatten-bundles (c: Circuit) :
-;   Circuit(map(flatten-bundles, modules(c)), main(c))
-;
-;;================== BUNDLE EXPANSION =======================
-;defn expand-imm-bundles (i:Immediate) -> List<Immediate> :
-;   val cname = collapsed-name(i) where :
-;      defn collapsed-name (i:Immediate) :
-;         match(i) :
-;            (i:Ref) : name(i)
-;            (i:Field) : symbol-join $ [collapsed-name(imm(i)) "." name(i)]      
-;   match(type(i)) :
-;      (t:BundleType) :
-;         for port in ports(t) map :
-;            val name = symbol-join $ [cname "." name(port)]
-;            Ref(name, direction(i) * direction(port), type(port))
-;      (t) :
-;         list(i)
-;
-;defn expand-mem-bundles (m: DefMemory) -> Command :
-;   match(type(m)) :
-;      (t:BundleType) :
-;         Begin $
-;         for p in ports(t) map :
-;            val name = symbol-join $ [name(m) "." name(p)]
-;            DefMemory(name, type(p), size(m))
-;      (t) :
-;         m
-;
-;defn expand-vec-bundles (v: DefVector) -> Command :
-;   match(type(v)) :
-;      (t:BundleType) :
-;         val args = transpose(map(expand-imm-bundles, args(v)))
-;         Begin $
-;         for (p in ports(t), a in args) map :
-;            val name = symbol-join $ [name(v) "." name(p)]
-;            DefVector(name, type(p), a)                    ;IS DIRECTION(p) USED??
-;      (t) :
-;         v
-;
-;defn expand-accessor-bundles (a: DefAccessor) -> Command :
-;   match(type(source(a))) :
-;      (t:BundleType) :
-;         val sources = expand-imm-bundles(source(a))
-;         Begin $
-;         for (p in ports(t), s in sources) map :
-;            val name = symbol-join $ [name(a) "." name(p)]
-;            DefAccessor(name, s, direction(a), index(a))    ;IS DIRECTION(p) USED?
-;      (t) :
-;         a
-;
-;defn expand-select-bundles (s:Select) -> Command :
-;   match(type(head(args))) :
-;      (t:BundleType) :
-;         val args = transpose(map(expand-imm-bundles, args(s)))
-;         Begin $
-;         for (p in ports(t), a in args) map :
-;            val name = symbol-join $ [name(s) "." name(p)]
-;            Select(name, idx(s), a)
-;      (t) :
-;         s
-;
-;defn expand-selectively-connect-bundles (s:SelectivelyConnect) -> Command :
-;   match(type(exp(s))) :
-;      (t:BundleType) :
-;         val locs-list = transpose(map(expand-imm-bundles, locs(s)))
-;         val exps = expand-imm-bundles(exp(s))
-;         Begin $
-;         for (exp in exps, locs in locs-list) map :
-;            switch {direction(exp) == _} :
-;               OUTPUT : SelectivelyConnect(idx(s), locs, exp)
-;               INPUT : SelectivelyConnect(
-;      (t) :
-;         s
-;   
-;defn expand-bundles (c: Command) -> Command :
-;   match(c) :
-;      (c:DefMemory) :
-;         expand-mem-bundles(c)
-;      (c:DefVector) :
-;         expand-vec-bundles(c)
-;      (c:DefAccessor) :
-;         expand-accessor-bundles(c)
-;      (c:Select) :
-;         val arg-ports = transpose(map(expand-bundles, args(c)))
+;=============== BUNDLE FLATTENING =========================
+defn flatten-ports (p:Port) -> List<Port> :
+   match(type(p)) :
+      (t:BundleType) :
+         val ports = map-append(flatten-ports, ports(t))
+         for port in ports map :
+            val name* = symbol-join([name(p) "/" name(port)])
+            Port(name*, direction(p) * direction(port), type(port))             
+      (t:Type) :
+         list(p)
+
+defn flatten-type (t:Type) -> Type :
+   match(t) :
+      (t:BundleType) :
+         BundleType $
+         map-append(flatten-ports, ports(t))
+      (t:Type) :
+         t         
+
+defn flatten-imm (i:Immediate) -> Immediate :
+   match(i) :
+      (r:Ref) : Ref(name(r), direction(r), flatten-type(type(r)))
+      (f:Field) : Field(flatten-imm(imm(f)), name(f), direction(f), flatten-type(type(f)))
+      
+defn flatten-command (c: Command) -> Command :
+   match(map(flatten-imm, c)) :
+      (c:DefWire) : DefWire(name(c), flatten-type(type(c)))
+      (c:DefRegister) : DefRegister(name(c), flatten-type(type(c)))
+      (c:DefMemory) : DefMemory(name(c), flatten-type(type(c)), size(c))
+      (c) : map(flatten-command, c)
+
+defn flatten-bundles (m: Module) :
+   val ports* = map-append(flatten-ports, ports(m))
+   val body* = flatten-command(body(m))
+   Module(name(m), ports*, body*)
+   
+defn flatten-bundles (c: Circuit) :
+   Circuit(map(flatten-bundles, modules(c)), main(c))
+
+
+
+;================== BUNDLE EXPANSION =======================
+defn expand-imm-bundles (i:Immediate) -> List<Immediate> :
+   val cname = collapsed-name(i) where :
+      defn collapsed-name (i:Immediate) :
+         match(i) :
+            (i:Ref) : name(i)
+            (i:Field) : symbol-join $ [collapsed-name(imm(i)) "/" name(i)]      
+   match(type(i)) :
+      (t:BundleType) :
+         for port in ports(t) map :
+            val name = symbol-join $ [cname "/" name(port)]
+            Ref(name, direction(i) * direction(port), type(port))
+      (t) :
+         list(i)
+
+defn expand-mem-bundles (m: DefMemory) -> Command :
+   match(type(m)) :
+      (t:BundleType) :
+         Begin $
+         for p in ports(t) map :
+            val name = symbol-join $ [name(m) "/" name(p)]
+            DefMemory(name, type(p), size(m))
+      (t) :
+         m
+
+defn expand-accessor-bundles (a: DefAccessor) -> Command :
+   match(type(source(a))) :
+      (t:BundleType) :
+         val sources = expand-imm-bundles(source(a))
+         Begin $
+         for (p in ports(t), s in sources) map :
+            val name = symbol-join $ [name(a) "/" name(p)]
+            DefAccessor(name, s as Ref, direction(a), index(a))
+      (t) :
+         a
+
+defn expand-connect-many (c:ConnectMany) -> Command :
+   val locs = expand-imm-bundles(loc(c))
+   val exps-list = transpose(map(expand-imm-bundles, exps(c)))
+   Begin $
+   for (loc in locs, exps in exps-list) map :
+      switch {direction(loc) == _} :
+         INPUT : ConnectMany(idx(c), loc, exps)
+         OUTPUT : ManyConnect(idx(c), exps, loc)
+
+defn expand-many-connect (c:ManyConnect) -> Command :
+   val locs-list = transpose(map(expand-imm-bundles, locs(c)))
+   val exps = expand-imm-bundles(exp(c))
+   Begin $
+   for (locs in locs-list, exp in exps) map :
+      switch {direction(exp) == _} :
+         OUTPUT : ManyConnect(idx(c), locs, exp)
+         INPUT : ConnectMany(idx(c), exp, locs)
+
+defn expand-connect (c:Connect) -> Command :
+   val locs = expand-imm-bundles(loc(c))
+   val exps = expand-imm-bundles(exp(c))
+   Begin $
+   for (loc in locs, exp in exps) map :
+      switch {direction(loc) == _} :
+         INPUT : Connect(loc, exp)
+         OUTPUT : Connect(exp, loc)
+
+defn expand-wires (c:DefWire) -> Command :
+   match(type(c)) :
+      (t:BundleType) :
+         Begin $
+         for p in ports(t) map :
+            val name = symbol-join $ [name(c) "/" name(p)]
+            DefWire(name, type(p))
+      (t) :
+         c
+
+defn expand-registers (c:DefRegister) -> Command :
+   match(type(c)) :
+      (t:BundleType) :
+         Begin $
+         for p in ports(t) map :
+            val name = symbol-join $ [name(c) "/" name(p)]
+            DefRegister(name, type(p))
+      (t) :
+         c
+
+defn expand-instance (c:DefInstance) -> Command :
+   Begin{to-list(_)} $
+   generate<Command> :
+      yield(c)
+      val module-type = type(module(c)) as BundleType
+      for p in ports(module-type) do :
+         val wire-name = symbol-join $ [name(c) "/" name(p)]
+         yield(DefWire(wire-name, type(p)))
+         switch {direction(p) == _} :
+            INPUT : yield(Connect(Field(Ref(name(c)), name(p)), Ref(wire-name)))
+            OUTPUT : yield(Connect(Ref(wire-name), Field(Ref(name(c)), name(p))))
+
+defn expand-bundles (c:Command) -> Command :
+   match(c) :
+      (c:DefWire) : expand-wires(c)
+      (c:DefRegister) : expand-registers(c)
+      (c:DefInstance) : expand-instance(c)
+      (c:DefMemory) : expand-mem-bundles(c)
+      (c:DefAccessor) : expand-accessor-bundles(c)
+      (c:ConnectMany) : expand-connect-many(c)
+      (c:ManyConnect) : expand-many-connect(c)
+      (c:Connect) : expand-connect(c)
+      (c) : map(expand-bundles, c)
+
+defn expand-circuit-bundles (c:Circuit) :
+   val c* = flatten-bundles(c)
+   val modules* =
+      for m in modules(c*) map :
+         Module(name(m), ports(m), expand-bundles(body(m)))
+   Circuit(modules*, main(c))      
+
+
+;================ CLEANUP COMMANDS =========================
+defn cleanup-command (c:Command) :
+   match(c) :
+      (c:Begin) :         
+         val cs = to-list $ generate<Command> :
+            loop(c) where :
+               defn loop (c:Command) :
+                  match(c) :
+                     (c:Begin) : do(loop, body(c))
+                     (c:EmptyCommand) : false
+                     (c) : yield(cleanup-command(c))
+         switch {length(cs) == _} :
+            0 : EmptyCommand()
+            1 : head(cs)
+            else : Begin(cs)
+      (c) : map(cleanup-command, c)
+
+defn cleanup-circuit (c:Circuit) :
+   val modules* =
+      for m in modules(c) map :
+         Module(name(m), ports(m), cleanup-command(body(m)))
+   Circuit(modules*, main(c))                              
+                     
+
+;================ EXPAND WHENS =============================
+definterface SymbolicValue 
+defstruct ImmediateValue <: SymbolicValue :
+  imm: Immediate
+defstruct WhenValue <: SymbolicValue :
+  pred: Immediate
+  conseq: SymbolicValue
+  alt: SymbolicValue
+defstruct VoidValue <: SymbolicValue
+
+defn eqv? (v1:SymbolicValue, v2:SymbolicValue) :
+   match(v1, v2) :
+      (v1:ImmediateValue, v2:ImmediateValue) :
+         eqv?(imm(v1), imm(v2))
+      (v1:WhenValue, v2:WhenValue) :
+         eqv?(pred(v1), pred(v2)) and
+         eqv?(conseq(v1), conseq(v2)) and
+         eqv?(alt(v1), alt(v2))
+      (v1:VoidValue, v2:VoidValue) : true
+      (v1, v2) : false
+
+defn merge-env (pred:Immediate,
+                con-env: List<KeyValue<Immediate,SymbolicValue>>,
+                alt-env: List<KeyValue<Immediate,SymbolicValue>>) :         
+   val env = Vector<KeyValue<Immediate, SymbolicValue>>()
+   for entry in con-env do :
+      if lookup(env, key(entry)) == false :
+         match(lookup(alt-env, key(entry))) :
+            (sv:SymbolicValue) :
+               if eqv?(sv, value(entry)) : add(env, entry)
+               else : add(env, key(entry) => WhenValue(pred, value(entry), sv))
+            (f:False) : add(env, entry)
+   for entry in alt-env do :
+      if lookup(env, key(entry)) == false :
+         add(env, entry)
+   to-list(env)      
+
+defn simplify-env (env: List<KeyValue<Immediate,SymbolicValue>>) :
+   val seen = Vector<Immediate>()
+   defn seen? (i:Immediate) :
+      find(eqv?{i, _}, seen) != false
+      
+   to-list $
+   for entry in env filter :
+      if not seen?(key(entry)) :
+         add(seen, key(entry))
+         true
+
+defn expand-whens (c:Command,
+                   modules: List<KeyValue<Symbol, BundleType>>,
+                   env:List<KeyValue<Immediate,SymbolicValue>>) :                   
+   val cs = Vector<Command>()
+   defn eval (c:Command, env:List<KeyValue<Immediate,SymbolicValue>>) ->
+              List<KeyValue<Immediate,SymbolicValue>> :
+      match(c) :
+         (c:DefInt|DefSInt|DoPrim) :
+            add(cs, c)
+            env
+         (c:DefWire) :
+            add(cs, c)
+            List(Ref(name(c), type(c)) => VoidValue(), env)
+         (c:DefRegister) :
+            add(cs, c)
+            val ref = Ref(name(c), type(c))
+            List(ref => ImmediateValue(ref), env)
+         (c:DefInstance) :
+            add(cs, c)
+            val port-type = lookup!(modules, module(c))
+            val ports* = 
+               for p in ports(port-type) filter :
+                  direction(p) == INPUT
+            to-list{concat(_, env)} $      
+            for p in ports* stream :
+               val ref = Field(Ref(name(c), port-type), name(p), type(p))
+               ref => VoidValue()
+         (c:DefMemory) :
+            add(cs, c)
+            env
+         (c:DefAccessor) :
+            add(cs, c)
+            if direction(c) == INPUT :         
+               List(Ref(name(c), UnknownType()) => VoidValue(), env)
+            else :
+               env
+         (c:Conditionally) :
+            val con-env = eval(conseq(c), env)
+            val alt-env = eval(alt(c), env)
+            merge-env(pred(c), con-env, alt-env)
+         (c:Begin) :
+            var current-env:List<KeyValue<Immediate,SymbolicValue>> = env
+            for c in body(c) do :
+               current-env = eval(c, current-env)
+            current-env
+         (c:Connect) :
+            List(loc(c) => ImmediateValue(exp(c)), env)
+         (c:EmptyCommand) :
+            env
+
+   defn convert-symbolic (sv:SymbolicValue) :
+      match(sv) :
+         (sv:VoidValue) :
+            throw $ PassException $ string-join $
+            ["Uninitialized Connection."]
+         (sv:ImmediateValue) :
+            imm(sv)
+         (sv:WhenValue) :
+            val name = gensym()
+            add{cs, _} $
+            Select(name, pred(sv),
+                   list(convert-symbolic(alt(sv)),
+                        convert-symbolic(conseq(sv))))
+            Ref(name, UnknownType())       
          
+   val env* = simplify-env(eval(c, env))
+   for entry in env* do :
+      add(cs, Connect(key(entry), convert-symbolic(value(entry))))
 
+   switch {length(cs) == _} :
+      0 : EmptyCommand()
+      1 : cs[0]
+      else : Begin(to-list(cs))
 
+defn expand-whens (m:Module,
+                   modules: List<KeyValue<Symbol, BundleType>>) :
+   
+   val env = let :
+      val in-ports = filter({direction(_) == OUTPUT}, ports(m))
+      to-list $
+      for p in in-ports stream :
+         val ref = Field(Ref('this, UnknownType()), name(p), type(p))
+         ref => VoidValue()
+   val body* = expand-whens(body(m), modules, env)
+   Module(name(m), ports(m), body*)
 
-
-
-
-;;================ EXPAND WHENS =============================
-;definterface SymbolicValue 
-;defstruct ImmediateValue <: SymbolicValue :
-;  imm: Immediate
-;defstruct WhenValue <: SymbolicValue :
-;  pred: Immediate
-;  conseq: SymbolicValue
-;  alt: SymbolicValue
-;defstruct VoidValue <: SymbolicValue
-;
-;defn eqv? (v1:SymbolicValue, v2:SymbolicValue) :
-;   match(v1, v2) :
-;      (v1:ImmediateValue, v2:ImmediateValue) :
-;         eqv?(imm(v1), imm(v2))
-;      (v1:WhenValue, v2:WhenValue) :
-;         eqv?(pred(v1), pred(v2)) and
-;         eqv?(conseq(v1), conseq(v2)) and
-;         eqv?(alt(v1), alt(v2))
-;      (v1:VoidValue, v2:VoidValue) : true
-;      (v1, v2) : false
-;
-;defn merge-env (pred:Immediate,
-;                con-env: List<KeyValue<Immediate,SymbolicValue>>,
-;                alt-env: List<KeyValue<Immediate,SymbolicValue>>) :         
-;   val env = Vector<KeyValue<Immediate, SymbolicValue>>()
-;   for entry in con-env do :
-;      if lookup(env, key(entry)) == false :
-;         match(lookup(alt-env, key(entry))) :
-;            (sv:SymbolicValue) :
-;               if eqv?(sv, value(entry)) : add(env, entry)
-;               else : add(env, key(entry) => WhenValue(pred, value(entry), sv))
-;            (f:False) : add(env, entry)
-;   for entry in alt-env do :
-;      if lookup(env, key(entry)) == false :
-;         add(env, entry)
-;   to-list(env)      
-;
-;defn simplify-env (env: List<KeyValue<Immediate,SymbolicValue>>) :
-;   val seen = Vector<Immediate>()
-;   defn seen? (i:Immediate) :
-;      find(eqv?{i, _}, seen) != false
-;      
-;   to-list $
-;   for entry in env filter :
-;      if not seen?(key(entry)) :
-;         add(seen, key(entry))
-;         true
-;
-;defn expand-whens (c:Command,
-;                   modules: List<KeyValue<Symbol, BundleType>>,
-;                   env:List<KeyValue<Immediate,SymbolicValue>>) :                   
-;   val cs = Vector<Command>()
-;   defn eval (c:Command, env:List<KeyValue<Immediate,SymbolicValue>>) ->
-;              List<KeyValue<Immediate,SymbolicValue>> :
-;      match(c) :
-;         (c:DefInt|DefSInt|DoPrim) :
-;            add(cs, c)
-;            env
-;         (c:DefWire) :
-;            add(cs, c)
-;            List(Ref(name(c), type(c)) => VoidValue(), env)
-;         (c:DefRegister) :
-;            add(cs, c)
-;            val ref = Ref(name(c), type(c))
-;            List(ref => ImmediateValue(ref), env)
-;         (c:DefInstance) :
-;            add(cs, c)
-;            val port-type = lookup!(modules, module(c))
-;            val ports* = 
-;               for p in ports(port-type) filter :
-;                  direction(p) == INPUT
-;            to-list{concat(_, env)} $      
-;            for p in ports* stream :
-;               val ref = Field(Ref(name(c), port-type), name(p), type(p))
-;               ref => VoidValue()
-;         (c:DefMemory) :
-;            add(cs, c)
-;            env
-;         (c:DefAccessor) :
-;            add(cs, c)
-;            if direction(c) == INPUT :         
-;               List(Ref(name(c), UnknownType()) => VoidValue(), env)
-;            else :
-;               env
-;         (c:Conditionally) :
-;            val con-env = eval(conseq(c), env)
-;            val alt-env = eval(alt(c), env)
-;            merge-env(pred(c), con-env, alt-env)
-;         (c:Begin) :
-;            var current-env:List<KeyValue<Immediate,SymbolicValue>> = env
-;            for c in body(c) do :
-;               current-env = eval(c, current-env)
-;            current-env
-;         (c:Connect) :
-;            List(loc(c) => ImmediateValue(exp(c)), env)
-;         (c:EmptyCommand) :
-;            env
-;
-;   defn convert-symbolic (sv:SymbolicValue) :
-;      match(sv) :
-;         (sv:VoidValue) :
-;            throw $ PassException $ string-join $
-;            ["Uninitialized Connection."]
-;         (sv:ImmediateValue) :
-;            imm(sv)
-;         (sv:WhenValue) :
-;            val name = gensym()
-;            add{cs, _} $
-;            Select(name, pred(sv),
-;                   list(convert-symbolic(alt(sv)),
-;                        convert-symbolic(conseq(sv))))
-;            Ref(name, UnknownType())       
-;         
-;   val env* = simplify-env(eval(c, env))
-;   for entry in env* do :
-;      add(cs, Connect(key(entry), convert-symbolic(value(entry))))
-;
-;   switch {length(cs) == _} :
-;      0 : EmptyCommand()
-;      1 : cs[0]
-;      else : Begin(to-list(cs))
-;
-;defn expand-whens (m:Module,
-;                   modules: List<KeyValue<Symbol, BundleType>>) :
-;   
-;   val env = let :
-;      val in-ports = filter({direction(_) == OUTPUT}, ports(m))
-;      to-list $
-;      for p in in-ports stream :
-;         val ref = Field(Ref('this, UnknownType()), name(p), type(p))
-;         ref => VoidValue()
-;   val body* = expand-whens(body(m), modules, env)
-;   Module(name(m), ports(m), body*)
-;
-;defn expand-whens (c:Circuit) :
-;   val module-ports =
-;      for m in modules(c) map :
-;         name(m) => BundleType(ports(m))
-;   val modules* =
-;      for m in modules(c) map :
-;         expand-whens(m, module-ports)
-;   Circuit(modules*, main(c))         
+defn expand-whens (c:Circuit) :
+   val module-ports =
+      for m in modules(c) map :
+         name(m) => BundleType(ports(m))
+   val modules* =
+      for m in modules(c) map :
+         expand-whens(m, module-ports)
+   Circuit(modules*, main(c))         
 
 ;============= DRIVER ======================================
 public defn run-passes (c: Circuit) :
@@ -676,8 +728,10 @@ public defn run-passes (c: Circuit) :
   c* = infer-accessor-dirs(c*)
   c* = expand-vecs(c*)
   c* = infer-types(c*)
+  c* = expand-circuit-bundles(c*)
+  c* = cleanup-circuit(c*)
   
-;  c* = flatten-bundles(c*)
+
 
 
 

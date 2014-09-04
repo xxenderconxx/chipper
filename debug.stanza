@@ -63,21 +63,6 @@ defmodule Top () :
    en(adder) := CInt(1)
    z(this) := z(adder)
 
-   ;== TESTING ==
-   register r : Decoupled(IntT())
-   data(r) := a(adder)
-   z(this) := ready(r)
-   data(init(r)) := b(adder)
-
-   vec v : IntT() of [a(adder), b(adder), c(adder), d(adder)]
-   v[0] := CInt(0)
-   v[1] := CInt(1)
-   v[2] := CInt(2)
-   v[3] := CInt(3)
-   v[CInt(0)] := CInt(42)
-
-   v[CInt(4)] := CInt(42) + v[CInt(0)]
-
 defmodule Test () :
    input a: Decoupled(IntT(1))
    input b: Decoupled(IntT(1))
@@ -89,7 +74,7 @@ defmodule Test () :
 
 
 defn main () :
-   circuit c: Test()
+   circuit c: Top()
    println(c)
    println("==== INFER ====")
    println(run-passes(c))
