@@ -1,0 +1,57 @@
+;Examples can be run by uncommenting the appropriate example (by
+;deleting the beginning semicolons).  and
+;running "./width testwidth.txt" in the terminal.
+
+;Possible Expressions:
+;   Literal: 42
+;   Plus: plus(a, b)
+;   Max: max(a, b)
+
+;Simple Feedforward Example
+a = 10
+b = 3
+c = plus(a, b)
+d = max(a, c)
+
+;Compound Expressions
+;a = plus(10, 10)
+;b = max(a, plus(a, max(10, 3)))
+
+;Counter Example
+;a = 1
+;b = plus(a, c)
+;c = b
+
+;Andrew's OR Example
+;a = 10
+;b = max(a, c)
+;c = b
+
+;Andrew's OR Example feeding into an
+;feedforward Example
+;a = 10
+;b = max(a, c)
+;c = b
+;d = 1
+;e = plus(d, b)
+;f = plus(e, e)
+
+;Andrew's OR Example feeding into an
+;uninferrable Counter Example
+;a = 10
+;b = max(a, c)
+;c = b
+;d = 1
+;e = plus(d, f)
+;f = plus(e, b)
+;g = c
+
+;Fixed Point Solver:
+;a = max(a, b)
+;b = max(max(b, a), 10)
+
+;Fixed Point Solver Feeding into Dataflow:
+;a = max(a, b)
+;b = max(max(b, a), 10)
+;c = plus(a, b)
+;d = plus(c, c)

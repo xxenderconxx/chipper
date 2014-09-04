@@ -60,6 +60,10 @@ defmodule Top () :
    b(adder) := a(this)
    c(adder) := a(this)
    d(adder) := a(this)
+   e(adder) := a(this)
+   f(adder) := a(this)
+   g(adder) := a(this)
+   h(adder) := a(this)
    en(adder) := CInt(1)
    z(this) := z(adder)
 

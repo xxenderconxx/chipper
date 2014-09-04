@@ -1,0 +1,239 @@
+include<"core/core.stanza">
+include<"core/verse.stanza">
+include<"core/stringeater.stanza">
+include<"compiler/lexer.stanza">
+
+
+defpackage widthsolver :
+   import core
+   import verse
+   import stanza.lexer
+
+;============= Language of Expressions ======================
+definterface Exp
+public defstruct EVar <: Exp :
+   name: Symbol
+public defstruct EMax <: Exp :
+   a: Exp
+   b: Exp
+public defstruct EPlus <: Exp :
+   a: Exp
+   b: Exp
+public defstruct ELit <: Exp :
+   width: Int
+public defstruct EUnknown <: Exp : ()
+
+defmethod print (o:OutputStream, e:Exp) :
+   match(e) :
+      (e:EVar) : print(o, name(e))
+      (e:EMax) : print-all(o, ["max(" a(e) ", " b(e) ")"])
+      (e:EPlus) : print-all(o, [a(e) " + " b(e)])
+      (e:ELit) : print(o, width(e))
+      (e:EUnknown) : print(o, "Unknown")
+
+defn map (f: (Exp) -> Exp, e: Exp) -> Exp :
+   match(e) :
+      (e:EMax) : EMax(f(a(e)), f(b(e)))
+      (e:EPlus) : EPlus(f(a(e)), f(b(e)))
+      (e:Exp) : e
+
+defn children (e: Exp) -> List<Exp> :
+   match(e) :
+      (e:EMax) : list(a(e), b(e))
+      (e:EPlus) : list(a(e), b(e))
+      (e:Exp) : list()
+;============================================================
+
+;================== Reading from File =======================
+defn read-exp (x) :
+   match(unwrap-token(x)) :
+      (x:Symbol) :
+         EVar(x)
+      (x:Int) :
+         ELit(x)
+      (x:List) :
+         val tag = unwrap-token(x[1])
+         switch {tag == _} :
+            'plus : EPlus(read-exp(x[2]), read-exp(x[3]))
+            'max : EMax(read-exp(x[2]), read-exp(x[3]))
+            else : error $ string-join $
+                   ["Improper expression: " x]
+
+defn read (filename: String) :               
+   var form:List = lex-file(filename)
+   val eqns = HashTable<Symbol,False|Exp>(symbol-hash)
+   while not empty?(form) :
+      val x = form[0]
+      val op = form[1]
+      val e = read-exp(form[2])
+      form = tailn(form, 3)
+      eqns[unwrap-token(x)] = e      
+   eqns   
+;============================================================
+
+;============ Operations on Expressions =====================
+defn substitute (v: Symbol, exp: Exp, eqn: Exp) :
+   match(eqn) :
+      (eqn: EVar) :
+         if name(eqn) == v : exp
+         else : eqn
+      (eqn: Exp) :
+         map(substitute{v, exp, _}, eqn)
+
+defn occurs? (v: Symbol, exp: Exp) :
+   match(exp) :
+      (exp: EVar) : name(exp) == v
+      (exp: Exp) : any?(occurs?{v, _}, children(exp))
+
+defn freevars (exp: Exp) :
+   to-list $ generate<Symbol> :
+      defn loop (exp: Exp) :
+         match(exp) :
+            (exp: EVar) : yield(name(exp))
+            (exp: Exp) : do(loop, children(exp))
+      loop(exp)
+
+defn contains-plus? (exp: Exp) :
+   match(exp) :
+      (exp:EPlus) : true
+      (exp:Exp) : any?(contains-plus?, children(exp))   
+
+defn eval (exp: Exp, state: HashTable<Symbol,Int>) -> False|Int :
+   label<False|Int> break :
+      defn loop (e: Exp) -> Int :
+         match(e) :
+            (e: EVar) :
+               if key?(state, name(e)) : state[name(e)]
+               else : break(false)
+            (e: EMax) : max(loop(a(e)), loop(b(e)))
+            (e: EPlus) : loop(a(e)) + loop(b(e))
+            (e: ELit) : width(e)
+      loop(exp)       
+
+defn simplify (exp: Exp) :
+   match(map(simplify,exp)) :
+      (exp: EPlus) :
+         match(a(exp), b(exp)) :
+            (a: ELit, b: ELit) :
+               ELit(width(a) + width(b))
+            (a: ELit, b) :
+               if width(a) == 0 : b
+               else : exp
+            (a, b: ELit) :
+               if width(b) == 0 : a
+               else : exp            
+            (a, b) :
+               exp
+      (exp: EMax) :
+         match(a(exp), b(exp)) :
+            (a: ELit, b: ELit) :
+               ELit(max(width(a), width(b)))
+            (a: ELit, b) :
+               if width(a) == 0 : b
+               else : exp
+            (a, b: ELit) :
+               if width(b) == 0 : a
+               else : exp            
+            (a, b) :
+               exp
+      (exp: Exp) :
+         exp
+;============================================================
+
+;============== Constraint Solver ===========================
+defn simplify (eqns: HashTable<Symbol, False|Exp>) :
+   for k in keys(eqns) do :
+      if eqns[k] != false :
+         eqns[k] = simplify(eqns[k] as Exp)
+         
+defn substitute (v: Symbol, exp: Exp, eqns: HashTable<Symbol, False|Exp>) :
+   for k in keys(eqns) do :
+      if eqns[k] != false :
+         eqns[k] = substitute(v, exp, eqns[k] as Exp)
+
+defn dataflow (eqns: HashTable<Symbol,False|Exp>, solved: Vector<KeyValue<Symbol,Exp>>) :
+   var progress? = false
+   val vs = to-list(filter({eqns[_] != false}, keys(eqns)))
+   for v in vs do :
+      val exp = eqns[v] as Exp
+      if not occurs?(v, exp) :
+         add(solved, KeyValue(v, exp))
+         eqns[v] = false
+         substitute(v, exp, eqns)
+         progress? = true
+   progress?      
+
+defn cluster (v: Symbol, eqns: HashTable<Symbol,False|Exp>) :
+   val vs = HashTable<Symbol,True>(symbol-hash)
+   defn loop (v: Symbol) :
+      if not key?(vs, v) :
+         vs[v] = true
+         do(loop, freevars(eqns[v] as Exp))
+   loop(v)
+   to-list(keys(vs))
+
+defn minsat (vs: List<Symbol>, eqns: HashTable<Symbol,False|Exp>,
+             solved: Vector<KeyValue<Symbol,Exp>>) :
+   val sol = HashTable<Symbol,Int>(symbol-hash)
+   do({sol[_] = 0}, vs)         
+   defn loop () :
+      var progress? = false
+      for v in vs do :
+         val x = eval(eqns[v] as Exp, sol) as Int
+         if x != sol[v] :
+            sol[v] = x
+            progress? = true
+      progress?
+   while loop() : false
+
+   for v in vs do :
+      val exp = ELit(sol[v])
+      add(solved, KeyValue(v, exp))
+      eqns[v] = false
+      substitute(v, exp, eqns)
+
+defn minsat (eqns: HashTable<Symbol,False|Exp>, solved: Vector<KeyValue<Symbol,Exp>>) :
+   label<False|True> break :
+      for v in keys(eqns) do :
+         if eqns[v] != false :
+            val vs = cluster(v, eqns)
+            if none?(contains-plus?{eqns[_] as Exp}, vs) :
+               minsat(vs, eqns, solved)
+               break(true)
+      false         
+
+defn backsubstitute (vs: List<Symbol>, solved: Vector<KeyValue<Symbol,Exp>>) :
+   val state = HashTable<Symbol,Int>(symbol-hash)
+   val soln = HashTable<Symbol,Exp>(symbol-hash)
+   do({soln[_] = EUnknown()}, vs)
+   for i in (length(solved) - 1) through 0 by -1 do :
+      val v = key(solved[i])
+      val exp = value(solved[i])
+      match(eval(exp, state)) :
+         (x:Int) :
+            state[v] = x
+            soln[v] = ELit(x)
+         (x:False) :
+            false
+   soln
+      
+defn solve (eqns: HashTable<Symbol,False|Exp>) :
+   val solved = Vector<KeyValue<Symbol,Exp>>()
+   defn loop () :
+      simplify(eqns)
+      dataflow(eqns, solved) or
+      minsat(eqns, solved)
+   while loop() : false
+   backsubstitute(to-list(keys(eqns)), solved)   
+;============================================================
+
+;================= Main =====================================
+defn main () :
+   val input = lex(commandline-arguments())
+   error("No input file!") when length(input) < 2
+   val eqns = read(to-string(input[1]))
+   for e in solve(eqns) do :
+      println-all([key(e) " = " value(e)])
+
+main()
+;============================================================
