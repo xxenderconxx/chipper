@@ -51,7 +51,8 @@
 ;b = max(max(b, a), 10)
 
 ;Fixed Point Solver Feeding into Dataflow:
-a = max(a, b)
-b = max(max(b, a), 10)
+b >= 10
+a >= b
+b >= a
 c = plus(a, b)
 d = plus(c, c)

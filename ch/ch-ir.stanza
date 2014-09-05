@@ -21,6 +21,8 @@ public defn times (x:Direction, y:Direction) :
 ;========== Mjolnir Width ==============
 public definterface Width
 public defstruct UnknownWidth <: Width : ()
+public defstruct WidthVar <: Width :
+   name: Symbol
 public defstruct IntWidth <: Width :
    value: Int
 
@@ -253,6 +255,7 @@ defmethod print (o:OutputStream, w:Width) :
    match(w) :
       (w:UnknownWidth) : "?"
       (w:IntWidth) : value(w)
+      (w:WidthVar) : name(w)
       (w) : error("Unable to print Width")
 
 defmethod print (o:OutputStream, op:PrimOp) :

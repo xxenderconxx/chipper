@@ -2,6 +2,7 @@ defpackage chipper.passes:
   import core
   import verse
   import chipper.ir
+  import widthsolver
 
 ;============== EXCEPTIONS =================================
 defclass PassException <: Exception
@@ -66,7 +67,7 @@ defn check-duplicates (c: Command) :
     (c:DefRegister) : check-duplicates(type(c))
     (c:DefMemory) : check-duplicates(type(c))
     (c:DefVector) : check-duplicates(type(c))
-    (c) : do(check-duplicates, children(c))  
+    (c) : do(check-duplicates, children(c))
 
 defn defined-names (c: Command) :
   generate<Symbol> :
@@ -129,7 +130,7 @@ defn reg-inits (e: List<KeyValue<Immediate,Immediate>>) :
          Field(Ref('this), 'reset),
          connections,
          EmptyCommand())
-            
+
 ;e is a mapping of (register => init wire)
 defn initialize-registers (c: Command
                            e: List<KeyValue<Immediate,Immediate>>) ->
@@ -138,12 +139,12 @@ defn initialize-registers (c: Command
    defn replace-reg-ports (i:Immediate) :
       match(lookup(e, root-ref(i))) :
          (wire:Immediate) :
-            val reg = root-ref(i)            
+            val reg = root-ref(i)
             replace-root{_, Field(reg, 'data), reg} $
                replace-root(i, Field(reg, 'init), wire)
          (f:False) :
             i
-            
+
    match(c) :
       (c:DefRegister) :
          val reg = Ref(name(c))
@@ -157,16 +158,16 @@ defn initialize-registers (c: Command
          val pred* = replace-reg-ports(pred(c))
          val [conseq* con-e] = initialize-registers(conseq(c), e)
          val [alt* alt-e] = initialize-registers(alt(c), e)
-         val c* = 
+         val c* =
             Conditionally(
                pred*
                Begin(list(conseq*, reg-inits(con-e)))
                Begin(list(alt*, reg-inits(alt-e))))
-         [c*, List()]      
+         [c*, List()]
       (c:Begin) :
          var current-e: List<KeyValue<Immediate,Immediate>> = e
          val defined = Vector<KeyValue<Immediate,Immediate>>()
-         val body* = 
+         val body* =
             for c in body(c) map :
                val [c* e*] = initialize-registers(c, current-e)
                current-e = append(e*, current-e)
@@ -174,8 +175,8 @@ defn initialize-registers (c: Command
                c*
          [Begin(body*), to-list(defined)]
       (c) :
-         [map(replace-reg-ports, c), List()]         
-         
+         [map(replace-reg-ports, c), List()]
+
 defn initialize-registers (m:Module) :
    val body* = let :
       val [body* regs] = initialize-registers(body(m), List())
@@ -197,17 +198,17 @@ defn lookup-port! (ports: Streamable<Port>, port-name: Symbol) :
     (p:Port) : p
     (p:False) :
       error $ string-join $
-        ["No port found with name: " port-name "."]           
+        ["No port found with name: " port-name "."]
 
 defn lookup-ref (e: Streamable<Ref>, n:Symbol) :
    for entry in e find :
-      name(entry) == n  
+      name(entry) == n
 
 defn lookup-ref! (e: Streamable<Ref>, n:Symbol) :
    match(lookup-ref(e, n)) :
       (r:Ref) : r
       (r:False) : error $ string-join $
-                  ["No ref exists with name: " n]                  
+                  ["No ref exists with name: " n]
 
 defn infer (i: Immediate, e: List<Ref>) -> Immediate :
   match(i) :
@@ -223,10 +224,10 @@ defn infer (i: Immediate, e: List<Ref>) -> Immediate :
                    (p) : [type(f), UNKNOWN-DIR]
              (t) :
                 [type(f), UNKNOWN-DIR]
-       Field(imm*, name(f), direction(imm*) * port-dir, port-type)             
+       Field(imm*, name(f), direction(imm*) * port-dir, port-type)
 
 defn infer (p:PrimOp, arg-types: List<Type>) -> Type :
-  IntType(UnknownWidth()) 
+  IntType(UnknownWidth())
 
 defn infer (c:Command, in-e: List<Ref>, out-e: List<Ref>) -> [Command, List<Ref>, List<Ref>] :
    match(c) :
@@ -254,7 +255,7 @@ defn infer (c:Command, in-e: List<Ref>, out-e: List<Ref>) -> [Command, List<Ref>
          val source* = let :
             val s = infer(source(c), out-e) as Ref
             Ref(name(s), UNKNOWN-DIR, type(s))
-         val index* = infer(index(c), out-e)   
+         val index* = infer(index(c), out-e)
          val in-ref = Ref(name(c), INPUT, type(source*))
          val out-ref = Ref(name(c), OUTPUT, type(source*))
          [DefAccessor(name(c), source*, UNKNOWN-DIR, index*), List(in-ref, in-e), List(out-ref, out-e)]
@@ -267,7 +268,7 @@ defn infer (c:Command, in-e: List<Ref>, out-e: List<Ref>) -> [Command, List<Ref>
          val [con*, con-in-e, con-out-e] = infer(conseq(c), in-e, out-e)
          val [alt*, alt-in-e, alt-out-e] = infer(alt(c), in-e, out-e)
          [Conditionally(pred*, con*, alt*), in-e, out-e]
-      (c:Begin) :        
+      (c:Begin) :
          var current-in-e: List<Ref> = in-e
          var current-out-e: List<Ref> = out-e
          val body* = for c in body(c) map :
@@ -295,7 +296,7 @@ defn infer (c:Command, in-e: List<Ref>, out-e: List<Ref>) -> [Command, List<Ref>
          val locs* = map(infer{_, in-e}, locs(c))
          val exp* = infer(exp(c), out-e)
          [ManyConnect(idx*, locs*, exp*), in-e, out-e]
-      (c:EmptyCommand) : [c, in-e, out-e]          
+      (c:EmptyCommand) : [c, in-e, out-e]
 
 defn infer (m: Module, e: List<Ref>) -> Module :
    val ref = lookup-ref!(e, name(m))
@@ -307,8 +308,8 @@ defn infer-types (c: Circuit) -> Circuit :
    val env =
       for m in modules(c) map :
          Ref(name(m), OUTPUT, BundleType(ports(m)))
-   val modules* = map(infer{_, env}, modules(c))                      
-   Circuit(modules*, main(c))  
+   val modules* = map(infer{_, env}, modules(c))
+   Circuit(modules*, main(c))
 
 ;========= INFER DIRECTIONS OF ACCESSORS ===================
 defn find-accessor-uses (c:Command) :
@@ -316,9 +317,9 @@ defn find-accessor-uses (c:Command) :
       val accessors = Vector<Symbol>()
       defn find-use (imm:Immediate) :
          val root = root-ref(imm)
-         yield(root) when contains?(accessors, name(root))        
+         yield(root) when contains?(accessors, name(root))
          imm
-      loop(c) where :  
+      loop(c) where :
          defn loop (c:Command) :
             match(map(find-use, c)) :
                (c:DefAccessor) : add(accessors, name(c))
@@ -331,7 +332,7 @@ defn fold-accessor-uses (uses: List<Ref>) :
          (r:Ref) :
             if direction(r) != direction(use) :
                throw $ PassException $ string-join $
-               ["Accessor " name(use) " is used both as an INPUT and an OUTPUT."]          
+               ["Accessor " name(use) " is used both as an INPUT and an OUTPUT."]
          (f:False) :
             table[name(use)] = use
    to-list(stream(value, table))
@@ -361,7 +362,7 @@ defn infer-accessor-dirs (c:Circuit) :
 defn lookup-vector (vecs: Streamable<DefVector>, n:Symbol) :
    for v in vecs find :
       name(v) == n
-      
+
 defn expand-vecs (c: Command) :
    val vecs = Vector<DefVector>()
    defn expand (c:Command) :
@@ -385,13 +386,13 @@ defn expand-vecs (c: Command) :
             EmptyCommand()
          (c) :
             map(expand, c)
-   expand(c)         
+   expand(c)
 
 defn expand-vecs (c:Circuit) :
    val modules* =
       for m in modules(c) map :
          Module(name(m), ports(m), expand-vecs(body(m)))
-   Circuit(modules*, main(c))      
+   Circuit(modules*, main(c))
 
 
 
@@ -402,7 +403,7 @@ defn flatten-ports (p:Port) -> List<Port> :
          val ports = map-append(flatten-ports, ports(t))
          for port in ports map :
             val name* = symbol-join([name(p) "/" name(port)])
-            Port(name*, direction(p) * direction(port), type(port))             
+            Port(name*, direction(p) * direction(port), type(port))
       (t:Type) :
          list(p)
 
@@ -412,13 +413,13 @@ defn flatten-type (t:Type) -> Type :
          BundleType $
          map-append(flatten-ports, ports(t))
       (t:Type) :
-         t         
+         t
 
 defn flatten-imm (i:Immediate) -> Immediate :
    match(i) :
       (r:Ref) : Ref(name(r), direction(r), flatten-type(type(r)))
       (f:Field) : Field(flatten-imm(imm(f)), name(f), direction(f), flatten-type(type(f)))
-      
+
 defn flatten-command (c: Command) -> Command :
    match(map(flatten-imm, c)) :
       (c:DefWire) : DefWire(name(c), flatten-type(type(c)))
@@ -430,7 +431,7 @@ defn flatten-bundles (m: Module) :
    val ports* = map-append(flatten-ports, ports(m))
    val body* = flatten-command(body(m))
    Module(name(m), ports*, body*)
-   
+
 defn flatten-bundles (c: Circuit) :
    Circuit(map(flatten-bundles, modules(c)), main(c))
 
@@ -560,7 +561,7 @@ defn expand-circuit-bundles (c:Circuit) :
 ;================ CLEANUP COMMANDS =========================
 defn cleanup-command (c:Command) :
    match(c) :
-      (c:Begin) :         
+      (c:Begin) :
          val cs = to-list $ generate<Command> :
             loop(c) where :
                defn loop (c:Command) :
@@ -578,7 +579,7 @@ defn cleanup-circuit (c:Circuit) :
    val modules* =
       for m in modules(c) map :
          Module(name(m), ports(m), cleanup-command(body(m)))
-   Circuit(modules*, main(c))                              
+   Circuit(modules*, main(c))
 
 
 ;=========== CONVERT MULTI CONNECTS to WHEN ================
@@ -618,10 +619,10 @@ defn expand-multi-connects (c:Circuit) :
       for m in modules(c) map :
          val body* = expand-command-multi-connects(body(m))
          Module(name(m), ports(m), body*)
-   Circuit(modules*, main(c))                     
+   Circuit(modules*, main(c))
 
 ;================ EXPAND WHENS =============================
-definterface SymbolicValue 
+definterface SymbolicValue
 defstruct ImmediateValue <: SymbolicValue :
   imm: Immediate
 defstruct WhenValue <: SymbolicValue :
@@ -643,7 +644,7 @@ defn eqv? (v1:SymbolicValue, v2:SymbolicValue) :
 
 defn merge-env (pred:Immediate,
                 con-env: List<KeyValue<Immediate,SymbolicValue>>,
-                alt-env: List<KeyValue<Immediate,SymbolicValue>>) :         
+                alt-env: List<KeyValue<Immediate,SymbolicValue>>) :
    val env = Vector<KeyValue<Immediate, SymbolicValue>>()
    for entry in con-env do :
       if lookup(env, key(entry)) == false :
@@ -655,21 +656,21 @@ defn merge-env (pred:Immediate,
    for entry in alt-env do :
       if lookup(env, key(entry)) == false :
          add(env, entry)
-   to-list(env)      
+   to-list(env)
 
 defn simplify-env (env: List<KeyValue<Immediate,SymbolicValue>>) :
    val seen = Vector<Immediate>()
    defn seen? (i:Immediate) :
       find(eqv?{i, _}, seen) != false
-      
+
    to-list $
    for entry in env filter :
       if not seen?(key(entry)) :
          add(seen, key(entry))
          true
 
-defn expand-whens (c:Command,                   
-                   env:List<KeyValue<Immediate,SymbolicValue>>) :                   
+defn expand-whens (c:Command,
+                   env:List<KeyValue<Immediate,SymbolicValue>>) :
    val cs = Vector<Command>()
    defn eval (c:Command, env:List<KeyValue<Immediate,SymbolicValue>>) ->
               List<KeyValue<Immediate,SymbolicValue>> :
@@ -690,7 +691,7 @@ defn expand-whens (c:Command,
             val in-ports =
                for p in ports(module-type) filter :
                   direction(p) == INPUT
-            to-list{concat(_, env)} $      
+            to-list{concat(_, env)} $
             for p in in-ports stream :
                val ref = Field(Ref(name(c)), name(p))
                ref => VoidValue()
@@ -699,7 +700,7 @@ defn expand-whens (c:Command,
             env
          (c:DefAccessor) :
             add(cs, c)
-            if direction(c) == INPUT :         
+            if direction(c) == INPUT :
                List(Ref(name(c)) => VoidValue(), env)
             else :
                env
@@ -731,14 +732,14 @@ defn expand-whens (c:Command,
                    list(pred(sv),
                         convert-symbolic(conseq(sv)),
                         convert-symbolic(alt(sv))))
-            Ref(name)       
-         
+            Ref(name)
+
    val env* = simplify-env(eval(c, env))
    for entry in env* do :
       add(cs, Connect(key(entry), convert-symbolic(value(entry))))
    Begin(to-list(cs))
 
-defn expand-whens (m:Module) :   
+defn expand-whens (m:Module) :
    val env = let :
       val out-ports = filter({direction(_) == OUTPUT}, ports(m))
       to-list $
@@ -750,7 +751,194 @@ defn expand-whens (m:Module) :
 
 defn expand-whens (c:Circuit) :
    val modules* = map(expand-whens, modules(c))
-   Circuit(modules*, main(c))         
+   Circuit(modules*, main(c))
+
+
+;============== WIDTH CONSTRAINTS ==========================
+defn typewidth (t:Type) :
+   match(t) :
+      (t:IntType) : width(t)
+      (t:SIntType) : width(t)
+      (t) : error $ string-join $
+            [t " has no width field."]
+
+defn assoc-width (t:Type, w:Width) :
+   match(t) :
+      (t:IntType) : IntType(w)
+      (t:SIntType) : SIntType(w)
+      (t) : error $ string-join $
+            [t " has no width field."]
+
+defn copy-width (t1:Type, t2:Type) :
+   match(t1, t2) :
+      (t1:IntType, t2:IntType) : t2
+      (t1:SIntType, t2:SIntType) : t2
+      (t1:BundleType, t2:BundleType) :
+         if map(name, ports(t1)) == map(name, ports(t2)) :
+            BundleType $
+            for (p1 in ports(t1), p2 in ports(t2)) map :
+               Port(name(p1), direction(p1), copy-width(type(p1), type(p2)))
+         else :
+            error $ string-join $
+            ["Types " t1 " and " t2 " are not equivalent."]
+
+defn add-width-var? (t:Type) :
+   match(typewidth(t)) :
+      (w:UnknownWidth) : assoc-width(t, WidthVar(gensym()))
+      (w) : t
+
+defn make-width-constraints (c:Command, e: List<KeyValue<Symbol, Type>>, cs: Vector<WConstraint>) :
+   ;Make table for types
+   val types = HashTable<Symbol,Type>(symbol-hash)
+   for entry in e do :
+      types[key(entry)] = value(entry)
+
+   ;Fill in immediate with widths
+   defn imm-width (i:Immediate) :
+      match(i) :
+         (i:Ref) :
+            val type* = copy-width(type(i), types[name(i)])
+            Ref(name(i), direction(i), type*)
+         (i:Field) :
+            val imm* = imm-width(imm(i))
+            val port-type = type(port) where :
+               val t = type(imm*) as BundleType
+               val port = lookup-port!(ports(t), name(i))
+            val type* = copy-width(type(i), port-type)
+            Field(imm*, name(i), direction(i), type*)
+
+   ;Calculate new width objects
+   defn width-exp (w:Width) :
+      match(w) :
+         (w:WidthVar) : EVar(name(w))
+         (w:IntWidth) : ELit(value(w))
+   defn width-op (f: (Exp, Exp) -> Exp, a:Width, b:Width) :
+      val name = gensym()
+      add(cs, WidthEqual(name, f(width-exp(a), width-exp(b))))
+      WidthVar(name)
+   defn width-plus (a:Width, b:Width) : width-op(EPlus, a, b)
+   defn width-minus (a:Width, b:Width) : width-op(EMinus, a, b)
+   defn width-max (a:Width, b:Width) : width-op(EMax, a, b)
+   defn width-max-inc (a:Width, b:Width) :
+      width-op{_, a, b} $ fn (a, b) :
+         EPlus(ELit(1), EMax(a, b))
+
+   ;Compute the resulting width of a primop
+   defn primop-type (op:PrimOp, types: List<Type>) -> Type :
+      defn Type (i: Int) -> (Width) -> Type :
+         match(types[i]) :
+            (t:IntType) : IntType
+            (t:SIntType) : SIntType
+      val widths = map(typewidth, types)   
+      switch {op == _} :
+         ADD-OP : Type(0)(width-max-inc(widths[0], widths[1]))
+         MINUS-OP : Type(0)(width-max-inc(widths[0], widths[1]))
+         TIMES-OP : Type(0)(width-plus(widths[0], widths[1]))
+         DIVIDE-OP : Type(0)(width-minus(widths[0], widths[1]))
+         MOD-OP : Type(0)(widths[1])
+         SHIFT-LEFT-OP : error("Not yet supported.")
+         SHIFT-RIGHT-OP : error("Not yet supported.")
+         BIT-AND-OP : IntType(width-max(widths[0], widths[1]))
+         BIT-OR-OP : IntType(width-max(widths[0], widths[1]))
+         BIT-XOR-OP : IntType(width-max(widths[0], widths[1]))
+         CONCAT-OP : IntType(width-plus(widths[0], widths[1]))
+         BIT-SELECT-OP : IntType(IntWidth(1))
+         MULTIPLEX-OP : Type(1)(width-max(widths[1], widths[2]))
+         LESS-OP : IntType(IntWidth(1))
+         LESS-EQ-OP : IntType(IntWidth(1))
+         GREATER-OP : IntType(IntWidth(1))
+         GREATER-EQ-OP : IntType(IntWidth(1))
+         EQUAL-OP : IntType(IntWidth(1))
+
+   ;Compute the width of literals
+   defn min-int-width (x:Int) :
+      if x == 0 :
+         1
+      else :
+         var n:Int = 1
+         var l:Int = 0
+         while n <= x :
+            l = l + 1
+            n = n * 2
+         l
+   defn min-sint-width (x:Int) :
+      error("Signed numbers: not yet supported.")
+         
+   ;Fill in commands with widths
+   defn loop (c:Command) -> Command :
+      match(c) :
+         (c:DefInt) :
+            types[name(c)] = IntType $
+               IntWidth(min-int-width(value(c)))
+            c
+         (c:DefSInt) :
+            types[name(c)] = SIntType $
+               IntWidth(min-sint-width(value(c)))
+            c
+         (c:DoPrim) :
+            val args* = map(imm-width, args(c))
+            types[name(c)] = primop-type(op(c), map(type, args*))
+            DoPrim(name(c), op(c), args*)
+         (c:DefWire) :
+            val type* = add-width-var?(type(c))
+            types[name(c)] = type*
+            DefWire(name(c), type*)
+         (c:DefRegister) :
+            val type* = add-width-var?(type(c))
+            types[name(c)] = type*
+            DefRegister(name(c), type*)
+         (c:DefInstance) :
+            val module* = imm-width(module(c)) as Ref
+            types[name(c)] = type(module*)
+            DefInstance(name(c), module*)
+         (c:DefMemory) :
+            val type* = add-width-var?(type(c))
+            types[name(c)] = type*
+            DefMemory(name(c), type*, size(c))
+         (c:DefAccessor) :
+            val source* = imm-width(source(c)) as Ref
+            val index* = imm-width(index(c))
+            types[name(c)] = type(source*)
+            DefAccessor(name(c), source*, direction(c), index*)
+         (c:Connect) :
+            val loc* = imm-width(loc(c))
+            val exp* = imm-width(exp(c))
+            match(typewidth(type(loc*))) :
+               (w:WidthVar) :
+                  val exp-width = width-exp(typewidth(type(exp*)))
+                  add(cs, WidthGreater(name(w), exp-width))
+               (w) : false
+            Connect(loc*, exp*)   
+         (c) :
+            map(loop, c)
+
+   ;Call on command
+   loop(c)
+
+
+defn make-width-constraints (m:Module, e:List<KeyValue<Symbol, Type>>, cs:Vector<WConstraint>) :
+   val env = List(
+      'this => lookup!(e, name(m))
+      e)
+   val body = make-width-constraints(body(m), env, cs)
+   Module(name(m), ports(m), body)
+
+
+defn make-width-constraints (c:Circuit, cs:Vector<WConstraint>) :
+   val modules* =
+      for m in modules(c) map :
+         val ports* = 
+            for p in ports(m) map :
+               val type* = add-width-var?(type(p))
+               Port(name(p), direction(p), type*)
+         Module(name(m), ports*, body(m))
+   val env =
+      for m in modules(c) map :
+         name(m) => BundleType(ports(m))
+         
+   Circuit{_, main(c)} $
+   map(make-width-constraints{_, env, cs}, modules(c))
+
 
 ;============= DRIVER ======================================
 public defn run-passes (c: Circuit) :
@@ -766,7 +954,10 @@ public defn run-passes (c: Circuit) :
   c* = cleanup-circuit(c*)
   c* = expand-multi-connects(c*)
   c* = expand-whens(c*)
-  
+  c* = infer-types(c*)
+  val cs = Vector<WConstraint>()
+  c* = make-width-constraints(c*, cs)
+  println-all(["cs = " cs])
 
 
 

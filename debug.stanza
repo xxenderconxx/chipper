@@ -1,8 +1,11 @@
 include<"core/core.stanza">
 include<"core/verse.stanza">
+include<"core/stringeater.stanza">
+include<"compiler/lexer.stanza">
 include("ch/ch-ir.stanza")
 include("ch/ch-construct.stanza")
 include("ch/passes.stanza")
+include("ch/widthsolver.stanza")
 include-syntax(chipper)
 
 defpackage debug :
@@ -17,10 +20,10 @@ defbundle Decoupled<T> () :
    output valid: IntT(1)
    input ready: IntT(1)
 
-defmodule Adder (w:Int) :
-   input a: IntT(w)
-   input b: IntT(w)
-   output z: IntT(w + 1)
+defmodule Adder () :
+   input a: IntT()
+   input b: IntT()
+   output z: IntT()
    z(this) := a(this) + b(this)
 
 defmodule BigAdder (w:Int) :
@@ -35,15 +38,15 @@ defmodule BigAdder (w:Int) :
    input en: IntT(1)
    output z: IntT(w + 2)   
 
-   instance ab: Adder(w)
+   instance ab: Adder()
    a(ab) := a(this)
    b(ab) := b(this)
 
-   instance cd: Adder(w)
+   instance cd: Adder()
    a(cd) := c(this)
    b(cd) := d(this)
 
-   instance abcd: Adder(w + 1)
+   instance abcd: Adder()
    a(abcd) := z(ab)
    b(abcd) := z(cd)
 
