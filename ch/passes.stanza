@@ -933,11 +933,11 @@ defn make-width-constraints (c:Circuit, cs:Vector<WConstraint>) :
                Port(name(p), direction(p), type*)
          Module(name(m), ports*, body(m))
    val env =
-      for m in modules(c) map :
+      for m in modules* map :
          name(m) => BundleType(ports(m))
          
    Circuit{_, main(c)} $
-   map(make-width-constraints{_, env, cs}, modules(c))
+   map(make-width-constraints{_, env, cs}, modules*)
 
 
 ;============= DRIVER ======================================
@@ -957,7 +957,11 @@ public defn run-passes (c: Circuit) :
   c* = infer-types(c*)
   val cs = Vector<WConstraint>()
   c* = make-width-constraints(c*, cs)
-  println-all(["cs = " cs])
+  println("================= CONSTRAINTS ===================")
+  do(println, cs)
+  val solved = solve-widths(cs)
+  println("================= SOLVED ===================")
+  do(println, solved)
 
 
 
