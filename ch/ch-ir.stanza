@@ -106,9 +106,11 @@ public defmulti name (x:HasName) -> Symbol
 public defstruct DefInt <: Command & HasName :
    name: Symbol [multi => false]
    value: Int
+   width: Width
 public defstruct DefSInt <: Command & HasName :
    name: Symbol [multi => false]
    value: Int
+   width: Width
 public defstruct DoPrim <: Command & HasName :
    name: Symbol [multi => false]
    op: PrimOp

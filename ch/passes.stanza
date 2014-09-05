@@ -588,7 +588,7 @@ defn convert-connect-many (c:ConnectMany|ManyConnect) :
    generate<Command> :
       defn make-int (i:Int) :
          val name = gensym()
-         yield(DefInt(name, i))
+         yield(DefInt(name, i, UnknownWidth()))
          Ref(name)
       defn compare (x:Immediate, i:Int) :
          val name = gensym()
@@ -869,11 +869,15 @@ defn make-width-constraints (c:Command, e: List<KeyValue<Symbol, Type>>, cs: Vec
       match(c) :
          (c:DefInt) :
             types[name(c)] = IntType $
-               IntWidth(min-int-width(value(c)))
+               match(width(c)) :
+                  (w:UnknownWidth) : IntWidth(min-int-width(value(c)))
+                  (w:IntWidth) : w
             c
          (c:DefSInt) :
             types[name(c)] = SIntType $
-               IntWidth(min-sint-width(value(c)))
+               match(width(c)) :
+                  (w:UnknownWidth) : IntWidth(min-sint-width(value(c)))
+                  (w:IntWidth) : w
             c
          (c:DoPrim) :
             val args* = map(imm-width, args(c))
@@ -999,6 +1003,10 @@ defn infer-widths (c:Circuit) :
    c* = make-width-constraints(c*, cs)
    val solved = solve-widths(cs)
    fill-widths(c*, solved)
+
+
+;================== WIDTH MATCHING =========================
+
 
 ;============= DRIVER ======================================
 public defn run-passes (c: Circuit) :
