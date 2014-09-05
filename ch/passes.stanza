@@ -939,6 +939,66 @@ defn make-width-constraints (c:Circuit, cs:Vector<WConstraint>) :
    Circuit{_, main(c)} $
    map(make-width-constraints{_, env, cs}, modules*)
 
+;================= FILL WIDTHS =============================
+defn fill-widths (t:Type, get-width: (Symbol) -> Width) :
+   match(t) :
+      (t:IntType) :
+         if width(t) typeof WidthVar :
+            val name = name(width(t) as WidthVar)
+            IntType(get-width(name))            
+         else : t
+      (t:SIntType) :
+         if width(t) typeof WidthVar :
+            val name = name(width(t) as WidthVar)
+            IntType(get-width(name))
+         else : t
+      (t:BundleType) :
+         BundleType $ map(fill-widths{_, get-width}, ports(t))
+         
+defn fill-widths (p:Port, get-width: (Symbol) -> Width) :
+   Port(name(p), direction(p), fill-widths(type(p), get-width))
+   
+defn fill-widths (i:Immediate, get-width: (Symbol) -> Width) :
+   match(i) :
+      (i:Ref) :
+         Ref(name(i), direction(i), fill-widths(type(i), get-width))
+      (i:Field) :
+         val imm* = fill-widths(imm(i), get-width)
+         Field(imm*, name(i), direction(i), fill-widths(type(i), get-width))
+
+defn fill-widths (c:Command, get-width: (Symbol) -> Width) -> Command :
+   match(c) :
+      (c:DefWire) : DefWire(name(c), fill-widths(type(c), get-width))
+      (c:DefRegister) : DefRegister(name(c), fill-widths(type(c), get-width))
+      (c:DefMemory) : DefMemory(name(c), fill-widths(type(c), get-width), size(c))
+      (c) :
+         val c* = map(fill-widths{_ as Immediate, get-width}, c)
+         map(fill-widths{_ as Command, get-width}, c*)
+
+defn fill-widths (m:Module, get-width: (Symbol) -> Width) :
+   Module(name(m),
+          map(fill-widths{_, get-width}, ports(m)),
+          fill-widths(body(m), get-width))
+
+defn fill-widths (c:Circuit, solved: Streamable<WidthEqual>) :
+   ;Construct get-width function
+   val table = HashTable<Symbol,Width>(symbol-hash)
+   for eqn in solved do :
+      table[name(eqn)] = IntWidth(width(value(eqn) as ELit))
+   defn get-width (n:Symbol) :
+      get?(table, n, UnknownWidth())
+
+   val modules* = map(fill-widths{_, get-width}, modules(c))
+   Circuit(modules*, main(c))
+
+;================= INFER WIDTHS ============================
+defn infer-widths (c:Circuit) :
+   var c*:Circuit = c
+   c* = infer-types(c*)
+   val cs = Vector<WConstraint>()
+   c* = make-width-constraints(c*, cs)
+   val solved = solve-widths(cs)
+   fill-widths(c*, solved)
 
 ;============= DRIVER ======================================
 public defn run-passes (c: Circuit) :
@@ -954,18 +1014,7 @@ public defn run-passes (c: Circuit) :
   c* = cleanup-circuit(c*)
   c* = expand-multi-connects(c*)
   c* = expand-whens(c*)
-  c* = infer-types(c*)
-  val cs = Vector<WConstraint>()
-  c* = make-width-constraints(c*, cs)
-  println("================= CONSTRAINTS ===================")
-  do(println, cs)
-  val solved = solve-widths(cs)
-  println("================= SOLVED ===================")
-  do(println, solved)
-
-
-
-
+  c* = infer-widths(c*)
 
 
 ;  c* = expand-whens(c)
