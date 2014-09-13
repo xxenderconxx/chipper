@@ -317,9 +317,9 @@ defmethod print (o:OutputStream, p:Port) :
 defmethod print (o:OutputStream, c:Command) :
    match(c) :
       (c:DefInt) :
-         print-all(o, ["node " name(c) " = " value(c)])
+         print-all(o, ["node " name(c) " = " value(c) " of width " width(c)])
       (c:DefSInt) :
-         print-all(o, ["node " name(c) " = " value(c)])
+         print-all(o, ["node " name(c) " = " value(c) " of width " width(c)])
       (c:DoPrim) :
          print-all(o, ["node " name(c) " = " op(c) "("])
          print-all(o, join(args(c), ", "))

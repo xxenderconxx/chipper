@@ -216,7 +216,13 @@ public defn get (h1:IntT|RegHandle<IntT>, i:Int) :
    do-op(BIT-SELECT-OP, h1, CInt(i))
 
 ;========= Constructors ================
-public defn CInt (value:Int) :
+public defn CInt (value:Int, width:Width) :
    val name = gen-scope-name('n)
-   push-command(DefInt(name, value))
+   push-command(DefInt(name, value, width))
    handle(IntT(), Ref(name))
+   
+public defn CInt (value:Int, width:Int) :
+   CInt(value, IntWidth(width))
+
+public defn CInt (value:Int) :
+   CInt(value, UnknownWidth())

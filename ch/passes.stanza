@@ -841,7 +841,7 @@ defn make-width-constraints (c:Command, e: List<KeyValue<Symbol, Type>>, cs: Vec
          BIT-AND-OP : IntType(width-max(widths[0], widths[1]))
          BIT-OR-OP : IntType(width-max(widths[0], widths[1]))
          BIT-XOR-OP : IntType(width-max(widths[0], widths[1]))
-         CONCAT-OP : IntType(width-plus(widths[0], widths[1]))
+         CONCAT-OP : Type(0)(width-plus(widths[0], widths[1]))
          BIT-SELECT-OP : IntType(IntWidth(1))
          MULTIPLEX-OP : Type(1)(width-max(widths[1], widths[2]))
          LESS-OP : IntType(IntWidth(1))
@@ -868,17 +868,19 @@ defn make-width-constraints (c:Command, e: List<KeyValue<Symbol, Type>>, cs: Vec
    defn loop (c:Command) -> Command :
       match(c) :
          (c:DefInt) :
-            types[name(c)] = IntType $
+            val w =
                match(width(c)) :
                   (w:UnknownWidth) : IntWidth(min-int-width(value(c)))
                   (w:IntWidth) : w
-            c
+            types[name(c)] = IntType(w)
+            DefInt(name(c), value(c), w)
          (c:DefSInt) :
-            types[name(c)] = SIntType $
+            val w =
                match(width(c)) :
                   (w:UnknownWidth) : IntWidth(min-sint-width(value(c)))
                   (w:IntWidth) : w
-            c
+            types[name(c)] = SIntType(w)
+            DefSInt(name(c), value(c), w)
          (c:DoPrim) :
             val args* = map(imm-width, args(c))
             types[name(c)] = primop-type(op(c), map(type, args*))
@@ -944,18 +946,15 @@ defn make-width-constraints (c:Circuit, cs:Vector<WConstraint>) :
    map(make-width-constraints{_, env, cs}, modules*)
 
 ;================= FILL WIDTHS =============================
+defn fill-widths (w:Width, get-width: (Symbol) -> Width) :
+   match(w) :
+      (w:WidthVar) : get-width(name(w))
+      (w) : w
+
 defn fill-widths (t:Type, get-width: (Symbol) -> Width) :
    match(t) :
-      (t:IntType) :
-         if width(t) typeof WidthVar :
-            val name = name(width(t) as WidthVar)
-            IntType(get-width(name))            
-         else : t
-      (t:SIntType) :
-         if width(t) typeof WidthVar :
-            val name = name(width(t) as WidthVar)
-            IntType(get-width(name))
-         else : t
+      (t:IntType) : IntType(fill-widths(width(t), get-width))
+      (t:SIntType) : SIntType(fill-widths(width(t), get-width))
       (t:BundleType) :
          BundleType $ map(fill-widths{_, get-width}, ports(t))
          
@@ -972,6 +971,8 @@ defn fill-widths (i:Immediate, get-width: (Symbol) -> Width) :
 
 defn fill-widths (c:Command, get-width: (Symbol) -> Width) -> Command :
    match(c) :
+      (c:DefInt) : DefInt(name(c), value(c), fill-widths(width(c), get-width))
+      (c:DefSInt) : DefSInt(name(c), value(c), fill-widths(width(c), get-width))
       (c:DefWire) : DefWire(name(c), fill-widths(type(c), get-width))
       (c:DefRegister) : DefRegister(name(c), fill-widths(type(c), get-width))
       (c:DefMemory) : DefMemory(name(c), fill-widths(type(c), get-width), size(c))
@@ -1006,7 +1007,83 @@ defn infer-widths (c:Circuit) :
 
 
 ;================== WIDTH MATCHING =========================
+defn pad-immediate (i:Immediate, desired-w:Int) -> [Immediate List<Command>] :
+   val cs = Vector<Command>()   
+   val w = typewidth(type(i)) as IntWidth
+   val imm* = 
+      if value(w) < desired-w :
+         val padw = IntWidth(desired-w - value(w))
+         match(type(i)) :
+            (t:IntType) :
+               val pad = Ref(gensym(), OUTPUT, IntType(padw))
+               add(cs, DefInt(name(pad), 0, padw))
+               val name = gensym()
+               add(cs, DoPrim(name, CONCAT-OP, list(pad, i)))            
+               Ref(name, OUTPUT, IntType(IntWidth(desired-w)))
+            (t:SIntType) :   
+               val pad = Ref(gensym(), OUTPUT, SIntType(padw))
+               add(cs, DefSInt(name(pad), -1, padw))
+               val name = gensym()
+               add(cs, DoPrim(name, CONCAT-OP, list(pad, i)))            
+               Ref(name, OUTPUT, SIntType(IntWidth(desired-w)))
+      else :
+         i
+   [imm* to-list(cs)]      
 
+defn match-prim (c:DoPrim) :
+   ;Find desired width
+   val match-args =
+      switch {op(c) == _} :
+         BIT-AND-OP : args(c)
+         BIT-OR-OP : args(c)
+         BIT-XOR-OP : args(c)
+         MULTIPLEX-OP : tail(args(c))
+   val width = maximum $
+      for a in match-args stream :
+         val w = typewidth(type(a)) as IntWidth
+         value(w)
+
+   ;Create commands for padding
+   Begin{to-list(_)} $ generate<Command> :
+      val match-args* =
+         for a in match-args map :
+            val [a* cs] = pad-immediate(a, width)
+            do(yield, cs)
+            a*
+      val prim-args =
+         switch {op(c) == _} :
+            BIT-AND-OP : match-args*
+            BIT-OR-OP : match-args*
+            BIT-XOR-OP : match-args*
+            MULTIPLEX-OP : List(head(args(c)), match-args*)
+      yield(DoPrim(name(c), op(c), prim-args))
+
+defn match-connect (c:Connect) :
+   val desired-w = let :
+      val w = typewidth(type(loc(c))) as IntWidth
+      value(w)
+   val [exp*, cs] = pad-immediate(exp(c), desired-w)
+   Begin{append(cs, list(_))} $
+   Connect(loc(c), exp*)
+         
+defn width-match (c:Command) -> Command :
+   match(c) :
+      (c:DoPrim) :
+         switch {op(c) == _} :
+            BIT-AND-OP : match-prim(c)
+            BIT-OR-OP : match-prim(c)
+            BIT-XOR-OP : match-prim(c)
+            MULTIPLEX-OP : match-prim(c)
+            else : c
+      (c:Connect) :
+         match-connect(c)
+      (c) : map(width-match{_ as Command}, c)
+
+defn width-match (c:Circuit) :
+   val modules* =
+      for m in modules(c) map :
+         Module(name(m), ports(m), width-match(body(m)))
+   Circuit(modules*, main(c))
 
 ;============= DRIVER ======================================
 public defn run-passes (c: Circuit) :
@@ -1023,7 +1100,5 @@ public defn run-passes (c: Circuit) :
   c* = expand-multi-connects(c*)
   c* = expand-whens(c*)
   c* = infer-widths(c*)
-
-
-;  c* = expand-whens(c)
+  c* = width-match(c*)
   c*
