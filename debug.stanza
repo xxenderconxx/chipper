@@ -70,24 +70,29 @@ defmodule Top () :
    en(adder) := CInt(1)
    z(this) := z(adder)
 
+
+
 defmodule Test () :
    input a: Decoupled(IntT(1))
    input b: Decoupled(IntT(1))
    input c: Decoupled(IntT(1))
    output z: Decoupled(IntT(1))
 
-   data(a(this)) := CInt(0)
+   data(z(this)) := CInt(0)
 
-;   vec v: Decoupled(IntT(1)) of [a(this) b(this) c(this)]
-;   v[CInt(0)] := v[CInt(1)]
+   register r: IntT(10)
+   r := data(a(this))
+
+   vec v: Decoupled(IntT(1)) of [a(this) b(this) c(this)]
+   v[CInt(0)] := v[CInt(1)]
 
 
 defn main () :
    circuit c: Top()
    println(c)
-   println("==== PASSES ====")
    val c* = run-passes(c)
    println(c*)
    emit-circuit(STANDARD-OUTPUT, c*)
 
 main()
+

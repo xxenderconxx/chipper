@@ -175,7 +175,7 @@ defn do-op (op:PrimOp, h1:IntT|RegHandle<IntT>, h2:IntT|RegHandle<IntT>) :
    val name = gen-scope-name('n)
    val args = list(immediate(unwrap-register<IntT>(h1)),
                    immediate(unwrap-register<IntT>(h2)))
-   push-command(DoPrim(name, op, args))
+   push-command(DoPrim(name, op, args, List()))
    handle(IntT(), Ref(name))
 
 public defn plus (h1:IntT|RegHandle<IntT>, h2:IntT|RegHandle<IntT>) :
