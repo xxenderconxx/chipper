@@ -1085,6 +1085,204 @@ defn width-match (c:Circuit) :
          Module(name(m), ports(m), width-match(body(m)))
    Circuit(modules*, main(c))
 
+;================== INLINE MODULES =========================
+
+;; CAT-NAME
+;; TO-SYM
+
+defn cat-name (p: String|Symbol, s: String|Symbol) -> Symbol :
+   if p == "" or p == 'this :
+      to-symbol(s)
+   else if s == 'this :
+      to-symbol(p)
+   else :
+      symbol-join([p, "/", s])
+
+defn inline-command (c: Command, mods: HashTable<Symbol, Module>, prefix: String, cmds: Vector<Command>) :
+   defn rename (n: Symbol) -> Symbol :
+      cat-name(prefix, n)
+   defn inline-name (i:Immediate) -> Symbol :
+      match(i) :
+         (r:Ref) :   rename(name(r))
+         (f:Field) : cat-name(inline-name(imm(f)), name(f))
+   defn inline-imm (i:Immediate) -> Ref :
+      Ref(inline-name(i), direction(i), type(i))
+   match(c) :
+      (c:DefInt) :       add(cmds, DefInt(rename(name(c)), value(c), width(c)))
+      (c:DefSInt) :      add(cmds, DefSInt(rename(name(c)), value(c), width(c)))
+      (c:DefWire) :      add(cmds, DefWire(rename(name(c)), type(c)))
+      (c:DefRegister) :  add(cmds, DefRegister(rename(name(c)), type(c)))
+      (c:DefMemory) :    add(cmds, DefMemory(rename(name(c)), type(c), size(c)))
+      (c:DefInstance) :  
+          println-all(["LOOKING UP " name(module(c))]) 
+          inline-module(mods, mods[name(module(c))], to-string(rename(name(c))), cmds)
+      (c:DoPrim) :       add(cmds, DoPrim(rename(name(c)), op(c), map(inline-imm, args(c))))
+      (c:DefAccessor) :  add(cmds, DefAccessor(rename(name(c)), inline-imm(source(c)), direction(c), inline-imm(index(c))))
+      (c:Connect) :      add(cmds, Connect(inline-imm(loc(c)), inline-imm(exp(c))))
+      (c:Begin) :        do(inline-command{_, mods, prefix, cmds}, body(c))
+      (c:EmptyCommand) : c
+      (c) :              error("Unsupported command")
+
+defn inline-port (p: Port, prefix: String) -> Command :
+   DefWire(cat-name(prefix, name(p)), type(p))
+
+defn inline-module (mods: HashTable<Symbol, Module>, mod: Module, prefix: String, cmds: Vector<Command>) :
+   do(add{cmds, _}, map(inline-port{_, prefix}, ports(mod)))
+   inline-command(body(mod), mods, prefix, cmds)
+
+defn inline-modules (c: Circuit) -> Circuit :
+   val cmds = Vector<Command>()
+   val mods = HashTable<Symbol, Module>(symbol-hash)
+   for mod in modules(c) do :
+      println-all(["mod " name(mod)])
+      mods[name(mod)] = mod
+   val top = mods[main(c)]
+   inline-command(body(top), mods, "", cmds)
+   val main* = Module(name(top), ports(top), Begin(to-list(cmds)))
+   Circuit(list(main*), name(top))
+
+
+;============= FLO PRINTER ======================================
+;Expected Input Example:
+;circuit Top :
+;   module Top :
+;      input reset : Int(1)
+;      input a : Int(10)
+;      input b : SInt(10)
+;      output z : Int(10)
+;      etc...
+;
+;   module ModuleA :
+;      input reset : Int(1)
+;      input a : Int(10)
+;      input b : Int(1)
+;      output z : SInt(20)
+;      int i = 20 of width 4
+;      int j = 21 of width 5
+;      sint i2 = -20 of width 3
+;      sint i3 = -10 of width 4
+;      node x = ADD(i, j)
+;      node y = MINUS(j, j)
+;      
+;      wire x : Int(10)
+;      wire y : SInt(1)
+;      register x : Int(1)
+;      register y : SInt(10)
+;      instance insta of ModuleB
+;      memory m : Int(10) of size 256
+;      input accessor myreader from m at index x
+;      output accessor mywriter from m at index y
+;
+;      x := y
+;      z := i
+;      x := myreader
+;      mywriter := y
+;      etc...
+
+defn flo-op-name (op:PrimOp) -> String :
+   switch {op == _} :
+      ADD-OP : "add"
+      MINUS-OP : "sub"
+      TIMES-OP : "mul"
+      DIVIDE-OP : "div"
+      MOD-OP : "mod"
+      SHIFT-LEFT-OP : "lsh"
+      SHIFT-RIGHT-OP : "rsh"
+      BIT-AND-OP : "and"
+      BIT-OR-OP : "or"
+      BIT-XOR-OP : "xor"
+      CONCAT-OP : "cat"
+      BIT-SELECT-OP : "rsh"
+      LESS-OP : "lt"
+      LESS-EQ-OP : "lte"
+      GREATER-OP : "gt"
+      GREATER-EQ-OP : "gte"
+      EQUAL-OP : "eq"
+      MULTIPLEX-OP : "mux"
+      else : error("Unable to print Primop")
+
+defn emit (o:OutputStream, elt) :
+  match(elt) :
+    (e:String|Symbol|Int) :
+       print(o, e)
+    (e:Ref) :
+       print(o, name(e))
+    (e:IntWidth) :
+       print(o, value(e))
+    (e:UnknownWidth) :
+       print(o, "?")
+    (e:PrimOp) :
+       print(o, flo-op-name(e))
+    (e:Field) :
+       error("Bad Field in EMIT")
+    (e) :
+       println-all(["EMIT " e])
+       error("Unable to emit")
+
+
+defn emit-all (o:OutputStream, elts: Streamable) :
+  for e in elts do : emit(o, e)
+
+defn prim-width (type:Type) -> Width :
+  match(type) : 
+    (t:IntType) :  width(t) 
+    (t:SIntType) : width(t)
+    (t) :          error("Bad mem type")
+
+defn emit-command (o:OutputStream, cmd:Command, regs:HashTable<Symbol, DefRegister>, accessors:HashTable<Symbol, DefAccessor>) :
+  match(cmd) :
+    (c:DefInt) :
+       emit-all(o, [name(c) " = lit " value(c) "'" width(c) "\n"])
+    (c:DefSInt) :
+       emit-all(o, [name(c) " = " value(c) "'" width(c) "\n"])
+    (c:DoPrim) : ;; NEED TO FIGURE OUT WHEN WIDTHS ARE NECESSARY AND EXTRACT
+       ;; println-all(["PRIM " c])
+       emit-all(o, [name(c) " = " op(c)])
+       for arg in args(c) do : 
+         print(o, " ")
+         emit(o, arg)
+       print("\n")
+    (c:DefRegister) :
+       regs[name(c)] = c
+    (c:DefMemory) :
+       emit-all(o, [name(c) " : mem'" prim-width(type(c)) " " size(c) "\n"])
+    (c:DefAccessor) :
+       accessors[name(c)] = c
+    (c:Connect) :
+       val dst = name(loc(c) as Ref)
+       val src = name(exp(c) as Ref)
+       if key?(regs, dst) :
+          val reg = regs[dst]
+          emit-all(o, [dst " = reg'" prim-width(type(reg)) " " exp(c) "\n"])
+       else if key?(accessors, dst) :
+          val acc = accessors[dst]
+          ;; assert(direction(acc) == OUTPUT)
+          emit-all(o, [dst " = wr " source(acc) " " index(acc) " " exp(c) "\n"])
+       else if key?(accessors, src) :
+          val acc = accessors[src]
+          ;; assert(direction(acc) == INPUT)
+          emit-all(o, [dst " = rd " source(acc) " " index(acc) "\n"])
+       else :
+          emit-all(o, [dst " = mov " exp(c) "\n"])
+    (c:Begin) :
+       do(emit-command{o, _, regs, accessors}, body(c))
+    (c:DefWire) :
+       print("")
+    (c:EmptyCommand) :
+       print("")
+    (c) :
+       error("Unable to print command")
+
+defn emit-module (o:OutputStream, m:Module) :
+   val regs = HashTable<Symbol, DefRegister>(symbol-hash)
+   val accessors = HashTable<Symbol, DefAccessor>(symbol-hash)
+   for port in ports(m) do :
+      emit-all(o, [name(port) " = " (if direction(port) == INPUT : "in" else : "out") "'" prim-width(type(port)) "\n"])
+   emit-command(o, body(m), regs, accessors)
+
+public defn emit-circuit (o:OutputStream, c:Circuit) :
+   emit-module(o, modules(c)[0])
+
 ;============= DRIVER ======================================
 public defn run-passes (c: Circuit) :
   var c*:Circuit = c
@@ -1101,4 +1299,5 @@ public defn run-passes (c: Circuit) :
   c* = expand-whens(c*)
   c* = infer-widths(c*)
   c* = width-match(c*)
+  c* = inline-modules(c*)
   c*

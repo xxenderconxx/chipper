@@ -85,7 +85,9 @@ defmodule Test () :
 defn main () :
    circuit c: Top()
    println(c)
-   println("==== INFER ====")
-   println(run-passes(c))
+   println("==== PASSES ====")
+   val c* = run-passes(c)
+   println(c*)
+   emit-circuit(STANDARD-OUTPUT, c*)
 
 main()
