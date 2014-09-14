@@ -1140,32 +1140,36 @@ defn inline-modules (c: Circuit) -> Circuit :
 
 defn flo-op-name (op:PrimOp) -> String :
    switch {op == _} :
-      ADD-OP : "add"
-      MINUS-OP : "sub"
-      TIMES-OP : "mul"
-      DIVIDE-OP : "div"
-      MOD-OP : "mod"
-      SHIFT-LEFT-OP : "lsh"
+      ADD-OP :         "add"
+      MINUS-OP :       "sub"
+      TIMES-OP :       "mul"
+      DIVIDE-OP :      "div"
+      MOD-OP :         "mod"
+      SHIFT-LEFT-OP :  "lsh"
       SHIFT-RIGHT-OP : "rsh"
-      BIT-AND-OP : "and"
-      BIT-OR-OP : "or"
-      BIT-XOR-OP : "xor"
-      CONCAT-OP : "cat"
-      BIT-SELECT-OP : "rsh"
-      LESS-OP : "lt"
-      LESS-EQ-OP : "lte"
-      GREATER-OP : "gt"
-      GREATER-EQ-OP : "gte"
-      EQUAL-OP : "eq"
-      MULTIPLEX-OP : "mux"
+      BIT-AND-OP :     "and"
+      BIT-OR-OP :      "or"
+      BIT-XOR-OP :     "xor"
+      CONCAT-OP :      "cat"
+      BIT-SELECT-OP :  "rsh"
+      LESS-OP :        "lt"
+      LESS-EQ-OP :     "lte"
+      GREATER-OP :     "gt"
+      GREATER-EQ-OP :  "gte"
+      EQUAL-OP :       "eq"
+      MULTIPLEX-OP :   "mux"
       else : error("Unable to print Primop")
 
-defn emit (o:OutputStream, elt) :
+defn emit (o:OutputStream, lits:HashTable<Symbol, DefInt>, elt) :
   match(elt) :
     (e:String|Symbol|Int) :
        print(o, e)
     (e:Ref) :
-       print(o, name(e))
+       if key?(lits, name(e)) :
+         val lit = lits[name(e)]
+         print-all(o, [value(lit) "'" width(lit)])
+       else :
+         print(o, name(e))
     (e:IntWidth) :
        print(o, value(e))
     (e:PrimOp) :
@@ -1174,51 +1178,51 @@ defn emit (o:OutputStream, elt) :
        println-all(["EMIT " e])
        error("Unable to emit")
 
-defn emit-all (o:OutputStream, elts: Streamable) :
-  for e in elts do : emit(o, e)
+defn emit-all (o:OutputStream, lits:HashTable<Symbol, DefInt>, elts: Streamable) :
+  for e in elts do : emit(o, lits, e)
 
 defn prim-width (type:Type) -> Width :
   match(type) : 
     (t:IntType) :  width(t) 
     (t:SIntType) : width(t)
-    (t) :          error("Bad mem type")
+    (t) :          error("Bad prim width type")
 
-defn emit-command (o:OutputStream, cmd:Command, regs:HashTable<Symbol, DefRegister>, accessors:HashTable<Symbol, DefAccessor>) :
+defn emit-command (o:OutputStream, cmd:Command, lits:HashTable<Symbol, DefInt>, regs:HashTable<Symbol, DefRegister>, accs:HashTable<Symbol, DefAccessor>) :
   match(cmd) :
     (c:DefInt) :
-       emit-all(o, [name(c) " = lit " value(c) "'" width(c) "\n"])
+       lits[name(c)] = c
     (c:DefSInt) :
-       emit-all(o, [name(c) " = " value(c) "'" width(c) "\n"])
+       emit-all(o, lits, [name(c) " = " value(c) "'" width(c) "\n"])
     (c:DoPrim) : ;; NEED TO FIGURE OUT WHEN WIDTHS ARE NECESSARY AND EXTRACT
-       emit-all(o, [name(c) " = " op(c)])
+       emit-all(o, lits, [name(c) " = " op(c)])
        for arg in args(c) do : 
          print(o, " ")
-         emit(o, arg)
+         emit(o, lits, arg)
        print("\n")
     (c:DefRegister) :
        regs[name(c)] = c
     (c:DefMemory) :
-       emit-all(o, [name(c) " : mem'" prim-width(type(c)) " " size(c) "\n"])
+       emit-all(o, lits, [name(c) " : mem'" prim-width(type(c)) " " size(c) "\n"])
     (c:DefAccessor) :
-       accessors[name(c)] = c
+       accs[name(c)] = c
     (c:Connect) :
        val dst = name(loc(c) as Ref)
        val src = name(exp(c) as Ref)
        if key?(regs, dst) :
           val reg = regs[dst]
-          emit-all(o, [dst " = reg'" prim-width(type(reg)) " " exp(c) "\n"])
-       else if key?(accessors, dst) :
-          val acc = accessors[dst]
+          emit-all(o, lits, [dst " = reg'" prim-width(type(reg)) " " exp(c) "\n"])
+       else if key?(accs, dst) :
+          val acc = accs[dst]
           ;; assert(direction(acc) == OUTPUT)
-          emit-all(o, [dst " = wr " source(acc) " " index(acc) " " exp(c) "\n"])
-       else if key?(accessors, src) :
-          val acc = accessors[src]
+          emit-all(o, lits, [dst " = wr " source(acc) " " index(acc) " " exp(c) "\n"])
+       else if key?(accs, src) :
+          val acc = accs[src]
           ;; assert(direction(acc) == INPUT)
-          emit-all(o, [dst " = rd " source(acc) " " index(acc) "\n"])
+          emit-all(o, lits, [dst " = rd " source(acc) " " index(acc) "\n"])
        else :
-          emit-all(o, [dst " = mov " exp(c) "\n"])
+          emit-all(o, lits, [dst " = mov " exp(c) "\n"])
     (c:Begin) :
-       do(emit-command{o, _, regs, accessors}, body(c))
+       do(emit-command{o, _, lits, regs, accs}, body(c))
     (c:DefWire|EmptyCommand) :
        print("")
     (c) :
@@ -1226,10 +1230,11 @@ defn emit-command (o:OutputStream, cmd:Command, regs:HashTable<Symbol, DefRegist
 
 defn emit-module (o:OutputStream, m:Module) :
    val regs = HashTable<Symbol, DefRegister>(symbol-hash)
-   val accessors = HashTable<Symbol, DefAccessor>(symbol-hash)
+   val accs = HashTable<Symbol, DefAccessor>(symbol-hash)
+   val lits = HashTable<Symbol, DefInt>(symbol-hash)
    for port in ports(m) do :
-      emit-all(o, [name(port) " = " (if direction(port) == INPUT : "in" else : "out") "'" prim-width(type(port)) "\n"])
-   emit-command(o, body(m), regs, accessors)
+      emit-all(o, lits, [name(port) " = " (if direction(port) == INPUT : "in" else : "out") "'" prim-width(type(port)) "\n"])
+   emit-command(o, body(m), lits, regs, accs)
 
 public defn emit-circuit (o:OutputStream, c:Circuit) :
    emit-module(o, modules(c)[0])
