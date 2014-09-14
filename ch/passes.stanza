@@ -1087,13 +1087,10 @@ defn width-match (c:Circuit) :
 
 ;================== INLINE MODULES =========================
 
-;; CAT-NAME
-;; TO-SYM
-
 defn cat-name (p: String|Symbol, s: String|Symbol) -> Symbol :
-   if p == "" or p == 'this :
+   if p == "" or p == 'this : ;; TODO: REMOVE THIS WHEN 'THIS GETS REMOVED
       to-symbol(s)
-   else if s == 'this :
+   else if s == 'this :       ;; TODO: DITTO
       to-symbol(p)
    else :
       symbol-join([p, "/", s])
@@ -1113,9 +1110,7 @@ defn inline-command (c: Command, mods: HashTable<Symbol, Module>, prefix: String
       (c:DefWire) :      add(cmds, DefWire(rename(name(c)), type(c)))
       (c:DefRegister) :  add(cmds, DefRegister(rename(name(c)), type(c)))
       (c:DefMemory) :    add(cmds, DefMemory(rename(name(c)), type(c), size(c)))
-      (c:DefInstance) :  
-          println-all(["LOOKING UP " name(module(c))]) 
-          inline-module(mods, mods[name(module(c))], to-string(rename(name(c))), cmds)
+      (c:DefInstance) :  inline-module(mods, mods[name(module(c))], to-string(rename(name(c))), cmds)
       (c:DoPrim) :       add(cmds, DoPrim(rename(name(c)), op(c), map(inline-imm, args(c))))
       (c:DefAccessor) :  add(cmds, DefAccessor(rename(name(c)), inline-imm(source(c)), direction(c), inline-imm(index(c))))
       (c:Connect) :      add(cmds, Connect(inline-imm(loc(c)), inline-imm(exp(c))))
@@ -1134,7 +1129,6 @@ defn inline-modules (c: Circuit) -> Circuit :
    val cmds = Vector<Command>()
    val mods = HashTable<Symbol, Module>(symbol-hash)
    for mod in modules(c) do :
-      println-all(["mod " name(mod)])
       mods[name(mod)] = mod
    val top = mods[main(c)]
    inline-command(body(top), mods, "", cmds)
@@ -1143,41 +1137,6 @@ defn inline-modules (c: Circuit) -> Circuit :
 
 
 ;============= FLO PRINTER ======================================
-;Expected Input Example:
-;circuit Top :
-;   module Top :
-;      input reset : Int(1)
-;      input a : Int(10)
-;      input b : SInt(10)
-;      output z : Int(10)
-;      etc...
-;
-;   module ModuleA :
-;      input reset : Int(1)
-;      input a : Int(10)
-;      input b : Int(1)
-;      output z : SInt(20)
-;      int i = 20 of width 4
-;      int j = 21 of width 5
-;      sint i2 = -20 of width 3
-;      sint i3 = -10 of width 4
-;      node x = ADD(i, j)
-;      node y = MINUS(j, j)
-;      
-;      wire x : Int(10)
-;      wire y : SInt(1)
-;      register x : Int(1)
-;      register y : SInt(10)
-;      instance insta of ModuleB
-;      memory m : Int(10) of size 256
-;      input accessor myreader from m at index x
-;      output accessor mywriter from m at index y
-;
-;      x := y
-;      z := i
-;      x := myreader
-;      mywriter := y
-;      etc...
 
 defn flo-op-name (op:PrimOp) -> String :
    switch {op == _} :
@@ -1209,16 +1168,11 @@ defn emit (o:OutputStream, elt) :
        print(o, name(e))
     (e:IntWidth) :
        print(o, value(e))
-    (e:UnknownWidth) :
-       print(o, "?")
     (e:PrimOp) :
        print(o, flo-op-name(e))
-    (e:Field) :
-       error("Bad Field in EMIT")
     (e) :
        println-all(["EMIT " e])
        error("Unable to emit")
-
 
 defn emit-all (o:OutputStream, elts: Streamable) :
   for e in elts do : emit(o, e)
@@ -1236,7 +1190,6 @@ defn emit-command (o:OutputStream, cmd:Command, regs:HashTable<Symbol, DefRegist
     (c:DefSInt) :
        emit-all(o, [name(c) " = " value(c) "'" width(c) "\n"])
     (c:DoPrim) : ;; NEED TO FIGURE OUT WHEN WIDTHS ARE NECESSARY AND EXTRACT
-       ;; println-all(["PRIM " c])
        emit-all(o, [name(c) " = " op(c)])
        for arg in args(c) do : 
          print(o, " ")
@@ -1266,9 +1219,7 @@ defn emit-command (o:OutputStream, cmd:Command, regs:HashTable<Symbol, DefRegist
           emit-all(o, [dst " = mov " exp(c) "\n"])
     (c:Begin) :
        do(emit-command{o, _, regs, accessors}, body(c))
-    (c:DefWire) :
-       print("")
-    (c:EmptyCommand) :
+    (c:DefWire|EmptyCommand) :
        print("")
     (c) :
        error("Unable to print command")
