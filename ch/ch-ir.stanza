@@ -35,11 +35,13 @@ public val DIVIDE-OP = new PrimOp
 public val MOD-OP = new PrimOp
 public val SHIFT-LEFT-OP = new PrimOp
 public val SHIFT-RIGHT-OP = new PrimOp
+public val PAD-OP = new PrimOp
 public val BIT-AND-OP = new PrimOp
 public val BIT-OR-OP = new PrimOp
 public val BIT-XOR-OP = new PrimOp
 public val CONCAT-OP = new PrimOp
 public val BIT-SELECT-OP = new PrimOp
+public val BITS-SELECT-OP = new PrimOp
 public val MULTIPLEX-OP = new PrimOp
 
 public val LESS-OP = new PrimOp
@@ -59,7 +61,7 @@ public defstruct Ref <: Immediate :
    type: Type [multi => false]
 public defn Ref (name:Symbol) :
    Ref(name, UNKNOWN-DIR, UnknownType())
-   
+
 public defstruct Field <: Immediate :
    imm: Immediate
    name: Symbol
@@ -68,10 +70,74 @@ public defstruct Field <: Immediate :
 public defn Field (imm:Immediate, name:Symbol) :
    Field(imm, name, UNKNOWN-DIR, UnknownType())
 
+
+;Immediates referring to registers
+public defstruct RegData <: Immediate :
+   name: Symbol
+   direction: Direction [multi => false]
+   type: Type [multi => false]
+public defn RegData (name: Symbol) :
+   RegData(name, UNKNOWN-DIR, UnknownType())
+
+public defstruct RegInit <: Immediate :
+   name: Symbol
+   direction: Direction [multi => false]
+   type: Type [multi => false]
+public defn RegInit (name: Symbol) :
+   RegInit(name, UNKNOWN-DIR, UnknownType())
+
+
+;Immediates referring to instance ports
+public defstruct InstPort <: Immediate :
+   name: Symbol
+   port: Symbol
+   direction: Direction [multi => false]
+   type: Type [multi => false]
+public defn InstPort (name:Symbol, port:Symbol) :
+   InstPort(name, port, UNKNOWN-DIR, UnknownType())
+
+;========= Putters =====================
+;More to come ...
+public defn put-imm (f:Field, i:Immediate) :
+   Field(i, name(f), direction(f), type(f))
+
+public defn put-type<?T> (i:?T&Immediate, t:Type) -> T :
+   match(i) :
+      (i:T&Ref) : Ref(name(i), direction(i), t) as T&Ref
+      (i:T&Field) : Field(imm(i), name(i), direction(i), t) as T&Field
+      (i:T&RegData) : RegData(name(i), direction(i), t) as T&RegData
+      (i:T&RegInit) : RegInit(name(i), direction(i), t) as T&RegInit
+      (i:T&InstPort) : InstPort(name(i), port(i), direction(i), t) as T&InstPort
+
+public defn put-dir<?T> (i:?T&Immediate, d:Direction) -> T :
+   match(i) :
+      (i:T&Ref) : Ref(name(i), d, type(i)) as T&Ref
+      (i:T&Field) : Field(imm(i), name(i), d, type(i)) as T&Field
+      (i:T&RegData) : RegData(name(i), d, type(i)) as T&RegData
+      (i:T&RegInit) : RegInit(name(i), d, type(i)) as T&RegInit
+      (i:T&InstPort) : InstPort(name(i), port(i), d, type(i)) as T&InstPort
+
+public defn put-width<?T> (t:?T&Type, w:Width) -> T :
+   match(t) :
+      (t:T&IntType) : IntType(w) as T&IntType
+      (t:T&SIntType) : SIntType(w) as T&SIntType
+
+;======= Equivalence Relation ==========
+;Does not consider direction and type.
 public defn eqv? (i1:Immediate, i2:Immediate) :
    match(i1, i2) :
-      (i1:Field, i2:Field) : eqv?(imm(i1), imm(i2)) and name(i1) == name(i2)
-      (i1:Ref, i2:Ref) : name(i1) == name(i2)
+      (i1:Field, i2:Field) :
+         eqv?(imm(i1), imm(i2)) and
+         name(i1) == name(i2)
+      (i1:Ref, i2:Ref) :
+         name(i1) == name(i2)
+      (i1:RegData, i2:RegData) :
+         name(i1) == name(i2)
+      (i1:RegInit, i2:RegInit) :
+         name(i1) == name(i2)
+      (i1:InstPort, i2:InstPort) :
+         name(i1) == name(i2) and
+         port(i1) == port(i2)
       (i1, i2) : false
 
 ;========== Mjolnir Port ===============
@@ -85,17 +151,22 @@ public defn flip (p:Port) :
 
 ;========== Mjolnir Type ===============
 public definterface Type 
-
-public defstruct UnknownType <: Type : ()
+public defmulti width (t:Type) -> Width
 
 public defstruct IntType <: Type :
-   width: Width 
+   width: Width [multi => false]
+public defn IntType () :
+   IntType(UnknownWidth())
 
 public defstruct SIntType <: Type :
-   width: Width
+   width: Width [multi => false]
+public defn SIntType () :
+   SIntType(UnknownWidth())
    
 public defstruct BundleType <: Type :
    ports: List<Port>
+
+public defstruct UnknownType <: Type
 
 ;========== Mjolnir Command ============
 public definterface Command
@@ -115,6 +186,7 @@ public defstruct DoPrim <: Command & HasName :
    name: Symbol [multi => false]
    op: PrimOp
    args: List<Immediate>
+   consts: List<Int>
 public defstruct DefWire <: Command & HasName :
    name: Symbol [multi => false]
    type: Type
@@ -167,7 +239,6 @@ public defstruct Circuit :
    modules: List<Module>
    main: Symbol
 
-
 ;========== Indentation ================
 defn IndentedStream (o:OutputStream, n:Int) :
    var indent? = true
@@ -194,7 +265,7 @@ defn indented (o:OutputStream, f: () -> ?) :
 ;========== Mappers and Walkers ========
 public defn map (f: (Immediate) -> Immediate, c: Command) -> Command :
    match(c) :
-      (c:DoPrim) : DoPrim(name(c), op(c), map(f, args(c)))
+      (c:DoPrim) : DoPrim(name(c), op(c), map(f, args(c)), consts(c))
       (c:DefInstance) : DefInstance(name(c), f(module(c)) as Ref)
       (c:DefVector) : DefVector(name(c), type(c), map(f, args(c)))
       (c:DefAccessor) : DefAccessor(name(c), f(source(c)) as Ref, direction(c), f(index(c)))
@@ -229,20 +300,20 @@ public defn map (f: (Type) -> Type, t: Type) -> Type :
          t
 
 ;======== Port Type Equal ==============
-public defn type-equal? (p1:Port, p2:Port) :
+public defn eqv? (p1:Port, p2:Port) :
    name(p1) == name(p2) and
    direction(p1) == direction(p2) and
-   type-equal?(type(p1), type(p2))
+   eqv?(type(p1), type(p2))
 
 ;======== Type Similarity ==============
-public defn type-equal? (t1:Type, t2:Type) :
+public defn eqv? (t1:Type, t2:Type) :
    match(t1, t2) :
       (t1:UnknownType, t2:UnknownType) : true
       (t1:IntType, t2:IntType) : true
       (t1:SIntType, t2:SIntType) : true
       (t1:BundleType, t2:BundleType) :
          length(ports(t1)) == length(ports(t2)) and
-         all?(type-equal?, ports(t1), ports(t2))
+         all?(eqv?, ports(t1), ports(t2))
 
 ;========== Printing ===================
 defmethod print (o:OutputStream, d:Direction) :
@@ -270,11 +341,13 @@ defmethod print (o:OutputStream, op:PrimOp) :
       MOD-OP : "Mod"
       SHIFT-LEFT-OP : "ShiftLeft"
       SHIFT-RIGHT-OP : "ShiftRight"
+      PAD-OP : "Pad"
       BIT-AND-OP : "BitAnd"
       BIT-OR-OP : "BitOr"
       BIT-XOR-OP : "BitXor"
       CONCAT-OP : "Concat"
       BIT-SELECT-OP : "Select"
+      BITS-SELECT-OP : "SelectRange"
       LESS-OP : "Less"
       LESS-EQ-OP : "LessEq"
       GREATER-OP : "Greater"
@@ -283,20 +356,13 @@ defmethod print (o:OutputStream, op:PrimOp) :
       MULTIPLEX-OP : "Multiplex"
       else : error("Unable to print Primop")
 
-if-not-defined(PRINT-TYPES) :
-   defmethod print (o:OutputStream, i:Immediate) :
-      match(i) :
-         (r:Ref) : print(o, name(r))
-         (f:Field) : print-all(o, [imm(f) "." name(f)])
-else : 
-   defmethod print (o:OutputStream, i:Immediate) :
-      match(i) :
-         (r:Ref) :
-            print-all{o, _} $ [
-               name(r) "(" type(r) ")"]
-         (f:Field) :
-            print-all{o, _} $ [
-               imm(f) "." name(f) "(" type(f) ")"]
+defmethod print (o:OutputStream, i:Immediate) :
+   match(i) :
+      (r:Ref) : print(o, name(r))
+      (f:Field) : print-all(o, [imm(f) "." name(f)])
+      (r:RegData) : print-all(o, [name(r) ".data"])
+      (r:RegInit) : print-all(o, [name(r) ".init"])
+      (p:InstPort) : print-all(o, [name(p) "." port(p)])
 
 defmethod print (o:OutputStream, t:Type) :
    match(t) :
@@ -321,8 +387,8 @@ defmethod print (o:OutputStream, c:Command) :
       (c:DefSInt) :
          print-all(o, ["node " name(c) " = " value(c) " of width " width(c)])
       (c:DoPrim) :
-         print-all(o, ["node " name(c) " = " op(c) "("])
-         print-all(o, join(args(c), ", "))
+         print-all(o, ["node " name(c) " = " op(c) "("])         
+         print-all(o, join(concat(args(c), consts(c)), ", "))
          print(o, ")")         
       (c:DefWire) :
          print-all(o, ["wire " name(c) " : " type(c)])

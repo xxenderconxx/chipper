@@ -71,7 +71,7 @@ defn extract-type (form, param-names:List) :
 ;      output z : IntT(w + 1)
 ;      z(this) := a(this) + b(this)
 ;Expands to:
-;   defclass Adder 
+;   definterface Adder 
 ;   defmulti a (a:Adder) -> IntT
 ;   defmulti b (a:Adder) -> IntT
 ;   defmulti z (a:Adder) -> IntT
@@ -131,7 +131,7 @@ new-macro{_, 0, '(defmodule)} $ fn (tokens) :
 
    ;== Make form ==
    val template = '(
-      defclass Name<Targs>
+      definterface Name<Targs>
       multis{defmulti port<Cargs> (x:Name<Cargs>) -> port-type}
       defmulti reset (x:Name) -> IntT
       defn Name<Cargs> (targs{Targ : HBuilder<?Targ>}, args...) :
@@ -143,11 +143,15 @@ new-macro{_, 0, '(defmodule)} $ fn (tokens) :
                   new Name<Targs> :
                      methods{defmethod port (this) : handle(builder, Field(#ref, 'port))}
                      defmethod reset (this) : handle(#reset-builder, Field(#ref, 'reset))
+               defn #this-instance () :
+                  new Name<Targs> :
+                     methods{defmethod port (this) : handle(builder, Ref('port))}
+                     defmethod reset (this) : handle(#reset-builder, Ref('reset))
                defn #module () :
                   val #ports = [
                      ports{Port('port, dir, type(builder))}]
                   make-module{'Name, #ports, _} $ fn () :
-                     val this = #instance(Ref('this))
+                     val this = #this-instance()
                      body
                #instance(make-instance(#name, #module()))         
    )
@@ -168,6 +172,7 @@ new-macro{_, 0, '(defmodule)} $ fn (tokens) :
          'builder => builders
          'builder-exp => port-builders]
       '#instance => gensym()
+      '#this-instance => gensym()
       '#ref => gensym()
       '#reset-builder => gensym()
       'methods => collect $ [
