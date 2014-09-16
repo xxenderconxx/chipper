@@ -12,12 +12,15 @@ import scala.collection.mutable.{ArrayBuffer, Stack, HashSet}
 /// multiple clock domains -- 
 /// 
 
+/// CHISEL IR
+
 case class PrimOp(val name: String) {
   override def toString = name
 }
 
 object PrimOp {
   val AddOp = PrimOp("Add");
+  val AddModOp = PrimOp("AddMod");
   val MinusOp = PrimOp("Minus");
   val TimesOp = PrimOp("Times");
   val DivideOp = PrimOp("Divide");
@@ -89,6 +92,8 @@ object Direction {
   val NO_DIR = new Direction("?")
 }
 import Direction._
+
+/// CHISEL FRONT-END
 
 class GenSym {
   var counter = -1
@@ -237,6 +242,11 @@ class Bits(name: String, val dir: Direction, val width: Int) extends Data(name) 
     pushCommand(DefPrim(name, AddOp, Array(this.ref, other.ref)))
     Data(new Bits(name, dir, width))
   }
+  def +% (other: Bits) = {
+    val name = genSym.next("T")
+    pushCommand(DefPrim(name, AddModOp, Array(this.ref, other.ref)))
+    Data(new Bits(name, dir, width))
+  }
   def - (other: Bits) = {
     val name = genSym.next("T")
     pushCommand(DefPrim(name, MinusOp, Array(this.ref, other.ref)))
@@ -365,6 +375,8 @@ object unless {
     when (!c) { block }
   }
 }
+
+/// CHISEL IR EMITTER
 
 class Emitter {
   var indenting = 0

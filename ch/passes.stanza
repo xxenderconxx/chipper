@@ -85,7 +85,7 @@ defn resolve-kinds (m:Module) -> Module :
    val kind = HashTable<Symbol,Symbol>(symbol-hash)
    defn find-kinds (c:Command) -> False :
       match(c) :
-         (c:DefInt|DefSInt|DoPrim) :
+         (c:DefUInt|DefSInt|DoPrim) :
             kind[name(c)] = 'node
          (c:DefWire) :
             kind[name(c)] = 'wire
@@ -154,7 +154,7 @@ defn make-explicit-reset (c: Command) -> Command :
          map(make-explicit-reset{_ as Command}, c)
 
 defn make-explicit-reset (m: Module) :
-   val reset = Port('reset, INPUT, IntType(IntWidth(1)))
+   val reset = Port('reset, INPUT, UIntType(IntWidth(1)))
    Module(name(m),
           List(reset, ports(m)),
           make-explicit-reset(body(m)))
@@ -238,11 +238,13 @@ defn lookup-port (ports: Streamable<Port>, port-name: Symbol) :
 defn infer (op:PrimOp, arg-types: List<Type>) -> Type :
    defn wipe-width (t:Type) :
       match(t) :
-         (t:IntType) : IntType()
+         (t:UIntType) : UIntType()
          (t:SIntType) : SIntType()
          
    switch {op == _} :
       ADD-OP : wipe-width(arg-types[0])
+      ADD-MOD-OP : wipe-width(arg-types[0])
+      SUB-MOD-OP : wipe-width(arg-types[0])
       MINUS-OP : wipe-width(arg-types[0])
       TIMES-OP : wipe-width(arg-types[0])
       DIVIDE-OP : wipe-width(arg-types[0])
@@ -252,7 +254,7 @@ defn infer (op:PrimOp, arg-types: List<Type>) -> Type :
       PAD-OP : wipe-width(arg-types[0])
       BITS-SELECT-OP : wipe-width(arg-types[0])
       MULTIPLEX-OP : wipe-width(arg-types[1])
-      else : IntType()
+      else : UIntType()
 
 defn bundle-field (t:Type, n:Symbol) :
    match(t) :
@@ -279,8 +281,8 @@ defn infer (c:Command, e:List<KeyValue<Symbol, Type>>) -> [Command, List<KeyValu
             bundle-field(lookup!(e, name(i)), port(i))
 
    match(map(put-types, c)) :
-      (c:DefInt) :
-         [c, List(name(c) => IntType(), e)]
+      (c:DefUInt) :
+         [c, List(name(c) => UIntType(), e)]
       (c:DefSInt) :
          [c, List(name(c) => SIntType(), e)]
       (c:DefWire) :
@@ -332,7 +334,7 @@ defn infer-dir (m:Module) :
    val insts = HashTable<Symbol,Type>(symbol-hash)
    defn find-dirs (c:Command) :
       match(c) :
-         (c:DefInt|DefSInt|DoPrim) :
+         (c:DefUInt|DefSInt|DoPrim) :
             directions[name(c)] = OUTPUT
          (c:DefWire|DefRegister|DefAccessor) :
             directions[name(c)] = UNKNOWN-DIR
@@ -666,12 +668,12 @@ defn convert-connect-many (c:ConnectMany|ManyConnect) :
    generate<Command> :
       defn make-int (i:Int) :
          val name = gensym()
-         yield(DefInt(name, i, UnknownWidth()))
-         Ref(name, OUTPUT, IntType())
+         yield(DefUInt(name, i, UnknownWidth()))
+         Ref(name, OUTPUT, UIntType())
       defn compare (x:Immediate, i:Int) :
          val name = gensym()
          yield(DoPrim(name, EQUAL-OP, list(x, make-int(i)), List()))
-         Ref(name, OUTPUT, IntType())
+         Ref(name, OUTPUT, UIntType())
       match(c) :
          (c:ConnectMany) :
             for (i in 0 to false, exp in exps(c)) do :
@@ -753,7 +755,7 @@ defn expand-whens (c:Command,
    defn eval (c:Command, env:List<KeyValue<Immediate,SymbolicValue>>) ->
               List<KeyValue<Immediate,SymbolicValue>> :
       match(c) :
-         (c:DefInt|DefSInt|DoPrim) :
+         (c:DefUInt|DefSInt|DoPrim) :
             add(cs, c)
             env
          (c:DefWire) :
@@ -852,6 +854,8 @@ defn generate-constraints (c:Circuit) -> [Circuit, Vector<WConstraint>] :
    defn primop-constraint (ret:Symbol, op:PrimOp, widths: List<Width>, consts: List<Int>) :
       switch {op == _} :
          ADD-OP : apply(ret, EMaxInc, widths[0], widths[1])
+         ADD-MOD-OP : apply(ret, EMax, widths[0], widths[1])
+         SUB-MOD-OP : apply(ret, EMax, widths[0], widths[1])
          MINUS-OP : apply(ret, EMaxInc, widths[0], widths[1])
          TIMES-OP : apply(ret, EPlus, widths[0], widths[1])
          DIVIDE-OP : apply(ret, EMinus, widths[0], widths[1])
@@ -894,7 +898,7 @@ defn generate-constraints (c:Circuit) -> [Circuit, Vector<WConstraint>] :
          
    defn add-type-width-vars (t:Type) -> Type :
       match(t) :
-         (t:IntType) : IntType(widthvar?(width(t)))
+         (t:UIntType) : UIntType(widthvar?(width(t)))
          (t:SIntType) : SIntType(widthvar?(width(t)))
 
    defn add-width-vars (m:Module, env:List<KeyValue<Symbol,Type>>) -> Module :
@@ -916,13 +920,13 @@ defn generate-constraints (c:Circuit) -> [Circuit, Vector<WConstraint>] :
 
       defn add-width-vars (c:Command) :
          match(map(add-imm-width-vars, c)) :
-            (c:DefInt) :
+            (c:DefUInt) :
                val width* =
                   match(width(c)) :
                      (w:UnknownWidth) : IntWidth(min-int-width(value(c)))
                      (w) : w
-               types[name(c)] = IntType(width*)
-               DefInt(name(c), value(c), width*)
+               types[name(c)] = UIntType(width*)
+               DefUInt(name(c), value(c), width*)
             (c:DefSInt) :
                val width* =
                   match(width(c)) :
@@ -995,7 +999,7 @@ defn fill-widths (w:Width, get-width: (Symbol) -> Width) :
 
 defn fill-widths (t:Type, get-width: (Symbol) -> Width) :
    match(t) :
-      (t:IntType) : IntType(fill-widths(width(t), get-width))
+      (t:UIntType) : UIntType(fill-widths(width(t), get-width))
       (t:SIntType) : SIntType(fill-widths(width(t), get-width))
       (t:BundleType) : BundleType $ map(fill-widths{_, get-width}, ports(t))
          
@@ -1147,7 +1151,7 @@ defn inline-command (c: Command, mods: HashTable<Symbol, Module>, prefix: String
    defn inline-imm (i:Immediate) -> Ref :
       Ref(inline-name(i), direction(i), type(i))
    match(c) :
-      (c:DefInt) :       add(cmds, DefInt(rename(name(c)), value(c), width(c)))
+      (c:DefUInt) :      add(cmds, DefUInt(rename(name(c)), value(c), width(c)))
       (c:DefSInt) :      add(cmds, DefSInt(rename(name(c)), value(c), width(c)))
       (c:DefWire) :      add(cmds, DefWire(rename(name(c)), type(c)))
       (c:DefRegister) :  add(cmds, DefRegister(rename(name(c)), type(c)))
@@ -1179,32 +1183,38 @@ defn inline-modules (c: Circuit) -> Circuit :
 
 
 ;============= FLO PRINTER ======================================
+;;; TODO:
+;;; not supported gt, lte
+;;; need top level module names perhaps done in inline-modules?
+
 defn flo-op-name (op:PrimOp) -> String :
    switch {op == _} :
       ADD-OP :         "add"
+      ADD-MOD-OP :     "add"
       MINUS-OP :       "sub"
-      TIMES-OP :       "mul"
-      DIVIDE-OP :      "div"
-      MOD-OP :         "mod"
-      SHIFT-LEFT-OP :  "lsh"
+      SUB-MOD-OP :     "sub"
+      TIMES-OP :       "mul" ;; todo: signed version
+      DIVIDE-OP :      "div" ;; todo: signed version
+      MOD-OP :         "mod" ;; todo: signed version
+      SHIFT-LEFT-OP :  "lsh" ;; todo: signed version
       SHIFT-RIGHT-OP : "rsh"
-      PAD-OP :         "--PAD--"
+      PAD-OP :         "pad" ;; todo: signed version
       BIT-AND-OP :     "and"
       BIT-OR-OP :      "or"
       BIT-XOR-OP :     "xor"
       CONCAT-OP :      "cat"
       BIT-SELECT-OP :  "rsh"
-      BITS-SELECT-OP : "--BITS SELECT--"
-      LESS-OP :        "lt"
-      LESS-EQ-OP :     "lte"
-      GREATER-OP :     "gt"
-      GREATER-EQ-OP :  "gte"
+      BITS-SELECT-OP : "rsh"
+      LESS-OP :        "lt"  ;; todo: signed version
+      LESS-EQ-OP :     "lte" ;; todo: swap args
+      GREATER-OP :     "gt"  ;; todo: swap args
+      GREATER-EQ-OP :  "gte" ;; todo: signed version
       EQUAL-OP :       "eq"
       MULTIPLEX-OP :   "mux"
       else : error $ string-join $
              ["Unable to print Primop: " op]
 
-defn emit (o:OutputStream, lits:HashTable<Symbol, DefInt>, elt) :
+defn emit (o:OutputStream, lits:HashTable<Symbol, DefUInt>, elt) :
   match(elt) :
     (e:String|Symbol|Int) :
        print(o, e)
@@ -1222,18 +1232,18 @@ defn emit (o:OutputStream, lits:HashTable<Symbol, DefInt>, elt) :
        println-all(["EMIT " e])
        error("Unable to emit")
 
-defn emit-all (o:OutputStream, lits:HashTable<Symbol, DefInt>, elts: Streamable) :
+defn emit-all (o:OutputStream, lits:HashTable<Symbol, DefUInt>, elts: Streamable) :
   for e in elts do : emit(o, lits, e)
 
 defn prim-width (type:Type) -> Width :
   match(type) : 
-    (t:IntType) :  width(t) 
+    (t:UIntType) : width(t) 
     (t:SIntType) : width(t)
     (t) :          error("Bad prim width type")
 
-defn emit-command (o:OutputStream, cmd:Command, lits:HashTable<Symbol, DefInt>, regs:HashTable<Symbol, DefRegister>, accs:HashTable<Symbol, DefAccessor>) :
+defn emit-command (o:OutputStream, cmd:Command, lits:HashTable<Symbol, DefUInt>, regs:HashTable<Symbol, DefRegister>, accs:HashTable<Symbol, DefAccessor>, outs:HashTable<Symbol, Port>) :
   match(cmd) :
-    (c:DefInt) :
+    (c:DefUInt) :
        lits[name(c)] = c
     (c:DefSInt) :
        emit-all(o, lits, [name(c) " = " value(c) "'" width(c) "\n"])
@@ -1254,11 +1264,14 @@ defn emit-command (o:OutputStream, cmd:Command, lits:HashTable<Symbol, DefInt>, 
        val src = name(exp(c) as Ref)
        if key?(regs, dst) :
           val reg = regs[dst]
-          emit-all(o, lits, [dst " = reg'" prim-width(type(reg)) " " exp(c) "\n"])
+          emit-all(o, lits, [dst " = reg'" prim-width(type(reg)) " 1'1 " exp(c) "\n"])
        else if key?(accs, dst) :
           val acc = accs[dst]
           ;; assert(direction(acc) == OUTPUT)
           emit-all(o, lits, [dst " = wr " source(acc) " " index(acc) " " exp(c) "\n"])
+       else if key?(outs, dst) :
+          val out = outs[dst]
+          emit-all(o, lits, [dst " = out'" prim-width(type(out)) " " exp(c) "\n"])
        else if key?(accs, src) :
           val acc = accs[src]
           ;; assert(direction(acc) == INPUT)
@@ -1266,7 +1279,7 @@ defn emit-command (o:OutputStream, cmd:Command, lits:HashTable<Symbol, DefInt>, 
        else :
           emit-all(o, lits, [dst " = mov " exp(c) "\n"])
     (c:Begin) :
-       do(emit-command{o, _, lits, regs, accs}, body(c))
+       do(emit-command{o, _, lits, regs, accs, outs}, body(c))
     (c:DefWire|EmptyCommand) :
        print("")
     (c) :
@@ -1275,10 +1288,16 @@ defn emit-command (o:OutputStream, cmd:Command, lits:HashTable<Symbol, DefInt>, 
 defn emit-module (o:OutputStream, m:Module) :
    val regs = HashTable<Symbol, DefRegister>(symbol-hash)
    val accs = HashTable<Symbol, DefAccessor>(symbol-hash)
-   val lits = HashTable<Symbol, DefInt>(symbol-hash)
+   val lits = HashTable<Symbol, DefUInt>(symbol-hash)
+   val outs = HashTable<Symbol, Port>(symbol-hash)
    for port in ports(m) do :
-      emit-all(o, lits, [name(port) " = " (if direction(port) == INPUT : "in" else : "out") "'" prim-width(type(port)) "\n"])
-   emit-command(o, body(m), lits, regs, accs)
+      if direction(port) == OUTPUT :
+         outs[name(port)] = port
+      else if name(port) == 'reset :
+         print-all(o, "reset = rst\n")
+      else :
+         emit-all(o, lits, [name(port) " = " "in'" prim-width(type(port)) "\n"])
+   emit-command(o, body(m), lits, regs, accs, outs)
 
 public defn emit-circuit (o:OutputStream, c:Circuit) :
    emit-module(o, modules(c)[0])

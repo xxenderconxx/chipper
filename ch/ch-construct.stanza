@@ -162,7 +162,7 @@ public defn IntT (width:Width) :
          new IntT :
             defmethod immediate (this) : ref
       defmethod type (this) :
-         IntType(width)
+         UIntType(width)
 
 public defn IntT (width:Int) :
    IntT(IntWidth(width))
@@ -180,6 +180,10 @@ defn do-op (op:PrimOp, h1:IntT|RegHandle<IntT>, h2:IntT|RegHandle<IntT>) :
 
 public defn plus (h1:IntT|RegHandle<IntT>, h2:IntT|RegHandle<IntT>) :
    do-op(ADD-OP, h1, h2)
+public defn add-mod (h1:IntT|RegHandle<IntT>, h2:IntT|RegHandle<IntT>) :
+   do-op(ADD-MOD-OP, h1, h2)
+public defn sub-mod (h1:IntT|RegHandle<IntT>, h2:IntT|RegHandle<IntT>) :
+   do-op(SUB-MOD-OP, h1, h2)
 public defn minus (h1:IntT|RegHandle<IntT>, h2:IntT|RegHandle<IntT>) :
    do-op(MINUS-OP, h1, h2)
 public defn times (h1:IntT|RegHandle<IntT>, h2:IntT|RegHandle<IntT>) :
@@ -218,7 +222,7 @@ public defn get (h1:IntT|RegHandle<IntT>, i:Int) :
 ;========= Constructors ================
 public defn CInt (value:Int, width:Width) :
    val name = gen-scope-name('n)
-   push-command(DefInt(name, value, width))
+   push-command(DefUInt(name, value, width))
    handle(IntT(), Ref(name))
    
 public defn CInt (value:Int, width:Int) :

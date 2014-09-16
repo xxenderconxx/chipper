@@ -29,6 +29,8 @@ public defstruct IntWidth <: Width :
 ;========= Mjolnir Primop ==============
 public definterface PrimOp
 public val ADD-OP = new PrimOp
+public val ADD-MOD-OP = new PrimOp
+public val SUB-MOD-OP = new PrimOp
 public val MINUS-OP = new PrimOp
 public val TIMES-OP = new PrimOp
 public val DIVIDE-OP = new PrimOp
@@ -119,7 +121,7 @@ public defn put-dir<?T> (i:?T&Immediate, d:Direction) -> T :
 
 public defn put-width<?T> (t:?T&Type, w:Width) -> T :
    match(t) :
-      (t:T&IntType) : IntType(w) as T&IntType
+      (t:T&UIntType) : UIntType(w) as T&UIntType
       (t:T&SIntType) : SIntType(w) as T&SIntType
 
 ;======= Equivalence Relation ==========
@@ -153,10 +155,10 @@ public defn flip (p:Port) :
 public definterface Type 
 public defmulti width (t:Type) -> Width
 
-public defstruct IntType <: Type :
+public defstruct UIntType <: Type :
    width: Width [multi => false]
-public defn IntType () :
-   IntType(UnknownWidth())
+public defn UIntType () :
+   UIntType(UnknownWidth())
 
 public defstruct SIntType <: Type :
    width: Width [multi => false]
@@ -174,7 +176,7 @@ public definterface Command
 public definterface HasName
 public defmulti name (x:HasName) -> Symbol
 
-public defstruct DefInt <: Command & HasName :
+public defstruct DefUInt <: Command & HasName :
    name: Symbol [multi => false]
    value: Int
    width: Width
@@ -309,7 +311,7 @@ public defn eqv? (p1:Port, p2:Port) :
 public defn eqv? (t1:Type, t2:Type) :
    match(t1, t2) :
       (t1:UnknownType, t2:UnknownType) : true
-      (t1:IntType, t2:IntType) : true
+      (t1:UIntType, t2:UIntType) : true
       (t1:SIntType, t2:SIntType) : true
       (t1:BundleType, t2:BundleType) :
          length(ports(t1)) == length(ports(t2)) and
@@ -335,6 +337,8 @@ defmethod print (o:OutputStream, op:PrimOp) :
    print{o, _} $
    switch {op == _} :
       ADD-OP : "Add"
+      ADD-MOD-OP : "AddMod"
+      SUB-MOD-OP : "SubMod"
       MINUS-OP : "Minus"
       TIMES-OP : "Times"
       DIVIDE-OP : "Divide"
@@ -368,8 +372,8 @@ defmethod print (o:OutputStream, t:Type) :
    match(t) :
       (t:UnknownType) :
          print(o, "?")
-      (t:IntType) :
-         print-all(o, ["Int(" width(t) ")"])
+      (t:UIntType) :
+         print-all(o, ["UInt(" width(t) ")"])
       (t:BundleType) :
          print(o, "{")
          print-all(o, join(ports(t), ", "))
@@ -382,12 +386,12 @@ defmethod print (o:OutputStream, p:Port) :
       
 defmethod print (o:OutputStream, c:Command) :
    match(c) :
-      (c:DefInt) :
-         print-all(o, ["node " name(c) " = " value(c) " of width " width(c)])
+      (c:DefUInt) :
+         print-all(o, ["ulit " name(c) " = " value(c) " of width " width(c)])
       (c:DefSInt) :
-         print-all(o, ["node " name(c) " = " value(c) " of width " width(c)])
+         print-all(o, ["slit " name(c) " = " value(c) " of width " width(c)])
       (c:DoPrim) :
-         print-all(o, ["node " name(c) " = " op(c) "("])         
+         print-all(o, ["prim " name(c) " = " op(c) "("])         
          print-all(o, join(concat(args(c), consts(c)), ", "))
          print(o, ")")         
       (c:DefWire) :
@@ -434,9 +438,5 @@ defmethod print (o:OutputStream, m:Module) :
 defmethod print (o:OutputStream, c:Circuit) :
    println-all(o, ["circuit " main(c) " :"])
    indented(o, do{println, modules(c)})
-
-
-
-
 
 
