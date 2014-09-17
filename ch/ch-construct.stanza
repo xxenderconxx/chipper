@@ -37,13 +37,7 @@ defn collect-commands (f: () -> ?) :
       fn () : COMMAND-LIST = commands
       f
       fn (f) : COMMAND-LIST = prev-commands)
-
-   ;Group commands
-   val n = length(commands)
-   switch {n == _} :
-      0 : EmptyCommand()
-      1 : commands[0]
-      else : Begin(to-list(commands))
+   to-command(commands)
 
 
 ;========== Module List ================

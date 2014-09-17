@@ -88,6 +88,9 @@ defmodule Test () :
 
 
 defn main () :
+   ;; val rcir = read-parse-file("debug.ch")
+   ;; println("PRINT BACK")
+   ;; println(rcir)
    circuit c: Top()
    println(c)
    val c* = run-passes(c)
