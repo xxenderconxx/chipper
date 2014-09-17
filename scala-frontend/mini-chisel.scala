@@ -1,4 +1,4 @@
-import scala.collection.mutable.{ArrayBuffer, Stack, HashSet}
+import scala.collection.mutable.{ArrayBuffer, Stack, HashSet, HashMap}
 
 /// TODO:
 /// uint, sint -- copy current implementation
@@ -11,89 +11,6 @@ import scala.collection.mutable.{ArrayBuffer, Stack, HashSet}
 /// tester -- need internal access
 /// multiple clock domains -- 
 /// 
-
-/// CHISEL IR
-
-case class PrimOp(val name: String) {
-  override def toString = name
-}
-
-object PrimOp {
-  val AddOp = PrimOp("Add");
-  val AddModOp = PrimOp("AddMod");
-  val MinusOp = PrimOp("Minus");
-  val TimesOp = PrimOp("Times");
-  val DivideOp = PrimOp("Divide");
-  val ModOp = PrimOp("Mod");
-  val ShiftLeftOp = PrimOp("ShiftLeft");
-  val ShiftRightOp = PrimOp("ShiftRight");
-  val AndOp = PrimOp("And");
-  val OrOp = PrimOp("Or");
-  val BitAndOp = PrimOp("BitAnd");
-  val BitOrOp = PrimOp("BitOr");
-  val BitXorOp = PrimOp("BitXor");
-  val ConcatOp = PrimOp("Concat");
-  val BitSelectOp = PrimOp("Select");
-  val LessOp = PrimOp("Less");
-  val LessEqOp = PrimOp("LessEq");
-  val GreaterOp = PrimOp("Greater");
-  val GreaterEqOp = PrimOp("GreaterEq");
-  val EqualOp = PrimOp("Equal");
-  val NotOp = PrimOp("Not");
-  val MultiplexOp = PrimOp("Multiplex");
-}
-import PrimOp._
-
-abstract class Immediate;
-case class Ref(val name: String, val kind: Type = UnknownType()) extends Immediate;
-case class Field(val imm: Immediate, val name: String, val kind: Type = UnknownType()) extends Immediate;
-
-case class Port(val name: String, val dir: Direction, val kind: Type);
-
-abstract class Width;
-case class UnknownWidth() extends Width;
-case class IntWidth(val value: Int) extends Width;
-
-abstract class Type;
-case class UnknownType extends Type;
-case class IntType(val width: Width) extends Type;
-case class SIntType(val width: Width) extends Type;
-case class BundleType(val ports: Array[Port]) extends Type;
-
-abstract class Command;
-abstract class Definition extends Command {
-  def name: String
-}
-case class DefInt(val name: String, val value: Int) extends Definition;
-case class DefSInt(val name: String, val value: Int) extends Definition;
-case class DefPrim(val name: String, val op: PrimOp, val args: Array[Immediate]) extends Definition;
-case class DefWire(val name: String, val kind: Type) extends Definition;
-case class DefRegister(val name: String, val kind: Type) extends Definition;
-case class DefMemory(val name: String, val kind: Type, val size: Int) extends Definition;
-case class DefVector(val name: String, val kind: Type, val args: Array[Immediate]) extends Definition;
-case class DefAccessor(val name: String, val source: String, val direction: Direction, val index: Immediate) extends Definition;
-case class DefInstance(val name: String, val module: String) extends Definition;
-case class Conditionally(val pred: Immediate, val conseq: Command, val alt: Command) extends Command;
-case class Begin(val body: Array[Command]) extends Command();
-case class Connect(val loc: Immediate, val exp: Immediate) extends Command;
-case class EmptyCommand() extends Command;
-
-case class Component(val name: String, val ports: Array[Port], val body: Command);
-case class Circuit(val components: Array[Component], val main: String);
-
-/// COMPONENTS
-
-case class Direction(val name: String) {
-  override def toString = name
-}
-object Direction {
-  val INPUT  = new Direction("input")
-  val OUTPUT = new Direction("output")
-  val NO_DIR = new Direction("?")
-}
-import Direction._
-
-/// CHISEL FRONT-END
 
 class GenSym {
   var counter = -1
@@ -115,10 +32,8 @@ object Builder {
       name
     }
   }
-  val genSyms = new Stack[GenSym]()
-  genSyms.push(new GenSym())
+  val genSym = new GenSym()
   val scopes = new Stack[HashSet[String]]()
-  def genSym = genSyms.top
   def scope = scopes.top
   def genVarName(name: String): String = {
     if (scope.contains(name))
@@ -130,11 +45,9 @@ object Builder {
   }
   def pushScope = {
     scopes.push(new HashSet[String]())
-    genSyms.push(new GenSym)
   }
   def popScope = {
     scopes.pop()
-    genSyms.pop()
   }
   val modules = new Stack[Module]()
   def pushModule(module: Module) = modules.push(module)
@@ -170,18 +83,124 @@ object Builder {
     f
     popCommands
   }
+
+  private val idmap = new HashMap[String,String]()
+  def setNameForId(id: String, name: String) {
+    idmap(id) = name
+  }
+  def getNameForId(id: String) = {
+    if (idmap.contains(id)) {
+      idmap(id)
+    } else  {
+      val name = genSym.next("T")
+      idmap(id) = name
+      name
+    }
+  }
+
   def build(f: => Unit) = {
     val cmd = collectCommands(f)
     Circuit(components.toArray, components.last.name)
   }
 }
+
 import Builder._
+
+/// CHISEL IR
+
+case class PrimOp(val name: String) {
+  override def toString = name
+}
+
+object PrimOp {
+  val AddOp = PrimOp("Add");
+  val AddModOp = PrimOp("AddMod");
+  val MinusOp = PrimOp("Minus");
+  val TimesOp = PrimOp("Times");
+  val DivideOp = PrimOp("Divide");
+  val ModOp = PrimOp("Mod");
+  val ShiftLeftOp = PrimOp("ShiftLeft");
+  val ShiftRightOp = PrimOp("ShiftRight");
+  val AndOp = PrimOp("And");
+  val OrOp = PrimOp("Or");
+  val BitAndOp = PrimOp("BitAnd");
+  val BitOrOp = PrimOp("BitOr");
+  val BitXorOp = PrimOp("BitXor");
+  val ConcatOp = PrimOp("Concat");
+  val BitSelectOp = PrimOp("Select");
+  val LessOp = PrimOp("Less");
+  val LessEqOp = PrimOp("LessEq");
+  val GreaterOp = PrimOp("Greater");
+  val GreaterEqOp = PrimOp("GreaterEq");
+  val EqualOp = PrimOp("Equal");
+  val NotOp = PrimOp("Not");
+  val MultiplexOp = PrimOp("Multiplex");
+}
+import PrimOp._
+
+abstract class Immediate {
+  def name: String
+}
+
+case class Ref(val name: String, val kind: Type = UnknownType()) extends Immediate;
+case class Field(val imm: Immediate, val id: String, val kind: Type = UnknownType())
+    extends Immediate {
+  def name = getNameForId(id)
+}
+
+case class Port(val id: String, val dir: Direction, val kind: Type);
+
+abstract class Width;
+case class UnknownWidth() extends Width;
+case class IntWidth(val value: Int) extends Width;
+
+abstract class Type;
+case class UnknownType extends Type;
+case class IntType(val width: Width) extends Type;
+case class SIntType(val width: Width) extends Type;
+case class BundleType(val ports: Array[Port]) extends Type;
+
+abstract class Command;
+abstract class Definition extends Command {
+  def id: String
+  def name = getNameForId(id)
+}
+case class DefInt(val id: String, val value: Int) extends Definition;
+case class DefSInt(val id: String, val value: Int) extends Definition;
+case class DefPrim(val id: String, val op: PrimOp, val args: Array[Immediate]) extends Definition;
+case class DefWire(val id: String, val kind: Type) extends Definition;
+case class DefRegister(val id: String, val kind: Type) extends Definition;
+case class DefMemory(val id: String, val kind: Type, val size: Int) extends Definition;
+case class DefVector(val id: String, val kind: Type, val args: Array[Immediate]) extends Definition;
+case class DefAccessor(val id: String, val source: String, val direction: Direction, val index: Immediate) extends Definition;
+case class DefInstance(val id: String, val module: String) extends Definition;
+case class Conditionally(val pred: Immediate, val conseq: Command, val alt: Command) extends Command;
+case class Begin(val body: Array[Command]) extends Command();
+case class Connect(val loc: Immediate, val exp: Immediate) extends Command;
+case class EmptyCommand() extends Command;
+
+case class Component(val name: String, val ports: Array[Port], val body: Command);
+case class Circuit(val components: Array[Component], val main: String);
+
+/// COMPONENTS
+
+case class Direction(val name: String) {
+  override def toString = name
+}
+object Direction {
+  val INPUT  = new Direction("input")
+  val OUTPUT = new Direction("output")
+  val NO_DIR = new Direction("?")
+}
+import Direction._
+
+/// CHISEL FRONT-END
 
 abstract class Id {
   val id = genSym.next("id-")
 }
 
-abstract class Data(val name: String) extends Id {
+abstract class Data extends Id {
   def toPort: Port
   def toType: Type
   def :=(other: Data) = 
@@ -191,13 +210,14 @@ abstract class Data(val name: String) extends Id {
   val parent = datas.top
   def ref: Immediate = {
     if (parent == null) {
-      if (name == "io")
-        module.ref
-      else
-        Field(module.ref, name, toType)
+      //module.findNames
+      Field(module.ref, id, toType)
     } else
-      Field(parent.ref, name, toType)
+      Field(parent.ref, id, toType)
   }
+
+  def name = getNameForId(id)
+
   pushData(this)
 }
 object Data {
@@ -212,7 +232,7 @@ object Wire {
   def apply[T <: Data](x: T): T = {
     // val prevIsWire = isWire
     // isWire = true
-    pushCommand(DefWire(x.name, x.toType))
+    pushCommand(DefWire(x.id, x.toType))
     val res = x
     // val res = x.cloneType
     // isWire = prevIsWire
@@ -222,104 +242,122 @@ object Wire {
 
 object Reg {
   def apply[T <: Data](x: T): T = {
-    pushCommand(DefRegister(x.name, x.toType))
+    pushCommand(DefRegister(x.id, x.toType))
     x
   }
 }
 
-class Bits(name: String, val dir: Direction, val width: Int) extends Data(name) {
+class Bits(val dir: Direction, val width: Int) extends Data {
   def toPort: Port = 
-    Port(name, dir, toType)
+    Port(id, dir, toType)
   def toType: Type = 
     IntType(if (width == -1) UnknownWidth() else IntWidth(width))
   def cloneType: Bits = {
-    val res = new Bits("", dir, width)
+    val res = new Bits(dir, width)
     res
   }
 
   def + (other: Bits) = {
-    val name = genSym.next("T")
-    pushCommand(DefPrim(name, AddOp, Array(this.ref, other.ref)))
-    Data(new Bits(name, dir, width))
+    val d = Data(new Bits(dir, width))
+    pushCommand(DefPrim(d.id, AddOp, Array(this.ref, other.ref)))
+    d
   }
   def +% (other: Bits) = {
-    val name = genSym.next("T")
-    pushCommand(DefPrim(name, AddModOp, Array(this.ref, other.ref)))
-    Data(new Bits(name, dir, width))
+    val d = Data(new Bits(dir, width))
+    pushCommand(DefPrim(d.id, AddModOp, Array(this.ref, other.ref)))
+    d
   }
   def - (other: Bits) = {
-    val name = genSym.next("T")
-    pushCommand(DefPrim(name, MinusOp, Array(this.ref, other.ref)))
-    Data(new Bits(name, dir, width))
+    val d = Data(new Bits(dir, width))
+    pushCommand(DefPrim(d.id, MinusOp, Array(this.ref, other.ref)))
+    d
   }
   def * (other: Bits) = {
-    val name = genSym.next("T")
-    pushCommand(DefPrim(name, TimesOp, Array(this.ref, other.ref)))
-    Data(new Bits(name, dir, width))
+    val d = Data(new Bits(dir, width))
+    pushCommand(DefPrim(d.id, TimesOp, Array(this.ref, other.ref)))
+    d
   }
   def < (other: Bits): Bool = {
-    val name = genSym.next("T")
-    pushCommand(DefPrim(name, LessOp, Array(this.ref, other.ref)))
-    Data(new Bool(name, dir))
+    val d = Data(new Bool(dir))
+    pushCommand(DefPrim(d.id, LessOp, Array(this.ref, other.ref)))
+    d
   }
   def > (other: Bits): Bool = {
-    val name = genSym.next("T")
-    pushCommand(DefPrim(name, GreaterOp, Array(this.ref, other.ref)))
-    Data(new Bool(name, dir))
+    val d = Data(new Bool(dir))
+    pushCommand(DefPrim(d.id, GreaterOp, Array(this.ref, other.ref)))
+    d
   }
   def === (other: Bits): Bool = {
-    val name = genSym.next("T")
-    pushCommand(DefPrim(name, EqualOp, Array(this.ref, other.ref)))
-    Data(new Bool(name, dir))
+    val d = Data(new Bool(dir))
+    pushCommand(DefPrim(d.id, EqualOp, Array(this.ref, other.ref)))
+    d
   }
 }
 
 object Bits {
-  def apply(name: String, dir: Direction, width: Int) = {
-    Data(new Bits(name, dir, width))
+  def apply(dir: Direction, width: Int) = {
+    Data(new Bits(dir, width))
   }
   def apply(value: Int, width: Int = -1) = {
-    val name = genSym.next("C")
-    pushCommand(DefInt(name, value))
-    Data(new Bits(name, NO_DIR, width))
+    val b = new Bits(NO_DIR, width)
+    pushCommand(DefInt(b.id, value))
+    Data(b)
   }
 }
 
-class Bool(name: String, dir: Direction) extends Bits(name, dir, 1) {
+class Bool(dir: Direction) extends Bits(dir, 1) {
   def || (other: Bool) = {
-    val name = genSym.next("T")
-    pushCommand(DefPrim(name, OrOp, Array(this.ref, other.ref)))
-    Data(new Bool(name, dir))
+    val d = Data(new Bool(dir))
+    pushCommand(DefPrim(d.id, OrOp, Array(this.ref, other.ref)))
+    d
   }
   def && (other: Bool) = {
-    val name = genSym.next("T")
-    pushCommand(DefPrim(name, AndOp, Array(this.ref, other.ref)))
-    Data(new Bool(name, dir))
+    val d = Data(new Bool(dir))
+    pushCommand(DefPrim(d.id, AndOp, Array(this.ref, other.ref)))
+    d
   }
   def unary_! (): Bool = {
-    val name = genSym.next("T")
-    pushCommand(DefPrim(name, NotOp, Array(this.ref)))
-    Data(new Bool(name, dir))
+    val d = Data(new Bool(dir))
+    pushCommand(DefPrim(d.id, NotOp, Array(this.ref)))
+    d
   }
 }
 object Bool {
-  def apply(name: String, dir: Direction) = {
-    Data(new Bool(name, dir))
+  def apply(dir: Direction) = {
+    Data(new Bool(dir))
   }
   def apply(value: Int) = {
-    val name = genSym.next("C")
-    pushCommand(DefInt(name, value))
-    Data(new Bool(name, NO_DIR))
+    val b = new Bool(NO_DIR)
+    pushCommand(DefInt(b.id, value))
+    Data(b)
   }
 }
 
-class Bundle(name: String, dir: Direction = NO_DIR) extends Data(name) {
+class Bundle(dir: Direction = NO_DIR) extends Data {
   def toPort: Port = 
-    Port(name, dir, toType)
+    Port(id, dir, toType)
   def toPorts: Array[Port] = 
     elts.map(d => d.toPort).toArray
   def toType: Type = 
     BundleType(this.toPorts)
+  def collectElts {
+    for (m <- getClass.getDeclaredMethods) {
+      val name = m.getName
+      val types = m.getParameterTypes()
+      if (types.length == 0) {
+        val obj = m.invoke(this)
+        obj match {
+          case bundle: Bundle =>
+            bundle.collectElts
+            elts += bundle
+            setNameForId(bundle.id, name)
+          case data: Data =>
+            elts += data
+            setNameForId(data.id, name)
+        }
+      }
+    }
+  }
   val elts = ArrayBuffer[Data]()
 }
 
@@ -327,7 +365,8 @@ object Module {
   def apply[T <: Module](c: T): T = {
     val cmd = popCommands
     popScope
-    popModule
+    val mod = popModule
+    mod.findNames
     val ports = c.io.toPorts
     components += Component(c.name, ports, cmd)
     pushCommand(DefInstance(c.instanceName, c.name))
@@ -335,12 +374,33 @@ object Module {
   }
 }
 
-abstract class Module(val instanceName: String, val name: String) extends Id {
+abstract class Module(val instanceName: String) extends Id {
   pushScope
   pushCommands
   pushModule(this)
   def io: Bundle
   def ref = if (this == modules.top) Ref("this") else Ref(instanceName)
+
+  def name = {
+    getClass.getName
+  }
+
+  def findNames {
+    for (m <- getClass.getDeclaredMethods) {
+      val name = m.getName()
+      val types = m.getParameterTypes()
+      if (types.length == 0) {
+        val obj = m.invoke(this)
+        obj match {
+          case bundle: Bundle =>
+            bundle.collectElts
+            setNameForId(bundle.id, name)
+          case data: Data =>
+            setNameForId(data.id, name)
+        }
+      }
+    }
+  }
 }
 
 object when {
@@ -400,7 +460,8 @@ class Emitter {
       case e: Field => emit(e.imm) + "." + e.name
     }
   }
-  def emit(e: Port): String = emit(e.dir) + " " + e.name + " : " + emit(e.kind)
+  def emit(e: Port): String =
+    emit(e.dir) + " " + getNameForId(e.id) + " : " + emit(e.kind)
   def emit(e: Width): String = {
     e match {
       case e: UnknownWidth => "?"
