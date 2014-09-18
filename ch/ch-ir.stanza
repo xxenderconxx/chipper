@@ -386,6 +386,8 @@ defmethod print (o:OutputStream, c:Command) :
          print-all(o, ["wire " name(c) " : " type(c)])
       (c:DefRegister) :
          print-all(o, ["register " name(c) " : " type(c)])
+      (c:DefMemory) :
+         print-all(o, ["memory " name(c) " : " type(c) " of size " size(c)])
       (c:DefInstance) :
          print-all(o, ["instance " name(c) " of " module(c)])
       (c:DefVector) :
@@ -428,18 +430,47 @@ defmethod print (o:OutputStream, c:Circuit) :
    indented(o, do{println, modules(c)})
 
 
+;================= PARSING ==================
+
 defn is-var? (pattern:List) -> True|False :
   length(pattern) == 2 and pattern[0] == '@cap
 
+defn split (str: String, sep: Char) -> List<String> :
+  val strs = Vector<String>()
+  var last : Int = 0
+  for i in 0 to length(str) do :
+    if str[i] == sep :
+      add(strs, substring(str, last, i))
+      last = i + 1
+  if last < length(str) :
+    add(strs, substring(str, last, length(str)))
+  to-list(strs)
+
+defn check-type (exp, kind:Symbol) -> True|False :
+  switch {kind == _} :
+    'Symbol : exp typeof Symbol
+    'Int    : exp typeof Int
+    'String : exp typeof String
+    'List   : exp typeof List
+    else    : true
+
 defn match? (pattern, exp) -> [List<KeyValue>, List, True|False] :
-  println-all(["MATCHING PAT " pattern " EXP " exp])
+  println-all([">>> MATCHING PAT " pattern " EXP " exp])
   val [kvs, rest, good?] =
     match(pattern) :
       (pat:List) :
         if is-var?(pat) :
           match(pat[1]) :
             (p:Symbol) : 
-              [list(KeyValue(p, exp)), list(), true]
+              val strs = split(to-string(p), "/"[0])
+              if length(strs) == 1 :
+                [list(KeyValue(p, exp)), list(), true]
+              else if length(strs) == 2 :
+                val name = to-symbol(strs[0])
+                val kind = to-symbol(strs[1])
+                [list(KeyValue(name, exp)), list(), check-type(exp, kind)]
+              else :
+                error("bad pattern")
             (p) : 
               [List<KeyValue>(), list(), false]
         else if (pat == list()) :
@@ -447,7 +478,7 @@ defn match? (pattern, exp) -> [List<KeyValue>, List, True|False] :
         else if (head(pat) == '.) :
           match?(head(tail(pat)), exp)
         else if (exp == list()) :
-          [List<KeyValue>(), list(), pat == list()]
+          [List<KeyValue>(), list(), false]
         else :
           match(exp) :
             (e:List) :
@@ -458,8 +489,15 @@ defn match? (pattern, exp) -> [List<KeyValue>, List, True|False] :
               [List<KeyValue>(), list(), false]
       (pat) :
         [List<KeyValue>(), list(), pat == exp]
-  println-all(["MATCHING KVS " kvs " REST " rest " GOOD? " good?])
+  println-all(["<<< MATCHED KVS " kvs " REST " rest " GOOD? " good?])
   [kvs, rest, good?]
+
+defn must-match? (pattern, exp) -> [List<KeyValue>, List] :
+  val [vals, rest, good?] = match?(pattern, exp)
+  if good? :
+     [ vals, rest ]
+  else :
+     error("bad match")
 
 defn parse-args (form: List<Symbol>) -> List<Immediate> :
   to-list(map(parse-immediate, form))
@@ -478,11 +516,11 @@ defn parse-ports (form: List) -> List<Port> :
   to-list(ports)
 
 defn parse-type (form: List) -> Type :
-   println(">>> PARSING TYPE")
+   println("--- PARSING TYPE")
    ;; BUNDLE TYPES
    val [vals, rest, good?] = match?('(@do ?type ?width), form)
+   ;; match-val [rest, good?] = match?((@do ?type ?width), form)
    if good? :
-     ;; assert(good?, "bad type" and empty(rest))
      val width = IntWidth(lookup(vals, 'width) as Int)
      val kind =
        switch {lookup(vals, 'type) == _} :
@@ -490,27 +528,15 @@ defn parse-type (form: List) -> Type :
          'SInt : SIntType(width)
      kind
    else :
-     val [vals, rest, good?] = match?('((@afn . ?ports)), form)
+     val [vals, rest] = must-match?('(@afn . ?ports), form)
      val ports = parse-ports(lookup(vals, 'ports) as List)     
      BundleType(ports)
 
 defn parse-instance (form: List) -> [DefInstance, List] :
-   println(">>> PARSING INSTANCE")
-   val [vals, rest, good?] = match?('(instance ?name of ?module), form)
-   ;; assert(good?, "bad prim")
+   println("--- PARSING INSTANCE")
+   val [vals, rest] = must-match?('(instance ?name of ?module), form)
    val mod-name : Symbol = lookup(vals, 'module)
    [DefInstance(lookup(vals, 'name), Ref(mod-name)), rest]
-
-defn split (str: String, sep: Char) -> List<String> :
-  val strs = Vector<String>()
-  var last : Int = 0
-  for i in 0 to length(str) do :
-    if str[i] == sep :
-      add(strs, substring(str, last, i))
-      last = i + 1
-  if last < length(str) :
-    add(strs, substring(str, last, length(str)))
-  to-list(strs)
 
 defn parse-ref (form: Symbol) -> Ref :
   Ref(form)
@@ -525,61 +551,52 @@ defn parse-immediate (form) -> Immediate :
   syms-to-imm(syms)
 
 defn parse-prim (form: List) -> [DoPrim, List] :
-   println(">>> PARSING DOPRIM")
-   val [vals, rest, good?] = match?('(prim ?name = (@do ?op . ?args)), form)
-   ;; assert(good?, "bad prim")
+   println("--- PARSING DOPRIM")
+   val [vals, rest] = must-match?('(prim ?name = (@do ?op . ?args)), form)
    val lits = Vector<Int>()
    val args = parse-args(lookup(vals, 'args) as List<Symbol>)
    val op = ops[lookup(vals, 'op) as Symbol]
    [DoPrim(lookup(vals, 'name) as Symbol, op, args, to-list(lits)), rest]
 
 defn parse-register (form: List) -> [DefRegister, List] :
-   println(">>> PARSING REGISTER")
-   val [vals, rest, good?] = match?('(register ?name : ?kind), form)
-   ;; assert(good?, "bad register")
+   println("--- PARSING REGISTER")
+   val [vals, rest] = must-match?('(register ?name : ?kind), form)
    [DefRegister(lookup(vals, 'name) as Symbol, parse-type(lookup(vals, 'kind))), rest]
 
 defn parse-wire (form: List) -> [DefWire, List] :
-   println(">>> PARSING WIRE")
-   val [vals, rest, good?] = match?('(wire ?name : ?kind), form)
-   ;; assert(good?, "bad wire")
+   println("--- PARSING WIRE")
+   val [vals, rest] = must-match?('(wire ?name : ?kind), form)
    [DefWire(lookup(vals, 'name) as Symbol, parse-type(lookup(vals, 'kind))), rest]
 
 defn parse-vec (form: List) -> [DefVector, List] :
-   println(">>> PARSING VEC")
-   val [vals, rest, good?] = match?('(vec ?name = ?kind of ?args), form)
-   ;; assert(good?, "bad vec")
+   println("--- PARSING VEC")
+   val [vals, rest] = must-match?('(vec ?name = ?kind of ?args), form)
    val args = parse-args(lookup(vals, 'args) as List<Symbol>)
    [DefVector(lookup(vals, 'name) as Symbol, parse-type(lookup(vals, 'kind)), args), rest]
 
 defn parse-accessor (form: List) -> [DefAccessor, List] :
-   println(">>> PARSING ACCESSOR")
-   val [vals, rest, good?] = match?('(accessor ?name = ?source (@get ?index )), form)
-   ;; assert(good?, "bad accessor")
+   println("--- PARSING ACCESSOR")
+   val [vals, rest] = must-match?('(accessor ?name = (@get ?source ?index)), form)
    [DefAccessor(lookup(vals, 'name) as Symbol, parse-ref(lookup(vals, 'source)), UNKNOWN-DIR, parse-immediate(lookup(vals, 'index))), rest]
 
 defn parse-memory (form: List) -> [DefMemory, List] :
-   println(">>> PARSING MEMORY")
-   val [vals, rest, good?] = match?('(memory ?name : ?kind of size ?size ), form)
-   ;; assert(good?, "bad memory")
+   println("--- PARSING MEMORY")
+   val [vals, rest] = must-match?('(memory ?name : ?kind of size ?size ), form)
    [DefMemory(lookup(vals, 'name) as Symbol, parse-type(lookup(vals, 'kind)), lookup(vals, 'size) as Int), rest]
 
 defn parse-connect (form: List) -> [Connect, List] :
-   println(">>> PARSING CONNECT")
-   val [vals, rest, good?] = match?('(connect ?loc ?exp), form)
-   ;; assert(good?, "bad connect")
+   println("--- PARSING CONNECT")
+   val [vals, rest] = must-match?('(connect ?loc ?exp), form)
    [Connect(parse-immediate(lookup(vals, 'loc)), parse-immediate(lookup(vals, 'exp))), rest]
 
 defn parse-connect-many (form: List) -> [ConnectMany, List] :
-   println(">>> PARSING CONNECT-MANY")
-   val [vals, rest, good?] = match?('(connect-many ?loc ( . ?exps ) (@get ?idx)), form)
-   ;; assert(good?, "bad connect-many")
+   println("--- PARSING CONNECT-MANY")
+   val [vals, rest] = must-match?('(connect-many ?loc ( . ?exps ) (@get ?idx)), form)
    [ConnectMany(parse-immediate(lookup(vals, 'idx)), parse-immediate(lookup(vals, 'loc)), parse-args(lookup(vals, 'exps))), rest]
 
 defn parse-many-connect (form: List) -> [ManyConnect, List] :
-   println(">>> PARSING MANY-CONNECT")
-   val [vals, rest, good?] = match?('(many-connect ( . ?locs ) (@get ?idx) ?exp ), form)
-   ;; assert(good?, "bad connect-many")
+   println("--- PARSING MANY-CONNECT")
+   val [vals, rest] = must-match?('(many-connect ( . ?locs ) (@get ?idx) ?exp ), form)
    [ManyConnect(parse-immediate(lookup(vals, 'idx)), parse-args(lookup(vals, 'locs)), parse-immediate(lookup(vals, 'exp))), rest]
 
 public defn to-command (commands: Vector<Command>) -> Command :
@@ -602,7 +619,7 @@ defn parse-commands (form: List) -> [Command, List] :
    [to-command(commands), elts]
 
 defn parse-else (form: List) -> [Command, List] :
-   println(">>> PARSING ELSE")
+   println("--- PARSING ELSE")
    val [vals, rest, good?] = match?('(else : ?body), form)
    if good? :
      ;; assert(good?, "bad else")
@@ -612,9 +629,8 @@ defn parse-else (form: List) -> [Command, List] :
      [EmptyCommand(), rest]
 
 defn parse-conditionally (form: List) -> [Conditionally, List] :
-   println(">>> PARSING CONDITIONALLY")
-   val [vals, rest, good?] = match?('(when ?cond : ?body), form)
-   ;; assert(good?, "bad when")
+   println("--- PARSING CONDITIONALLY")
+   val [vals, rest] = must-match?('(when ?cond : ?body), form)
    val [con, other] = parse-commands(lookup(vals, 'body))
    val [alt, arest] = parse-else(rest)
    [Conditionally(parse-immediate(lookup(vals, 'cond)), con, alt), arest]
@@ -634,7 +650,7 @@ defn parse-command (form: List) -> [Command, List] :
      'when         : parse-conditionally(form)
 
 defn parse-port (form: List) -> [Port|False, List] :
-   println(">>> PARSING PORT")
+   println("--- PARSING PORT")
    val [vals, rest, good?] = match?('(?dir ?name : ?kind), form)
    if good? : 
      val dir = 
@@ -652,7 +668,7 @@ defn parse-port (form: List) -> [Port|False, List] :
      [false, form]
 
 defn parse-module (form: List) -> [Module, List] :
-   println(">>> PARSING MODULE")
+   println("--- PARSING MODULE")
    val [vals, mod-rest, good?] = match?('(module ?name : ?body), form)
    if good? :
      val commands = Vector<Command>()
@@ -682,10 +698,9 @@ defn parse-module (form: List) -> [Module, List] :
      error("bad circuit")
 
 defn parse-circuit (form: List) -> Circuit :
-   println(">>> PARSING CIRCUIT")
-   val [vals, cir-rest, good?] = match?('(circuit ?name : ?body), form)
+   println("--- PARSING CIRCUIT")
+   val [vals, cir-rest, good?] = match?('(circuit ?name/Symbol : ?body), form)
    if good? :
-     println-all(["BODY " lookup(vals, 'body)])
      var body : List = lookup(vals, 'body)
      val mods = Vector<Module>()
      while not empty?(body) :
