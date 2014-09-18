@@ -424,9 +424,29 @@ class when (prevCond: Bool) {
     new when(prevCond || cond);
   }
   def otherwise (block: => Unit) {
-    val cond = !prevCond
-    // cond.canBeUsedAsDefault = !Module.current.hasWhenCond
-    when.execWhen(cond){ block }
+    // first generate the body
+    pushScope
+    pushCommands
+    block
+    val elsecmd = popCommands
+    popScope
+    // now we look back and find the last Conditionally
+    val isConditionally = (x: Command) => {
+      x match {
+        case Conditionally(_, _, _) => true
+        case _ => false
+      }
+    }
+    // replace the last Conditionally with a new one with the
+    // same predicate and consequent but with the alt replaced
+    // by the commands for the otherwise body
+    val i = commands.lastIndexWhere(isConditionally)
+    commands(i) = commands(i) match {
+      case Conditionally(pred, conseq, _) =>
+        Conditionally(pred, conseq, elsecmd)
+      // this should never happen
+      case _ => throw new Exception("That's not a conditionally")
+    }
   }
 }
 
