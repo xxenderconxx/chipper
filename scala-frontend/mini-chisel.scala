@@ -420,9 +420,29 @@ object when {
 
 class when (prevCond: Bool) {
   def elsewhen (cond: Bool)(block: => Unit): when = {
-    when.execWhen(!prevCond && cond){ block }
-    new when(prevCond || cond);
+    this.otherwise {
+      when.execWhen(cond) { block }
+    }
+    new when(cond)
   }
+
+  private def replaceCondition(
+      cond: Conditionally, elsecmd: Command): Conditionally = {
+    cond.alt match {
+      // this is an elsewhen clause
+      // we have to go deeper
+      case newcond: Conditionally =>
+        Conditionally(cond.pred, cond.conseq,
+          replaceCondition(newcond, elsecmd))
+      // if the alt is empty, we've found the end
+      case empty: EmptyCommand =>
+        Conditionally(cond.pred, cond.conseq, elsecmd)
+      // this shouldn't happen
+      case _ =>
+        throw new Exception("Cannot replace non-empty else clause")
+    }
+  }
+
   def otherwise (block: => Unit) {
     // first generate the body
     pushScope
@@ -438,12 +458,12 @@ class when (prevCond: Bool) {
       }
     }
     // replace the last Conditionally with a new one with the
-    // same predicate and consequent but with the alt replaced
+    // same predicate and consequent but with the last alt replaced
     // by the commands for the otherwise body
     val i = commands.lastIndexWhere(isConditionally)
     commands(i) = commands(i) match {
-      case Conditionally(pred, conseq, _) =>
-        Conditionally(pred, conseq, elsecmd)
+      case cond: Conditionally =>
+        replaceCondition(cond, elsecmd)
       // this should never happen
       case _ => throw new Exception("That's not a conditionally")
     }
