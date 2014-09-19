@@ -21,27 +21,9 @@ class GenSym {
 
 object Builder {
   val components = new ArrayBuffer[Component]()
-  var moduleNames = new HashSet[String]
-  var moduleGenSym = new GenSym
-  def genModuleName(name: String): String = {
-    if (moduleNames.contains(name))
-      moduleGenSym.next(name)
-    else {
-      moduleNames(name) = true
-      name
-    }
-  }
   val genSym = new GenSym()
   val scopes = new Stack[HashSet[String]]()
   def scope = scopes.top
-  def genVarName(name: String): String = {
-    if (scope.contains(name))
-      genSym.next(name)
-    else {
-      scope(name) = true
-      name
-    }
-  }
   def pushScope = {
     scopes.push(new HashSet[String]())
   }
