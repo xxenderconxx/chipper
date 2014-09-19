@@ -126,14 +126,13 @@ object PrimOp {
 import PrimOp._
 
 abstract class Immediate {
-  def name: String
-}
-
-case class Ref(val name: String, val kind: Type = UnknownType()) extends Immediate;
-case class Field(val imm: Immediate, val id: String, val kind: Type = UnknownType())
-    extends Immediate {
+  def id: String
   def name = getNameForId(id)
 }
+
+case class Ref(val id: String, val kind: Type = UnknownType()) extends Immediate;
+case class Field(val imm: Immediate, val id: String,
+    val kind: Type = UnknownType()) extends Immediate
 
 case class Port(val id: String, val dir: Direction, val kind: Type);
 
@@ -197,7 +196,6 @@ abstract class Data extends Id {
   val parent = datas.top
   def ref: Immediate = {
     if (parent == null) {
-      //module.findNames
       Field(module.ref, id, toType)
     } else
       Field(parent.ref, id, toType)
@@ -369,12 +367,12 @@ class Bundle(dir: Direction = NO_DIR) extends Data {
         val obj = m.invoke(this)
         obj match {
           case bundle: Bundle =>
+            setNameForId(bundle.id, name)
             bundle.collectElts
             elts += bundle
-            setNameForId(bundle.id, name)
           case data: Data =>
-            elts += data
             setNameForId(data.id, name)
+            elts += data
         }
       }
     }
@@ -428,17 +426,18 @@ abstract class Module extends Id {
         val obj = m.invoke(this)
         obj match {
           case module: Module =>
-            println("SETTING MODULE NAME " + name)
             setNameForId(module.id, name)
           case bundle: Bundle =>
-            bundle.collectElts
             setNameForId(bundle.id, name)
+            bundle.collectElts
           case mem: Mem[_] =>
             setNameForId(mem.t.id, name)
           case vec: Vec[_] =>
             setNameForId(vec.t.id, name)
           case data: Data =>
             setNameForId(data.id, name)
+          // ignore anything not of those types
+          case _ => null
         }
       }
     }
@@ -538,7 +537,7 @@ class Emitter {
   def emit(e: PrimOp): String = e.name
   def emit(e: Immediate): String = {
     e match {
-      case e: Ref => getNameForId(e.name);
+      case e: Ref => e.name;
       case e: Field => emit(e.imm) + "." + e.name
     }
   }
@@ -575,8 +574,11 @@ class Emitter {
       case e: EmptyCommand => "skip"
     }
   }
-  def emit(e: Component): String = 
-    withIndent{ "module " + e.name + " : " + join0(e.ports.map(x => emit(x)), newline) + emit(e.body) }
+  def emit(e: Component): String =  {
+    withIndent{ "module " + e.name + " : " +
+      join0(e.ports.map(x => emit(x)), newline) +
+      newline + emit(e.body) }
+  }
   def emit(e: Circuit): String = 
     withIndent{ "circuit " + e.main + " : " + join0(e.components.map(x => emit(x)), newline) }
 }
