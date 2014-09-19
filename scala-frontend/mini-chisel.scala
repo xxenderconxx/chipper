@@ -293,7 +293,7 @@ class Bits(val dir: Direction, val width: Int) extends Data {
     UIntType(if (width == -1) UnknownWidth() else IntWidth(width))
   override def cloneType: this.type = {
     val res = new Bits(dir, width).asInstanceOf[this.type]
-    res
+    Data(res)
   }
 
   def + (other: Bits) = {
@@ -402,7 +402,7 @@ class Bundle(dir: Direction = NO_DIR) extends Data {
     try {
       val constructor = this.getClass.getConstructors.head
       val res = constructor.newInstance(Array.fill(constructor.getParameterTypes.size)(null):_*)
-      res.asInstanceOf[this.type]
+      Data(res.asInstanceOf[this.type])
     } catch {
       case npe: java.lang.reflect.InvocationTargetException if npe.getCause.isInstanceOf[java.lang.NullPointerException] =>
       //   throwException("Parameterized Bundle " + this.getClass + " needs clone method. You are probably using an anonymous Bundle object that captures external state and hence is un-cloneable", npe)
