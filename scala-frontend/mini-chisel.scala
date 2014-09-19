@@ -538,7 +538,11 @@ class Emitter {
   def emit(e: Immediate): String = {
     e match {
       case e: Ref => e.name;
-      case e: Field => emit(e.imm) + "." + e.name
+      case e: Field =>
+        if (e.name == "io")
+          emit(e.imm)
+        else
+          emit(e.imm) + "." + e.name
     }
   }
   def emit(e: Port): String =
