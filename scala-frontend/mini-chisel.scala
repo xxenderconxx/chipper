@@ -541,8 +541,11 @@ class Emitter {
       case e: Field =>
         if (e.name == "io")
           emit(e.imm)
-        else
-          emit(e.imm) + "." + e.name
+        else {
+          if (e.imm.name == "this")
+            e.name
+          else emit(e.imm) + "." + e.name
+        }
     }
   }
   def emit(e: Port): String =
