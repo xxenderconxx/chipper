@@ -1,7 +1,7 @@
 import Direction._
 import Builder._
 
-class GCD(instanceName: String) extends Module(instanceName) {
+class GCD extends Module {
   val io = Data(new Bundle {
     val a  = Bits(INPUT,  16)
     val b  = Bits(INPUT,  16)

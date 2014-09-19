@@ -2,7 +2,6 @@ import scala.collection.mutable.{ArrayBuffer, Stack, HashSet, HashMap}
 
 /// TODO:
 /// uint, sint -- copy current implementation
-/// optimize when 
 /// unique id -> named using introspection
 /// memories -- need to gen accessors and connects
 /// vecs -- need to figure this out
@@ -86,19 +85,25 @@ object Builder {
 
   private val idmap = new HashMap[String,String]()
   def setNameForId(id: String, name: String) {
+    // println("SETTING ID " + id + " TO " + name)
     idmap(id) = name
   }
   def getNameForId(id: String) = {
-    if (idmap.contains(id)) {
+    val res = 
+    if (id == "this") {
+      "this"
+    } else if (idmap.contains(id)) {
       idmap(id)
     } else  {
       val name = genSym.next("T")
       idmap(id) = name
       name
     }
+    // println("ID = " + id + " => " + res)
+    res
   }
 
-  def build(f: => Unit) = {
+  def build[T <: Module](f: => T) = {
     val cmd = collectCommands(f)
     Circuit(components.toArray, components.last.name)
   }
@@ -156,7 +161,7 @@ case class IntWidth(val value: Int) extends Width;
 
 abstract class Type;
 case class UnknownType extends Type;
-case class IntType(val width: Width) extends Type;
+case class UIntType(val width: Width) extends Type;
 case class SIntType(val width: Width) extends Type;
 case class BundleType(val ports: Array[Port]) extends Type;
 
@@ -165,7 +170,7 @@ abstract class Definition extends Command {
   def id: String
   def name = getNameForId(id)
 }
-case class DefInt(val id: String, val value: Int) extends Definition;
+case class DefUInt(val id: String, val value: Int) extends Definition;
 case class DefSInt(val id: String, val value: Int) extends Definition;
 case class DefPrim(val id: String, val op: PrimOp, val args: Array[Immediate]) extends Definition;
 case class DefWire(val id: String, val kind: Type) extends Definition;
@@ -197,7 +202,7 @@ import Direction._
 /// CHISEL FRONT-END
 
 abstract class Id {
-  val id = genSym.next("id-")
+  val id = genSym.next("id")
 }
 
 abstract class Data extends Id {
@@ -205,7 +210,7 @@ abstract class Data extends Id {
   def toType: Type
   def :=(other: Data) = 
     pushCommand(Connect(this.ref, other.ref))
-  // def cloneType: this.type
+  def cloneType: this.type
   val module = modules.top;
   val parent = datas.top
   def ref: Immediate = {
@@ -247,13 +252,47 @@ object Reg {
   }
 }
 
+object Mem {
+  def apply[T <: Data](t: T, size: Int): Mem[T] = {
+    val mem = new Mem(t, size)
+    pushCommand(DefMemory(t.id, t.toType, size))
+    mem
+  }
+}
+
+class Mem[T <: Data](val t: T, val size: Int) {
+  def apply(idx: Bits): T = {
+    val y = t.cloneType
+    pushCommand(DefAccessor(y.id, t.id, NO_DIR, idx.ref))
+    y
+  }
+}
+
+object Vec {
+  def apply[T <: Data](t: T, elts: Array[T]): Vec[T] = {
+    val vec = new Vec(t, elts)
+    pushCommand(DefVector(t.id, t.toType, elts.map(_.ref)))
+    vec
+  }
+}
+
+class Vec[T <: Data](val t: T, val elts: Array[T]) {
+  def apply(idx: Bits): T = {
+    val y = elts(0).cloneType
+    pushCommand(DefAccessor(y.id, t.id, NO_DIR, idx.ref))
+    y
+  }
+  def apply(idx: Int): T = 
+    elts(idx)
+}
+
 class Bits(val dir: Direction, val width: Int) extends Data {
   def toPort: Port = 
     Port(id, dir, toType)
   def toType: Type = 
-    IntType(if (width == -1) UnknownWidth() else IntWidth(width))
-  def cloneType: Bits = {
-    val res = new Bits(dir, width)
+    UIntType(if (width == -1) UnknownWidth() else IntWidth(width))
+  override def cloneType: this.type = {
+    val res = new Bits(dir, width).asInstanceOf[this.type]
     res
   }
 
@@ -300,7 +339,7 @@ object Bits {
   }
   def apply(value: Int, width: Int = -1) = {
     val b = new Bits(NO_DIR, width)
-    pushCommand(DefInt(b.id, value))
+    pushCommand(DefUInt(b.id, value))
     Data(b)
   }
 }
@@ -328,7 +367,7 @@ object Bool {
   }
   def apply(value: Int) = {
     val b = new Bool(NO_DIR)
-    pushCommand(DefInt(b.id, value))
+    pushCommand(DefUInt(b.id, value))
     Data(b)
   }
 }
@@ -359,6 +398,20 @@ class Bundle(dir: Direction = NO_DIR) extends Data {
     }
   }
   val elts = ArrayBuffer[Data]()
+  override def cloneType: this.type = {
+    try {
+      val constructor = this.getClass.getConstructors.head
+      val res = constructor.newInstance(Array.fill(constructor.getParameterTypes.size)(null):_*)
+      res.asInstanceOf[this.type]
+    } catch {
+      case npe: java.lang.reflect.InvocationTargetException if npe.getCause.isInstanceOf[java.lang.NullPointerException] =>
+      //   throwException("Parameterized Bundle " + this.getClass + " needs clone method. You are probably using an anonymous Bundle object that captures external state and hence is un-cloneable", npe)
+        error("BAD")
+      case e: java.lang.Exception =>
+        error("BAD")
+      //   throwException("Parameterized Bundle " + this.getClass + " needs clone method", e)
+    }
+  }
 }
 
 object Module {
@@ -369,17 +422,17 @@ object Module {
     mod.findNames
     val ports = c.io.toPorts
     components += Component(c.name, ports, cmd)
-    pushCommand(DefInstance(c.instanceName, c.name))
+    pushCommand(DefInstance(c.id, c.name))
     c
   }
 }
 
-abstract class Module(val instanceName: String) extends Id {
+abstract class Module extends Id {
   pushScope
   pushCommands
   pushModule(this)
   def io: Bundle
-  def ref = if (this == modules.top) Ref("this") else Ref(instanceName)
+  def ref = if (this == modules.top) Ref("this") else Ref(id)
 
   def name = {
     getClass.getName
@@ -392,9 +445,16 @@ abstract class Module(val instanceName: String) extends Id {
       if (types.length == 0) {
         val obj = m.invoke(this)
         obj match {
+          case module: Module =>
+            println("SETTING MODULE NAME " + name)
+            setNameForId(module.id, name)
           case bundle: Bundle =>
             bundle.collectElts
             setNameForId(bundle.id, name)
+          case mem: Mem[_] =>
+            setNameForId(mem.t.id, name)
+          case vec: Vec[_] =>
+            setNameForId(vec.t.id, name)
           case data: Data =>
             setNameForId(data.id, name)
         }
@@ -496,7 +556,7 @@ class Emitter {
   def emit(e: PrimOp): String = e.name
   def emit(e: Immediate): String = {
     e match {
-      case e: Ref => e.name;
+      case e: Ref => getNameForId(e.name);
       case e: Field => emit(e.imm) + "." + e.name
     }
   }
@@ -511,23 +571,23 @@ class Emitter {
   def emit(e: Type): String = {
     e match {
       case e: UnknownType => "?"
-      case e: IntType => "Int(" + e.width + ")"
-      case e: SIntType => "SInt(" + e.width + ")"
+      case e: UIntType => "UInt(" + emit(e.width) + ")"
+      case e: SIntType => "SInt(" + emit(e.width) + ")"
       case e: BundleType => "{" + join(e.ports.map(x => emit(x)), " ") + "}"
     }
   }
   def emit(e: Command): String = {
     e match {
-      case e: DefInt => "node " + e.name + " = " + e.value
-      case e: DefSInt => "node " + e.name + " = " + e.value
-      case e: DefPrim => "node " + e.name + " = " + emit(e.op) + "(" + join(e.args.map(x => emit(x)), " ") + ")"
+      case e: DefUInt => "ulit " + e.name + " = " + e.value
+      case e: DefSInt => "slit " + e.name + " = " + e.value
+      case e: DefPrim => "prim " + e.name + " = " + emit(e.op) + "(" + join(e.args.map(x => emit(x)), ", ") + ")"
       case e: DefWire => "wire " + e.name + " : " + emit(e.kind)
-      case e: DefRegister => "register " + e.name + " : " + emit(e.kind)
+      case e: DefRegister => "reg " + e.name + " : " + emit(e.kind)
       case e: DefMemory => "mem " + e.name + " : " + emit(e.kind) + "[" + e.size + "]";
       case e: DefVector => "vec " + e.name + " : " + emit(e.kind) + "(" + join(e.args.map(x => emit(x)), " ") + ")"
-      case e: DefAccessor => "accessor " + emit(e.direction) + " " + e.name + "[" + e.index + "]"
+      case e: DefAccessor => "accessor " + e.name + "[" + emit(e.index) + "]"
       case e: DefInstance => "instance " + e.name + " of " + e.module
-      case e: Conditionally => "when " + emit(e.pred) + " { " + withIndent{ emit(e.conseq) } + " } else { " + emit(e.alt) + " } "
+      case e: Conditionally => "when " + emit(e.pred) + " { " + withIndent{ emit(e.conseq) } + newline + "}" + (if (e.alt.isInstanceOf[EmptyCommand]) "" else " else { " + withIndent{ emit(e.alt) } + newline + "}")
       case e: Begin => join0(e.body.map(x => emit(x)), newline)
       case e: Connect => emit(e.loc) + " := " + emit(e.exp)
       case e: EmptyCommand => "skip"
