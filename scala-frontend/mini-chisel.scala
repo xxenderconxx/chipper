@@ -21,43 +21,19 @@ class GenSym {
 
 object Builder {
   val components = new ArrayBuffer[Component]()
-  var moduleNames = new HashSet[String]
-  var moduleGenSym = new GenSym
-  def genModuleName(name: String): String = {
-    if (moduleNames.contains(name))
-      moduleGenSym.next(name)
-    else {
-      moduleNames(name) = true
-      name
-    }
-  }
   val genSym = new GenSym()
   val scopes = new Stack[HashSet[String]]()
   def scope = scopes.top
-  def genVarName(name: String): String = {
-    if (scope.contains(name))
-      genSym.next(name)
-    else {
-      scope(name) = true
-      name
-    }
-  }
   def pushScope = {
     scopes.push(new HashSet[String]())
   }
   def popScope = {
     scopes.pop()
   }
-  val modules = new Stack[Module]()
-  def pushModule(module: Module) = modules.push(module)
-  def popModule() = modules.pop()
-  val datas = new Stack[Data]()
-  datas.push(null)
-  def pushData(data: Data) = datas.push(data)
-  def popData() = datas.pop()
-  // val immediates = new Stack[Immediate]()
-  // def pushImmediate() = immediates.push()
-  // def popImmediate() = immediates.pop()
+  val modules = new HashMap[String,Module]()
+  def addModule(mod: Module) {
+    modules(mod.id) = mod
+  }
   val commandz = new Stack[ArrayBuffer[Command]]()
   def commands = commandz.top
   def pushCommand(cmd: Command) = commands += cmd
@@ -77,30 +53,35 @@ object Builder {
     commandz.pop()
     commandify(newCommands)
   }
-  def collectCommands(f: => Unit): Command = {
+  def collectCommands[T <: Module](f: => T): Command = {
     pushCommands
-    f
+    val mod = f
+    mod.setRefs
     popCommands
   }
 
-  private val idmap = new HashMap[String,String]()
-  def setNameForId(id: String, name: String) {
-    // println("SETTING ID " + id + " TO " + name)
-    idmap(id) = name
+  private val refmap = new HashMap[String,Immediate]()
+
+  def setRefForId(id: String, imm: Immediate) {
+    refmap(id) = imm
   }
-  def getNameForId(id: String) = {
-    val res = 
-    if (id == "this") {
-      "this"
-    } else if (idmap.contains(id)) {
-      idmap(id)
-    } else  {
-      val name = genSym.next("T")
-      idmap(id) = name
-      name
+
+  def setRefForId(parentid: String, id: String, name: String) {
+    if (refmap.contains(parentid)) {
+      refmap(id) = Field(refmap(parentid), name)
+    } else {
+      refmap(id) = Ref(name)
     }
-    // println("ID = " + id + " => " + res)
-    res
+  }
+
+  def getRefForId(id: String): Immediate = {
+    if (refmap.contains(id)) {
+      refmap(id)
+    } else  {
+      val ref = Ref(genSym.next("T"))
+      refmap(id) = ref
+      ref
+    }
   }
 
   def build[T <: Module](f: => T) = {
@@ -143,14 +124,23 @@ object PrimOp {
 }
 import PrimOp._
 
+case class Alias(val id: String) {
+  def fullname = getRefForId(id).fullname
+}
+
 abstract class Immediate {
+  def fullname: String
   def name: String
 }
 
-case class Ref(val name: String, val kind: Type = UnknownType()) extends Immediate;
-case class Field(val imm: Immediate, val id: String, val kind: Type = UnknownType())
+case class Ref(val name: String)
     extends Immediate {
-  def name = getNameForId(id)
+  def fullname = name
+}
+case class Field(val imm: Immediate, val name: String) extends Immediate {
+  def fullname = {
+    imm.fullname + "." + name
+  }
 }
 
 case class Port(val id: String, val dir: Direction, val kind: Type);
@@ -168,20 +158,20 @@ case class BundleType(val ports: Array[Port]) extends Type;
 abstract class Command;
 abstract class Definition extends Command {
   def id: String
-  def name = getNameForId(id)
+  def name = getRefForId(id).name
 }
 case class DefUInt(val id: String, val value: Int) extends Definition;
 case class DefSInt(val id: String, val value: Int) extends Definition;
-case class DefPrim(val id: String, val op: PrimOp, val args: Array[Immediate]) extends Definition;
+case class DefPrim(val id: String, val op: PrimOp, val args: Array[Alias]) extends Definition;
 case class DefWire(val id: String, val kind: Type) extends Definition;
 case class DefRegister(val id: String, val kind: Type) extends Definition;
 case class DefMemory(val id: String, val kind: Type, val size: Int) extends Definition;
-case class DefVector(val id: String, val kind: Type, val args: Array[Immediate]) extends Definition;
-case class DefAccessor(val id: String, val source: String, val direction: Direction, val index: Immediate) extends Definition;
+case class DefVector(val id: String, val kind: Type, val args: Array[Alias]) extends Definition;
+case class DefAccessor(val id: String, val source: String, val direction: Direction, val index: Alias) extends Definition;
 case class DefInstance(val id: String, val module: String) extends Definition;
-case class Conditionally(val pred: Immediate, val conseq: Command, val alt: Command) extends Command;
+case class Conditionally(val pred: Alias, val conseq: Command, val alt: Command) extends Command;
 case class Begin(val body: Array[Command]) extends Command();
-case class Connect(val loc: Immediate, val exp: Immediate) extends Command;
+case class Connect(val loc: Alias, val exp: Alias) extends Command;
 case class EmptyCommand() extends Command;
 
 case class Component(val name: String, val ports: Array[Port], val body: Command);
@@ -211,23 +201,12 @@ abstract class Data extends Id {
   def :=(other: Data) = 
     pushCommand(Connect(this.ref, other.ref))
   def cloneType: this.type
-  val module = modules.top;
-  val parent = datas.top
-  def ref: Immediate = {
-    if (parent == null) {
-      //module.findNames
-      Field(module.ref, id, toType)
-    } else
-      Field(parent.ref, id, toType)
-  }
-
-  def name = getNameForId(id)
-
-  pushData(this)
+  def ref: Alias = Alias(id)
+  def name = getRefForId(id).name
 }
+
 object Data {
   def apply[T <: Data](data: T): T = {
-    popData()
     data
   }
 }
@@ -373,12 +352,25 @@ object Bool {
 }
 
 class Bundle(dir: Direction = NO_DIR) extends Data {
+  private var wrapcount = 0
+  private var parent: Bundle = null
   def toPort: Port = 
     Port(id, dir, toType)
   def toPorts: Array[Port] = 
     elts.map(d => d.toPort).toArray
   def toType: Type = 
     BundleType(this.toPorts)
+
+  def setRefs {
+    for (elt <- elts) {
+      setRefForId(id, elt.id, elt.name)
+      elt match {
+        case bundle: Bundle => bundle.setRefs
+        case _ => ()
+      }
+    }
+  }
+
   def collectElts {
     for (m <- getClass.getDeclaredMethods) {
       val name = m.getName
@@ -387,16 +379,18 @@ class Bundle(dir: Direction = NO_DIR) extends Data {
         val obj = m.invoke(this)
         obj match {
           case bundle: Bundle =>
+            setRefForId(id, bundle.id, name)
             bundle.collectElts
             elts += bundle
-            setNameForId(bundle.id, name)
           case data: Data =>
+            setRefForId(id, data.id, name)
             elts += data
-            setNameForId(data.id, name)
+          case _ => ()
         }
       }
     }
   }
+
   val elts = ArrayBuffer[Data]()
   override def cloneType: this.type = {
     try {
@@ -418,8 +412,7 @@ object Module {
   def apply[T <: Module](c: T): T = {
     val cmd = popCommands
     popScope
-    val mod = popModule
-    mod.findNames
+    c.io.collectElts
     val ports = c.io.toPorts
     components += Component(c.name, ports, cmd)
     pushCommand(DefInstance(c.id, c.name))
@@ -430,15 +423,19 @@ object Module {
 abstract class Module extends Id {
   pushScope
   pushCommands
-  pushModule(this)
+  addModule(this)
+
   def io: Bundle
-  def ref = if (this == modules.top) Ref("this") else Ref(id)
+  def ref = getRefForId(id)
 
   def name = {
     getClass.getName
   }
 
-  def findNames {
+  def setRefs {
+    setRefForId(io.id, Ref("this"))
+    io.setRefs
+
     for (m <- getClass.getDeclaredMethods) {
       val name = m.getName()
       val types = m.getParameterTypes()
@@ -446,17 +443,21 @@ abstract class Module extends Id {
         val obj = m.invoke(this)
         obj match {
           case module: Module =>
-            println("SETTING MODULE NAME " + name)
-            setNameForId(module.id, name)
+            setRefForId(module.id, Ref(name))
+            module.setRefs
           case bundle: Bundle =>
-            bundle.collectElts
-            setNameForId(bundle.id, name)
+            if (name != "io") {
+              setRefForId(bundle.id, Ref(name))
+              bundle.collectElts
+            }
           case mem: Mem[_] =>
-            setNameForId(mem.t.id, name)
+            setRefForId(mem.t.id, Ref(name))
           case vec: Vec[_] =>
-            setNameForId(vec.t.id, name)
+            setRefForId(vec.t.id, Ref(name))
           case data: Data =>
-            setNameForId(data.id, name)
+            setRefForId(data.id, Ref(name))
+          // ignore anything not of those types
+          case _ => null
         }
       }
     }
@@ -554,14 +555,9 @@ class Emitter {
     "\n" + join((0 until indenting).map(x => "  ").toArray, "")
   def emit(e: Direction): String = e.name
   def emit(e: PrimOp): String = e.name
-  def emit(e: Immediate): String = {
-    e match {
-      case e: Ref => getNameForId(e.name);
-      case e: Field => emit(e.imm) + "." + e.name
-    }
-  }
+  def emit(e: Alias): String = e.fullname
   def emit(e: Port): String =
-    emit(e.dir) + " " + getNameForId(e.id) + " : " + emit(e.kind)
+    emit(e.dir) + " " + getRefForId(e.id).name + " : " + emit(e.kind)
   def emit(e: Width): String = {
     e match {
       case e: UnknownWidth => "?"
@@ -586,15 +582,24 @@ class Emitter {
       case e: DefMemory => "mem " + e.name + " : " + emit(e.kind) + "[" + e.size + "]";
       case e: DefVector => "vec " + e.name + " : " + emit(e.kind) + "(" + join(e.args.map(x => emit(x)), " ") + ")"
       case e: DefAccessor => "accessor " + e.name + "[" + emit(e.index) + "]"
-      case e: DefInstance => "instance " + e.name + " of " + e.module
+      case e: DefInstance => {
+        val mod = modules(e.id)
+        // update all references to the modules ports
+        setRefForId(mod.io.id, Ref(e.name))
+        mod.io.setRefs
+        "instance " + e.name + " of " + e.module
+      }
       case e: Conditionally => "when " + emit(e.pred) + " { " + withIndent{ emit(e.conseq) } + newline + "}" + (if (e.alt.isInstanceOf[EmptyCommand]) "" else " else { " + withIndent{ emit(e.alt) } + newline + "}")
       case e: Begin => join0(e.body.map(x => emit(x)), newline)
       case e: Connect => emit(e.loc) + " := " + emit(e.exp)
       case e: EmptyCommand => "skip"
     }
   }
-  def emit(e: Component): String = 
-    withIndent{ "module " + e.name + " : " + join0(e.ports.map(x => emit(x)), newline) + emit(e.body) }
+  def emit(e: Component): String =  {
+    withIndent{ "module " + e.name + " : " +
+      join0(e.ports.map(x => emit(x)), newline) +
+      newline + emit(e.body) }
+  }
   def emit(e: Circuit): String = 
     withIndent{ "circuit " + e.main + " : " + join0(e.components.map(x => emit(x)), newline) }
 }
