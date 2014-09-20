@@ -3,10 +3,14 @@ import Builder._
 
 object MiniChisel {
   def main(args: Array[String]): Unit = {
+    if (args.length < 1)
+      println("Need an argument")
     val emitter = new Emitter
-    //println(emitter.emit(build{ Module(new Tbl) }))
-    // println(emitter.emit(build{ Module(new Outer) }))
-    // println(emitter.emit(build{ Module(new GCD) }))
-    println(emitter.emit(build{ Module(new Nester(10)) }))
+    args(0) match {
+      case "tbl" => println(emitter.emit(build{ Module(new Tbl) }))
+      case "gcd" => println(emitter.emit(build{ Module(new GCD) }))
+      case "outer" => println(emitter.emit(build{ Module(new Outer) }))
+      case "nester" => println(emitter.emit(build{ Module(new Nester(10)) }))
+    }
   }
 }
