@@ -30,9 +30,6 @@ object Builder {
   def popScope = {
     scopes.pop()
   }
-  val modules = new Stack[Module]()
-  def pushModule(module: Module) = modules.push(module)
-  def popModule() = modules.pop()
   val commandz = new Stack[ArrayBuffer[Command]]()
   def commands = commandz.top
   def pushCommand(cmd: Command) = commands += cmd
@@ -52,9 +49,10 @@ object Builder {
     commandz.pop()
     commandify(newCommands)
   }
-  def collectCommands(f: => Unit): Command = {
+  def collectCommands[T <: Module](f: => T): Command = {
     pushCommands
-    f
+    val mod = f
+    mod.setRefs
     popCommands
   }
 
@@ -358,8 +356,18 @@ class Bundle(dir: Direction = NO_DIR) extends Data {
     elts.map(d => d.toPort).toArray
   def toType: Type = 
     BundleType(this.toPorts)
+
+  def setRefs {
+    for (elt <- elts) {
+      setRefForId(id, elt.id, elt.name)
+      elt match {
+        case bundle: Bundle => bundle.setRefs
+        case _ => ()
+      }
+    }
+  }
+
   def collectElts {
-    println(s"collecting ${id}")
     for (m <- getClass.getDeclaredMethods) {
       val name = m.getName
       val types = m.getParameterTypes()
@@ -373,7 +381,7 @@ class Bundle(dir: Direction = NO_DIR) extends Data {
           case data: Data =>
             setRefForId(id, data.id, name)
             elts += data
-          case _ => null
+          case _ => ()
         }
       }
     }
@@ -400,8 +408,7 @@ object Module {
   def apply[T <: Module](c: T): T = {
     val cmd = popCommands
     popScope
-    val mod = popModule
-    c.setRefs
+    c.io.collectElts
     val ports = c.io.toPorts
     components += Component(c.name, ports, cmd)
     pushCommand(DefInstance(c.id, c.name))
@@ -412,7 +419,6 @@ object Module {
 abstract class Module extends Id {
   pushScope
   pushCommands
-  pushModule(this)
   def io: Bundle
   def ref = getRefForId(id)
 
@@ -422,7 +428,7 @@ abstract class Module extends Id {
 
   def setRefs {
     setRefForId(id, io.id, "io")
-    io.collectElts
+    io.setRefs
 
     for (m <- getClass.getDeclaredMethods) {
       val name = m.getName()
