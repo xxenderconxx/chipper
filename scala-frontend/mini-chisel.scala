@@ -30,6 +30,10 @@ object Builder {
   def popScope = {
     scopes.pop()
   }
+  val modules = new HashMap[String,Module]()
+  def addModule(mod: Module) {
+    modules(mod.id) = mod
+  }
   val commandz = new Stack[ArrayBuffer[Command]]()
   def commands = commandz.top
   def pushCommand(cmd: Command) = commands += cmd
@@ -419,6 +423,8 @@ object Module {
 abstract class Module extends Id {
   pushScope
   pushCommands
+  addModule(this)
+
   def io: Bundle
   def ref = getRefForId(id)
 
@@ -427,7 +433,7 @@ abstract class Module extends Id {
   }
 
   def setRefs {
-    setRefForId(id, io.id, "io")
+    setRefForId(io.id, Ref("this"))
     io.setRefs
 
     for (m <- getClass.getDeclaredMethods) {
@@ -576,7 +582,13 @@ class Emitter {
       case e: DefMemory => "mem " + e.name + " : " + emit(e.kind) + "[" + e.size + "]";
       case e: DefVector => "vec " + e.name + " : " + emit(e.kind) + "(" + join(e.args.map(x => emit(x)), " ") + ")"
       case e: DefAccessor => "accessor " + e.name + "[" + emit(e.index) + "]"
-      case e: DefInstance => "instance " + e.name + " of " + e.module
+      case e: DefInstance => {
+        val mod = modules(e.id)
+        // update all references to the modules ports
+        setRefForId(mod.io.id, Ref(e.name))
+        mod.io.setRefs
+        "instance " + e.name + " of " + e.module
+      }
       case e: Conditionally => "when " + emit(e.pred) + " { " + withIndent{ emit(e.conseq) } + newline + "}" + (if (e.alt.isInstanceOf[EmptyCommand]) "" else " else { " + withIndent{ emit(e.alt) } + newline + "}")
       case e: Begin => join0(e.body.map(x => emit(x)), newline)
       case e: Connect => emit(e.loc) + " := " + emit(e.exp)
