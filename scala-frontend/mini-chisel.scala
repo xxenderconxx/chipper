@@ -437,7 +437,7 @@ abstract class Module extends Id {
         val obj = m.invoke(this)
         obj match {
           case module: Module =>
-            setRefForId(id, module.id, name)
+            setRefForId(module.id, Ref(name))
             module.setRefs
           case bundle: Bundle =>
             if (name != "io") {
