@@ -1,12 +1,9 @@
 import scala.collection.mutable.{ArrayBuffer, Stack, HashSet, HashMap}
 
 /// TODO:
-/// uint, sint -- copy current implementation
-/// unique id -> named using introspection
-/// memories -- need to gen accessors and connects
-/// vecs -- need to figure this out
+/// uint, sint -- copy current implementation -- more to expand
+/// vecs -- subclass Data
 /// init on regs -- need to figure this out
-/// get rid of this
 /// tester -- need internal access
 /// multiple clock domains -- 
 /// 
@@ -114,6 +111,7 @@ object PrimOp {
   val BitXorOp = PrimOp("BitXor");
   val ConcatOp = PrimOp("Concat");
   val BitSelectOp = PrimOp("Select");
+  val BitsExtractOp = PrimOp("Extract");
   val LessOp = PrimOp("Less");
   val LessEqOp = PrimOp("LessEq");
   val GreaterOp = PrimOp("Greater");
@@ -121,6 +119,9 @@ object PrimOp {
   val EqualOp = PrimOp("Equal");
   val NotOp = PrimOp("Not");
   val MultiplexOp = PrimOp("Multiplex");
+  val AndReduceOp = PrimOp("AndReduce");
+  val OrReduceOp = PrimOp("OrReduce");
+  val XorReduceOp = PrimOp("XorReduce");
 }
 import PrimOp._
 
@@ -154,6 +155,7 @@ case class UnknownType extends Type;
 case class UIntType(val width: Width) extends Type;
 case class SIntType(val width: Width) extends Type;
 case class BundleType(val ports: Array[Port]) extends Type;
+case class VectorType(val size: Int, val port: Port) extends Type;
 
 abstract class Command;
 abstract class Definition extends Command {
@@ -166,7 +168,7 @@ case class DefPrim(val id: String, val op: PrimOp, val args: Array[Alias]) exten
 case class DefWire(val id: String, val kind: Type) extends Definition;
 case class DefRegister(val id: String, val kind: Type) extends Definition;
 case class DefMemory(val id: String, val kind: Type, val size: Int) extends Definition;
-case class DefVector(val id: String, val kind: Type, val args: Array[Alias]) extends Definition;
+case class DefVector(val id: String, val kind: Type, val args: Iterable[Alias]) extends Definition;
 case class DefAccessor(val id: String, val source: String, val direction: Direction, val index: Alias) extends Definition;
 case class DefInstance(val id: String, val module: String) extends Definition;
 case class Conditionally(val pred: Alias, val conseq: Command, val alt: Command) extends Command;
@@ -203,14 +205,22 @@ abstract class Data extends Id {
   def cloneType: this.type
   def ref: Alias = Alias(id)
   def name = getRefForId(id).name
-}
-
-object Data {
-  def apply[T <: Data](data: T): T = {
-    data
+  def getWidth: Int
+  def flatten: Array[Bits]
+  def fromBits(n: Bits): this.type = {
+    val res = this.cloneType
+    var i = 0
+    for (x <- res.flatten.reverse) {
+      x := n(i + x.getWidth-1, i)
+      i += x.getWidth
+    }
+    res
+  }
+  def toBits: Bits = {
+    val elts = this.flatten
+    Cat(elts.head, elts.tail:_*)
   }
 }
-
 
 object Wire {
   def apply[T <: Data](x: T): T = {
@@ -248,21 +258,114 @@ class Mem[T <: Data](val t: T, val size: Int) {
 }
 
 object Vec {
-  def apply[T <: Data](t: T, elts: Array[T]): Vec[T] = {
-    val vec = new Vec(t, elts)
+  def apply[T <: Data](t: T, dir: Direction, elts: Iterable[T]): Vec[T] = {
+    val vec = new Vec(t, dir)
+    for (elt <- elts)
+      vec.self += elt
     pushCommand(DefVector(t.id, t.toType, elts.map(_.ref)))
     vec
   }
+  def tabulate[T <: Data](n: Int, dir: Direction)(gen: (Int) => T): Vec[T] =
+    apply(gen(0), dir, (0 until n).map(i => gen(i)))
+  def fill[T <: Data](n: Int, dir: Direction)(gen: => T): Vec[T] = 
+    Vec.tabulate(n, dir){ i => gen }
 }
 
-class Vec[T <: Data](val t: T, val elts: Array[T]) {
-  def apply(idx: Bits): T = {
-    val y = elts(0).cloneType
+class Vec[T <: Data](val t: T, val dir: Direction) extends Data with VecLike[T] {
+  val self = new ArrayBuffer[T]
+  def apply(idx: UInt): T = {
+    val y = self(0).cloneType
     pushCommand(DefAccessor(y.id, t.id, NO_DIR, idx.ref))
     y
   }
   def apply(idx: Int): T = 
-    elts(idx)
+    self(idx)
+  def toPort: Port = 
+    Port(id, dir, toType)
+  def toPorts: Array[Port] = 
+    self.map(d => d.toPort).toArray
+  def toType: Type = 
+    VectorType(self.size, t.toPort)
+  override def cloneType: this.type =
+    Vec.tabulate(size, dir)(i => self(i)).asInstanceOf[this.type]
+
+  override def flatten: Array[Bits] = 
+    self.map(_.flatten).reduce(_ ++ _)
+  override def getWidth: Int = 
+    flatten.map(_.getWidth).reduce(_ + _)
+
+  def length: Int = self.size
+}
+
+trait VecLike[T <: Data] extends collection.IndexedSeq[T] {
+  // def read(idx: UInt): T
+  // def write(idx: UInt, data: T): Unit
+  def apply(idx: UInt): T
+
+  def forall(p: T => Bool): Bool = (this map p).fold(Bool(true))(_&&_)
+  def exists(p: T => Bool): Bool = (this map p).fold(Bool(false))(_||_)
+  // def contains[T <: Bits](x: T): Bool = this.exists(_ === x)
+  def count(p: T => Bool): UInt = PopCount((this map p).toSeq)
+
+  private def indexWhereHelper(p: T => Bool) = this map p zip (0 until length).map(i => UInt(i))
+  def indexWhere(p: T => Bool): UInt = PriorityMux(indexWhereHelper(p))
+  def lastIndexWhere(p: T => Bool): UInt = PriorityMux(indexWhereHelper(p).reverse)
+  def onlyIndexWhere(p: T => Bool): UInt = Mux1H(indexWhereHelper(p))
+}
+
+/** Returns the number of bits set (i.e value is 1) in the input signal.
+  */
+object PopCount
+{
+  def apply(in: Iterable[Bool]): UInt = {
+    if (in.size == 0) {
+      UInt(0)
+    } else if (in.size == 1) {
+      in.head
+    } else {
+      apply(in.slice(0, in.size/2)) + Cat(UInt(0), apply(in.slice(in.size/2, in.size)))
+    }
+  }
+  def apply(in: Bits): UInt = apply((0 until in.getWidth).map(in(_)))
+}
+
+/** Builds a Mux tree out of the input signal vector using a one hot encoded
+  select signal. Returns the output of the Mux tree.
+  */
+object Mux1H
+{
+  def apply[T <: Data](sel: Iterable[Bool], in: Iterable[T]): T = {
+    if (in.tail.isEmpty) in.head
+    else {
+      val masked = (sel, in).zipped map ((s, i) => Mux(s, i.toBits, Bits(0)))
+      in.head.fromBits(masked.reduceLeft(_|_))
+    }
+  }
+  def apply[T <: Data](in: Iterable[(Bool, T)]): T = {
+    val (sel, data) = in.unzip
+    apply(sel, data)
+  }
+  def apply[T <: Data](sel: Bits, in: Iterable[T]): T =
+    apply((0 until in.size).map(sel(_)), in)
+  def apply(sel: Bits, in: Bits): Bool = (sel & in).orR
+}
+
+/** Builds a Mux tree under the assumption that multiple select signals
+  can be enabled. Priority is given to the first select signal.
+
+  Returns the output of the Mux tree.
+  */
+object PriorityMux
+{
+  def apply[T <: Bits](in: Iterable[(Bool, T)]): T = {
+    if (in.size == 1) {
+      in.head._2
+    } else {
+      Mux(in.head._1, in.head._2, apply(in.tail))
+    }
+  }
+  def apply[T <: Bits](sel: Iterable[Bool], in: Iterable[T]): T = apply(sel zip in)
+  def apply[T <: Bits](sel: Bits, in: Iterable[T]): T = apply((0 until in.size).map(sel(_)), in)
 }
 
 class Bits(val dir: Direction, val width: Int) extends Data {
@@ -272,41 +375,87 @@ class Bits(val dir: Direction, val width: Int) extends Data {
     UIntType(if (width == -1) UnknownWidth() else IntWidth(width))
   override def cloneType: this.type = {
     val res = new Bits(dir, width).asInstanceOf[this.type]
-    Data(res)
+    res
   }
+  override def getWidth: Int = width
+  override def flatten: Array[Bits] = Array[Bits](this)
 
+  def apply(x: UInt): Bool = {
+    val d = new Bool(dir)
+    pushCommand(DefPrim(d.id, BitSelectOp, Array(this.ref, x.ref)))
+    d
+  }
+  def apply(x: Int): Bool = 
+    apply(UInt(x))
+  def apply(x: UInt, y: UInt): Bits = {
+    val d = new Bits(dir, width)
+    pushCommand(DefPrim(d.id, BitsExtractOp, Array(this.ref, x.ref, y.ref)))
+    d
+  }
+  def apply(x: Int, y: Int): Bits = 
+    apply(UInt(x), UInt(y))
   def + (other: Bits) = {
-    val d = Data(new Bits(dir, width))
+   val d = new Bits(dir, width)
     pushCommand(DefPrim(d.id, AddOp, Array(this.ref, other.ref)))
     d
   }
   def +% (other: Bits) = {
-    val d = Data(new Bits(dir, width))
+    val d = new Bits(dir, width)
     pushCommand(DefPrim(d.id, AddModOp, Array(this.ref, other.ref)))
     d
   }
   def - (other: Bits) = {
-    val d = Data(new Bits(dir, width))
+    val d = new Bits(dir, width)
     pushCommand(DefPrim(d.id, MinusOp, Array(this.ref, other.ref)))
     d
   }
   def * (other: Bits) = {
-    val d = Data(new Bits(dir, width))
+    val d = new Bits(dir, width)
     pushCommand(DefPrim(d.id, TimesOp, Array(this.ref, other.ref)))
     d
   }
   def < (other: Bits): Bool = {
-    val d = Data(new Bool(dir))
+    val d = new Bool(dir)
     pushCommand(DefPrim(d.id, LessOp, Array(this.ref, other.ref)))
     d
   }
+  def & (other: Bits): Bits = {
+    val d = new Bits(dir, width)
+    pushCommand(DefPrim(d.id, BitAndOp, Array(this.ref, other.ref)))
+    d
+  }
+  def | (other: Bits): Bits = {
+    val d = new Bits(dir, width)
+    pushCommand(DefPrim(d.id, BitOrOp, Array(this.ref, other.ref)))
+    d
+  }
+  def orR: Bool = {
+    val d = new Bool(dir)
+    pushCommand(DefPrim(d.id, OrReduceOp, Array(this.ref)))
+    d
+  }
+  def andR: Bool = {
+    val d = new Bool(dir)
+    pushCommand(DefPrim(d.id, AndReduceOp, Array(this.ref)))
+    d
+  }
+  def xorR: Bool = {
+    val d = new Bool(dir)
+    pushCommand(DefPrim(d.id, XorReduceOp, Array(this.ref)))
+    d
+  }
+  def ^ (other: Bits): Bits = {
+    val d = new Bits(dir, width)
+    pushCommand(DefPrim(d.id, BitXorOp, Array(this.ref, other.ref)))
+    d
+  }
   def > (other: Bits): Bool = {
-    val d = Data(new Bool(dir))
+    val d = new Bool(dir)
     pushCommand(DefPrim(d.id, GreaterOp, Array(this.ref, other.ref)))
     d
   }
   def === (other: Bits): Bool = {
-    val d = Data(new Bool(dir))
+    val d = new Bool(dir)
     pushCommand(DefPrim(d.id, EqualOp, Array(this.ref, other.ref)))
     d
   }
@@ -314,46 +463,198 @@ class Bits(val dir: Direction, val width: Int) extends Data {
 
 object Bits {
   def apply(dir: Direction, width: Int) = {
-    Data(new Bits(dir, width))
+    new Bits(dir, width)
   }
   def apply(value: Int, width: Int = -1) = {
     val b = new Bits(NO_DIR, width)
     pushCommand(DefUInt(b.id, value))
-    Data(b)
+    b
   }
 }
 
-class Bool(dir: Direction) extends Bits(dir, 1) {
+abstract trait Num[T <: Data] {
+  // def << (b: T): T;
+  // def >> (b: T): T;
+  // def unary_-(): T;
+  def +  (b: T): T;
+  def *  (b: T): T;
+  // def /  (b: T): T;
+  // def %  (b: T): T;
+  def -  (b: T): T;
+  def <  (b: T): Bool;
+  // def <= (b: T): Bool;
+  def >  (b: T): Bool;
+  // def >= (b: T): Bool;
+
+  def min(b: T): T = Mux(this < b, this.asInstanceOf[T], b)
+  def max(b: T): T = Mux(this < b, b, this.asInstanceOf[T])
+}
+
+class UInt(dir: Direction, width: Int) extends Bits(dir, width) with Num[UInt] {
+  override def cloneType: this.type = {
+    val res = new UInt(dir, width).asInstanceOf[this.type]
+    res
+  }
+
+  def + (other: UInt) = {
+    val d = new UInt(dir, width)
+    pushCommand(DefPrim(d.id, AddOp, Array(this.ref, other.ref)))
+    d
+  }
+  def +% (other: UInt) = {
+    val d = new UInt(dir, width)
+    pushCommand(DefPrim(d.id, AddModOp, Array(this.ref, other.ref)))
+    d
+  }
+  def - (other: UInt) = {
+    val d = new UInt(dir, width)
+    pushCommand(DefPrim(d.id, MinusOp, Array(this.ref, other.ref)))
+    d
+  }
+  def * (other: UInt) = {
+    val d = new UInt(dir, width)
+    pushCommand(DefPrim(d.id, TimesOp, Array(this.ref, other.ref)))
+    d
+  }
+  def < (other: UInt): Bool = {
+    val d = new Bool(dir)
+    pushCommand(DefPrim(d.id, LessOp, Array(this.ref, other.ref)))
+    d
+  }
+  def > (other: UInt): Bool = {
+    val d = new Bool(dir)
+    pushCommand(DefPrim(d.id, GreaterOp, Array(this.ref, other.ref)))
+    d
+  }
+  def === (other: UInt): Bool = {
+    val d = new Bool(dir)
+    pushCommand(DefPrim(d.id, EqualOp, Array(this.ref, other.ref)))
+    d
+  }
+}
+
+object UInt {
+  def apply(dir: Direction, width: Int) = {
+    new UInt(dir, width)
+  }
+  def apply(value: Int, width: Int = -1) = {
+    val b = new UInt(NO_DIR, width)
+    pushCommand(DefUInt(b.id, value))
+    b
+  }
+}
+
+class SInt(dir: Direction, width: Int) extends Bits(dir, width) with Num[SInt] {
+  override def cloneType: this.type = {
+    val res = new SInt(dir, width).asInstanceOf[this.type]
+    res
+  }
+
+  def + (other: SInt) = {
+    val d = new SInt(dir, width)
+    pushCommand(DefPrim(d.id, AddOp, Array(this.ref, other.ref)))
+    d
+  }
+  def +% (other: SInt) = {
+    val d = new SInt(dir, width)
+    pushCommand(DefPrim(d.id, AddModOp, Array(this.ref, other.ref)))
+    d
+  }
+  def - (other: SInt) = {
+    val d = new SInt(dir, width)
+    pushCommand(DefPrim(d.id, MinusOp, Array(this.ref, other.ref)))
+    d
+  }
+  def * (other: SInt) = {
+    val d = new SInt(dir, width)
+    pushCommand(DefPrim(d.id, TimesOp, Array(this.ref, other.ref)))
+    d
+  }
+  def < (other: SInt): Bool = {
+    val d = new Bool(dir)
+    pushCommand(DefPrim(d.id, LessOp, Array(this.ref, other.ref)))
+    d
+  }
+  def > (other: SInt): Bool = {
+    val d = new Bool(dir)
+    pushCommand(DefPrim(d.id, GreaterOp, Array(this.ref, other.ref)))
+    d
+  }
+  def === (other: SInt): Bool = {
+    val d = new Bool(dir)
+    pushCommand(DefPrim(d.id, EqualOp, Array(this.ref, other.ref)))
+    d
+  }
+}
+
+object SInt {
+  def apply(dir: Direction, width: Int) = {
+    new SInt(dir, width)
+  }
+  def apply(value: Int, width: Int = -1) = {
+    val b = new SInt(NO_DIR, width)
+    pushCommand(DefSInt(b.id, value))
+    b
+  }
+}
+
+class Bool(dir: Direction) extends UInt(dir, 1) {
   def || (other: Bool) = {
-    val d = Data(new Bool(dir))
+    val d = new Bool(dir)
     pushCommand(DefPrim(d.id, OrOp, Array(this.ref, other.ref)))
     d
   }
   def && (other: Bool) = {
-    val d = Data(new Bool(dir))
+    val d = new Bool(dir)
     pushCommand(DefPrim(d.id, AndOp, Array(this.ref, other.ref)))
     d
   }
   def unary_! (): Bool = {
-    val d = Data(new Bool(dir))
+    val d = new Bool(dir)
     pushCommand(DefPrim(d.id, NotOp, Array(this.ref)))
     d
   }
 }
 object Bool {
-  def apply(dir: Direction) = {
-    Data(new Bool(dir))
+  def apply(dir: Direction) : Bool = {
+    new Bool(dir)
   }
-  def apply(value: Int) = {
+  def apply(value: Int) : Bool = {
     val b = new Bool(NO_DIR)
     pushCommand(DefUInt(b.id, value))
-    Data(b)
+    b
+  }
+  def apply(value: Boolean) : Bool = 
+    apply(if (value) 1 else 0)
+}
+
+object Mux {
+  def apply[T <: Data](cond: Bool, con: T, alt: T): T = {
+    val r = con.cloneType
+    pushCommand(DefPrim(r.id, MultiplexOp, Array(cond.ref, con.ref, alt.ref)))
+    r
+  }
+}
+
+object Cat {
+  def apply[T <: Bits](a: T, r: T*): T = apply(a :: r.toList)
+  def apply[T <: Bits](r: Seq[T]): T = doCat(r)
+  private def doCat[T <: Data](r: Seq[T]): T = {
+    if (r.tail.isEmpty)
+      r.head
+    else {
+      val l = doCat(r.slice(0, r.length/2))
+      val h = doCat(r.slice(r.length/2, r.length))
+      val d = l.cloneType
+      pushCommand(DefPrim(d.id, ConcatOp, Array(l.ref, h.ref)))
+      d
+    }
   }
 }
 
 class Bundle(dir: Direction = NO_DIR) extends Data {
   private var wrapcount = 0
-  private var parent: Bundle = null
+  private var parent: Data = null
   def toPort: Port = 
     Port(id, dir, toType)
   def toPorts: Array[Port] = 
@@ -371,6 +672,12 @@ class Bundle(dir: Direction = NO_DIR) extends Data {
     }
   }
 
+  override def flatten: Array[Bits] = 
+    elts.map(_.flatten).reduce(_ ++ _)
+  override def getWidth: Int = 
+    flatten.map(_.getWidth).reduce(_ + _)
+
+  val elts = ArrayBuffer[Data]()
   def collectElts {
     for (m <- getClass.getDeclaredMethods) {
       val name = m.getName
@@ -391,12 +698,11 @@ class Bundle(dir: Direction = NO_DIR) extends Data {
     }
   }
 
-  val elts = ArrayBuffer[Data]()
   override def cloneType: this.type = {
     try {
       val constructor = this.getClass.getConstructors.head
       val res = constructor.newInstance(Array.fill(constructor.getParameterTypes.size)(null):_*)
-      Data(res.asInstanceOf[this.type])
+      res.asInstanceOf[this.type]
     } catch {
       case npe: java.lang.reflect.InvocationTargetException if npe.getCause.isInstanceOf[java.lang.NullPointerException] =>
       //   throwException("Parameterized Bundle " + this.getClass + " needs clone method. You are probably using an anonymous Bundle object that captures external state and hence is un-cloneable", npe)
@@ -570,6 +876,7 @@ class Emitter {
       case e: UIntType => "UInt(" + emit(e.width) + ")"
       case e: SIntType => "SInt(" + emit(e.width) + ")"
       case e: BundleType => "{" + join(e.ports.map(x => emit(x)), " ") + "}"
+      case e: VectorType => "Vec(" + e.size + "," + e.port + ")"
     }
   }
   def emit(e: Command): String = {
@@ -580,7 +887,7 @@ class Emitter {
       case e: DefWire => "wire " + e.name + " : " + emit(e.kind)
       case e: DefRegister => "reg " + e.name + " : " + emit(e.kind)
       case e: DefMemory => "mem " + e.name + " : " + emit(e.kind) + "[" + e.size + "]";
-      case e: DefVector => "vec " + e.name + " : " + emit(e.kind) + "(" + join(e.args.map(x => emit(x)), " ") + ")"
+      case e: DefVector => "vec " + e.name + " : " + emit(e.kind) + "(" + join(e.args.map(x => emit(x)).toArray[String], " ") + ")"
       case e: DefAccessor => "accessor " + e.name + "[" + emit(e.index) + "]"
       case e: DefInstance => {
         val mod = modules(e.id)
