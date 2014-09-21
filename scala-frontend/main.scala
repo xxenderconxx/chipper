@@ -10,6 +10,7 @@ object MiniChisel {
       case "tbl" => println(emitter.emit(build{ Module(new Tbl) }))
       case "gcd" => println(emitter.emit(build{ Module(new GCD) }))
       case "outer" => println(emitter.emit(build{ Module(new Outer) }))
+      case "complex" => println(emitter.emit(build{ Module(new ComplexAssign(10)) }))
     }
   }
 }
