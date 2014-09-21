@@ -1061,6 +1061,7 @@ defn match-prim (c:DoPrim) :
          BIT-AND-OP : args(c)
          BIT-OR-OP : args(c)
          BIT-XOR-OP : args(c)
+         EQUAL-OP : args(c)
          MULTIPLEX-OP : tail(args(c))
    val desired-w = maximum $
       for a in match-args stream :
@@ -1079,6 +1080,7 @@ defn match-prim (c:DoPrim) :
             BIT-AND-OP : match-args*
             BIT-OR-OP : match-args*
             BIT-XOR-OP : match-args*
+            EQUAL-OP : match-args*
             MULTIPLEX-OP : List(head(args(c)), match-args*)
       yield(DoPrim(name(c), op(c), prim-args, consts(c)))
 
@@ -1098,6 +1100,7 @@ defn width-match (c:Command) -> Command :
             BIT-OR-OP : match-prim(c)
             BIT-XOR-OP : match-prim(c)
             MULTIPLEX-OP : match-prim(c)
+            EQUAL-OP : match-prim(c)
             else : c
       (c:Connect) :
          match-connect(c)
