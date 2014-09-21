@@ -64,11 +64,7 @@ object Builder {
   }
 
   def setRefForId(parentid: String, id: String, name: String) {
-    if (refmap.contains(parentid)) {
-      refmap(id) = Field(refmap(parentid), name)
-    } else {
-      refmap(id) = Ref(name)
-    }
+    refmap(id) = Field(Alias(parentid), name)
   }
 
   def getRefForId(id: String): Immediate = {
@@ -84,6 +80,13 @@ object Builder {
   def build[T <: Module](f: => T) = {
     val cmd = collectCommands(f)
     Circuit(components.toArray, components.last.name)
+  }
+
+  def finalizeData(data: Data) {
+    data match {
+      case bundle: Bundle => bundle.collectElts
+      case _ => ()
+    }
   }
 }
 
@@ -125,17 +128,16 @@ object PrimOp {
 }
 import PrimOp._
 
-case class Alias(val id: String) {
-  def fullname = getRefForId(id).fullname
-}
-
 abstract class Immediate {
   def fullname: String
   def name: String
 }
 
-case class Ref(val name: String)
-    extends Immediate {
+case class Alias(val id: String) extends Immediate{
+  def fullname = getRefForId(id).fullname
+  def name = getRefForId(id).name
+}
+case class Ref(val name: String) extends Immediate {
   def fullname = name
 }
 case class Field(val imm: Immediate, val name: String) extends Immediate {
@@ -224,19 +226,16 @@ abstract class Data extends Id {
 
 object Wire {
   def apply[T <: Data](x: T): T = {
-    // val prevIsWire = isWire
-    // isWire = true
     pushCommand(DefWire(x.id, x.toType))
-    val res = x
-    // val res = x.cloneType
-    // isWire = prevIsWire
-    res
+    finalizeData(x)
+    x
   }
 }
 
 object Reg {
   def apply[T <: Data](x: T): T = {
     pushCommand(DefRegister(x.id, x.toType))
+    finalizeData(x)
     x
   }
 }
@@ -662,16 +661,6 @@ class Bundle(dir: Direction = NO_DIR) extends Data {
   def toType: Type = 
     BundleType(this.toPorts)
 
-  def setRefs {
-    for (elt <- elts) {
-      setRefForId(id, elt.id, elt.name)
-      elt match {
-        case bundle: Bundle => bundle.setRefs
-        case _ => ()
-      }
-    }
-  }
-
   override def flatten: Array[Bits] = 
     elts.map(_.flatten).reduce(_ ++ _)
   override def getWidth: Int = 
@@ -740,7 +729,6 @@ abstract class Module extends Id {
 
   def setRefs {
     setRefForId(io.id, Ref("this"))
-    io.setRefs
 
     for (m <- getClass.getDeclaredMethods) {
       val name = m.getName()
@@ -754,7 +742,6 @@ abstract class Module extends Id {
           case bundle: Bundle =>
             if (name != "io") {
               setRefForId(bundle.id, Ref(name))
-              bundle.collectElts
             }
           case mem: Mem[_] =>
             setRefForId(mem.t.id, Ref(name))
@@ -893,7 +880,6 @@ class Emitter {
         val mod = modules(e.id)
         // update all references to the modules ports
         setRefForId(mod.io.id, Ref(e.name))
-        mod.io.setRefs
         "instance " + e.name + " of " + e.module
       }
       case e: Conditionally => "when " + emit(e.pred) + " { " + withIndent{ emit(e.conseq) } + newline + "}" + (if (e.alt.isInstanceOf[EmptyCommand]) "" else " else { " + withIndent{ emit(e.alt) } + newline + "}")
