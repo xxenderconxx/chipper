@@ -1,4 +1,6 @@
+package Chipper
 import scala.collection.mutable.{ArrayBuffer, Stack, HashSet, HashMap}
+import java.lang.reflect.Modifier._
 
 /// TODO:
 /// uint, sint -- copy current implementation -- more to expand
@@ -63,8 +65,12 @@ object Builder {
     refmap(id) = imm
   }
 
-  def setRefForId(parentid: String, id: String, name: String) {
+  def setFieldForId(parentid: String, id: String, name: String) {
     refmap(id) = Field(Alias(parentid), name)
+  }
+
+  def setIndexForId(parentid: String, id: String, index: Int) {
+    refmap(id) = Index(Alias(parentid), index)
   }
 
   def getRefForId(id: String): Immediate = {
@@ -85,6 +91,7 @@ object Builder {
   def finalizeData(data: Data) {
     data match {
       case bundle: Bundle => bundle.collectElts
+      case vec: Vec[_] => vec.collectElts
       case _ => ()
     }
   }
@@ -145,6 +152,12 @@ case class Field(val imm: Immediate, val name: String) extends Immediate {
     imm.fullname + "." + name
   }
 }
+case class Index(val imm: Immediate, val value: Int) extends Immediate {
+  def name = "[" + value + "]"
+  def fullname = {
+    imm.fullname + "[" + value + "]"
+  }
+}
 
 case class Port(val id: String, val dir: Direction, val kind: Type);
 
@@ -157,7 +170,7 @@ case class UnknownType extends Type;
 case class UIntType(val width: Width) extends Type;
 case class SIntType(val width: Width) extends Type;
 case class BundleType(val ports: Array[Port]) extends Type;
-case class VectorType(val size: Int, val port: Port) extends Type;
+case class VectorType(val size: Int, val kind: Type) extends Type;
 
 abstract class Command;
 abstract class Definition extends Command {
@@ -170,8 +183,8 @@ case class DefPrim(val id: String, val op: PrimOp, val args: Array[Alias]) exten
 case class DefWire(val id: String, val kind: Type) extends Definition;
 case class DefRegister(val id: String, val kind: Type) extends Definition;
 case class DefMemory(val id: String, val kind: Type, val size: Int) extends Definition;
-case class DefVector(val id: String, val kind: Type, val args: Iterable[Alias]) extends Definition;
-case class DefAccessor(val id: String, val source: String, val direction: Direction, val index: Alias) extends Definition;
+// case class DefVector(val id: String, val kind: Type, val args: Iterable[Alias]) extends Definition;
+case class DefAccessor(val id: String, val source: Alias, val direction: Direction, val index: Alias) extends Definition;
 case class DefInstance(val id: String, val module: String) extends Definition;
 case class Conditionally(val pred: Alias, val conseq: Command, val alt: Command) extends Command;
 case class Begin(val body: Array[Command]) extends Command();
@@ -225,17 +238,19 @@ abstract class Data extends Id {
 }
 
 object Wire {
-  def apply[T <: Data](x: T): T = {
-    pushCommand(DefWire(x.id, x.toType))
+  def apply[T <: Data](t: T): T = {
+    val x = t.cloneType
     finalizeData(x)
+    pushCommand(DefWire(x.id, x.toType))
     x
   }
 }
 
 object Reg {
-  def apply[T <: Data](x: T): T = {
-    pushCommand(DefRegister(x.id, x.toType))
+  def apply[T <: Data](t: T): T = {
+    val x = t.cloneType
     finalizeData(x)
+    pushCommand(DefRegister(x.id, x.toType))
     x
   }
 }
@@ -250,32 +265,37 @@ object Mem {
 
 class Mem[T <: Data](val t: T, val size: Int) {
   def apply(idx: Bits): T = {
-    val y = t.cloneType
-    pushCommand(DefAccessor(y.id, t.id, NO_DIR, idx.ref))
-    y
+    val x = t.cloneType
+    finalizeData(x)
+    pushCommand(DefAccessor(x.id, Alias(t.id), NO_DIR, idx.ref))
+    x
   }
 }
 
 object Vec {
-  def apply[T <: Data](t: T, dir: Direction, elts: Iterable[T]): Vec[T] = {
-    val vec = new Vec(t, dir)
-    for (elt <- elts)
-      vec.self += elt
-    pushCommand(DefVector(t.id, t.toType, elts.map(_.ref)))
+  def apply[T <: Data](dir: Direction, elts: Iterable[T]): Vec[T] = {
+    val vec = new Vec[T](i => elts.head.cloneType, dir)
+    vec.self ++= elts
+    // pushCommand(DefVector(t.id, t.toType, elts.map(_.ref)))
     vec
   }
   def tabulate[T <: Data](n: Int, dir: Direction)(gen: (Int) => T): Vec[T] =
-    apply(gen(0), dir, (0 until n).map(i => gen(i)))
+    apply(dir, (0 until n).map(i => gen(i)))
   def fill[T <: Data](n: Int, dir: Direction)(gen: => T): Vec[T] = 
     Vec.tabulate(n, dir){ i => gen }
 }
 
-class Vec[T <: Data](val t: T, val dir: Direction) extends Data with VecLike[T] {
+abstract class Aggregate extends Data {
+  def collectElts: Unit;
+}
+
+class Vec[T <: Data](val gen: (Int) => T, val dir: Direction) extends Aggregate with VecLike[T] {
+  val t = gen(0)
   val self = new ArrayBuffer[T]
   def apply(idx: UInt): T = {
-    val y = self(0).cloneType
-    pushCommand(DefAccessor(y.id, t.id, NO_DIR, idx.ref))
-    y
+    val x = self(0).cloneType
+    pushCommand(DefAccessor(x.id, Alias(t.id), NO_DIR, idx.ref))
+    x
   }
   def apply(idx: Int): T = 
     self(idx)
@@ -284,7 +304,7 @@ class Vec[T <: Data](val t: T, val dir: Direction) extends Data with VecLike[T] 
   def toPorts: Array[Port] = 
     self.map(d => d.toPort).toArray
   def toType: Type = 
-    VectorType(self.size, t.toPort)
+    VectorType(self.size, t.toType)
   override def cloneType: this.type =
     Vec.tabulate(size, dir)(i => self(i)).asInstanceOf[this.type]
 
@@ -292,6 +312,22 @@ class Vec[T <: Data](val t: T, val dir: Direction) extends Data with VecLike[T] 
     self.map(_.flatten).reduce(_ ++ _)
   override def getWidth: Int = 
     flatten.map(_.getWidth).reduce(_ + _)
+
+  def collectElts: Unit = {
+    for (i <- 0 until self.size) {
+      val elt = self(i)
+      elt match {
+        case bundle: Bundle =>
+          setIndexForId(id, bundle.id, i)
+          bundle.collectElts
+        case vec: Vec[_] =>
+          setIndexForId(id, vec.id, i)
+          vec.collectElts
+        case data: Data =>
+          setIndexForId(id, data.id, i)
+      }
+    }
+  }
 
   def length: Int = self.size
 }
@@ -651,14 +687,19 @@ object Cat {
   }
 }
 
-class Bundle(dir: Direction = NO_DIR) extends Data {
-  private var wrapcount = 0
-  private var parent: Data = null
+object Bundle {
+  val keywords = HashSet[String]("elements", "flip", "toString",
+    "flatten", "binding", "asInput", "asOutput", "unary_$tilde",
+    "unary_$bang", "unary_$minus", "cloneType", "toUInt", "toBits",
+    "toBool", "toSInt", "asDirectionless")
+}
+
+class Bundle(dir: Direction = NO_DIR) extends Aggregate {
   def toPort: Port = 
     Port(id, dir, toType)
   def toPorts: Array[Port] = 
     elts.map(d => d.toPort).toArray
-  def toType: Type = 
+  def toType: BundleType = 
     BundleType(this.toPorts)
 
   override def flatten: Array[Bits] = 
@@ -667,19 +708,41 @@ class Bundle(dir: Direction = NO_DIR) extends Data {
     flatten.map(_.getWidth).reduce(_ + _)
 
   val elts = ArrayBuffer[Data]()
-  def collectElts {
+  def collectElts: Unit = {
+    elts.clear()
     for (m <- getClass.getDeclaredMethods) {
       val name = m.getName
+
+      val modifiers = m.getModifiers();
       val types = m.getParameterTypes()
-      if (types.length == 0) {
+      var isInterface = false;
+      var isFound = false;
+      val rtype = m.getReturnType();
+      var c = rtype;
+      val sc = Class.forName("Chipper.Data");
+      do {
+        if (c == sc) {
+          isFound = true; isInterface = true;
+        } else if (c == null || c == Class.forName("java.lang.Object")) {
+          isFound = true; isInterface = false;
+        } else {
+          c = c.getSuperclass();
+        }
+      } while (!isFound);
+      if (types.length == 0 && !isStatic(modifiers) && isInterface
+          && !(Bundle.keywords contains name)) {
         val obj = m.invoke(this)
         obj match {
           case bundle: Bundle =>
-            setRefForId(id, bundle.id, name)
+            setFieldForId(id, bundle.id, name)
             bundle.collectElts
             elts += bundle
+          case vec: Vec[_] =>
+            setFieldForId(id, vec.id, name)
+            vec.collectElts
+            elts += vec
           case data: Data =>
-            setRefForId(id, data.id, name)
+            setFieldForId(id, data.id, name)
             elts += data
           case _ => ()
         }
@@ -746,7 +809,7 @@ abstract class Module extends Id {
           case mem: Mem[_] =>
             setRefForId(mem.t.id, Ref(name))
           case vec: Vec[_] =>
-            setRefForId(vec.t.id, Ref(name))
+            setRefForId(vec.id, Ref(name))
           case data: Data =>
             setRefForId(data.id, Ref(name))
           // ignore anything not of those types
@@ -863,7 +926,7 @@ class Emitter {
       case e: UIntType => "UInt(" + emit(e.width) + ")"
       case e: SIntType => "SInt(" + emit(e.width) + ")"
       case e: BundleType => "{" + join(e.ports.map(x => emit(x)), " ") + "}"
-      case e: VectorType => "Vec(" + e.size + "," + e.port + ")"
+      case e: VectorType => "Vec(" + e.size + ", " + emit(e.kind) + ")"
     }
   }
   def emit(e: Command): String = {
@@ -874,8 +937,8 @@ class Emitter {
       case e: DefWire => "wire " + e.name + " : " + emit(e.kind)
       case e: DefRegister => "reg " + e.name + " : " + emit(e.kind)
       case e: DefMemory => "mem " + e.name + " : " + emit(e.kind) + "[" + e.size + "]";
-      case e: DefVector => "vec " + e.name + " : " + emit(e.kind) + "(" + join(e.args.map(x => emit(x)).toArray[String], " ") + ")"
-      case e: DefAccessor => "accessor " + e.name + "[" + emit(e.index) + "]"
+      // case e: DefVector => "vec " + e.name + " : " + emit(e.kind) + "(" + join(e.args.map(x => emit(x)).toArray[String], " ") + ")"
+      case e: DefAccessor => "accessor " + e.name + " " + emit(e.source) + "[" + emit(e.index) + "]"
       case e: DefInstance => {
         val mod = modules(e.id)
         // update all references to the modules ports

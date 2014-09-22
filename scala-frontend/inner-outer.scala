@@ -1,3 +1,4 @@
+import Chipper._
 import Direction._
 import Builder._
 

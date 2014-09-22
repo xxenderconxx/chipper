@@ -1,3 +1,4 @@
+import Chipper._
 import Direction._
 import Builder._
 
@@ -7,6 +8,7 @@ object MiniChisel {
       println("Need an argument")
     val emitter = new Emitter
     args(0) match {
+      case "vec" => println(emitter.emit(build{ Module(new VecApp(4,8)) }))
       case "tbl" => println(emitter.emit(build{ Module(new Tbl) }))
       case "gcd" => println(emitter.emit(build{ Module(new GCD) }))
       case "outer" => println(emitter.emit(build{ Module(new Outer) }))
