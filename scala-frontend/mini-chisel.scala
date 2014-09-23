@@ -290,11 +290,10 @@ abstract class Aggregate extends Data {
 }
 
 class Vec[T <: Data](val gen: (Int) => T, val dir: Direction) extends Aggregate with VecLike[T] {
-  val t = gen(0)
   val self = new ArrayBuffer[T]
   def apply(idx: UInt): T = {
     val x = self(0).cloneType
-    pushCommand(DefAccessor(x.id, Alias(t.id), NO_DIR, idx.ref))
+    pushCommand(DefAccessor(x.id, Alias(id), NO_DIR, idx.ref))
     x
   }
   def apply(idx: Int): T = 
@@ -304,7 +303,7 @@ class Vec[T <: Data](val gen: (Int) => T, val dir: Direction) extends Aggregate 
   def toPorts: Array[Port] = 
     self.map(d => d.toPort).toArray
   def toType: Type = 
-    VectorType(self.size, t.toType)
+    VectorType(self.size, self(0).toType)
   override def cloneType: this.type =
     Vec.tabulate(size, dir)(i => self(i)).asInstanceOf[this.type]
 
