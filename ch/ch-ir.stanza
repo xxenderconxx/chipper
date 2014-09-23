@@ -84,6 +84,12 @@ public defstruct Field <: Immediate :
 public defn Field (imm:Immediate, name:Symbol) :
    Field(imm, name, UNKNOWN-DIR, UnknownType())
 
+public defstruct Index <: Immediate :
+   imm: Immediate
+   value: Int
+   type: Type [multi => false]
+public defn Index (imm:Immediate, value:Int) :
+   Index(imm, value, UnknownType())
 
 ;Immediates referring to registers
 public defstruct RegData <: Immediate :
@@ -119,6 +125,7 @@ public defn put-type<?T> (i:?T&Immediate, t:Type) -> T :
    match(i) :
       (i:T&Ref) : Ref(name(i), direction(i), t) as T&Ref
       (i:T&Field) : Field(imm(i), name(i), direction(i), t) as T&Field
+      (i:T&Index) : Index(imm(i), value(i), t) as T&Index
       (i:T&RegData) : RegData(name(i), direction(i), t) as T&RegData
       (i:T&RegInit) : RegInit(name(i), direction(i), t) as T&RegInit
       (i:T&InstPort) : InstPort(name(i), port(i), direction(i), t) as T&InstPort
@@ -127,6 +134,7 @@ public defn put-dir<?T> (i:?T&Immediate, d:Direction) -> T :
    match(i) :
       (i:T&Ref) : Ref(name(i), d, type(i)) as T&Ref
       (i:T&Field) : Field(imm(i), name(i), d, type(i)) as T&Field
+      (i:T&Index) : Index(imm(i), value(i), type(i)) as T&Index
       (i:T&RegData) : RegData(name(i), d, type(i)) as T&RegData
       (i:T&RegInit) : RegInit(name(i), d, type(i)) as T&RegInit
       (i:T&InstPort) : InstPort(name(i), port(i), d, type(i)) as T&InstPort
@@ -143,6 +151,9 @@ public defn eqv? (i1:Immediate, i2:Immediate) :
       (i1:Field, i2:Field) :
          eqv?(imm(i1), imm(i2)) and
          name(i1) == name(i2)
+      (i1:Index, i2:Index) :
+         eqv?(imm(i1), imm(i2)) and
+         value(i1) == value(i2)
       (i1:Ref, i2:Ref) :
          name(i1) == name(i2)
       (i1:RegData, i2:RegData) :
@@ -179,6 +190,10 @@ public defn SIntType () :
    
 public defstruct BundleType <: Type :
    ports: List<Port>
+
+public defstruct VectorType <: Type :
+   type: Type
+   size: Int
 
 public defstruct UnknownType <: Type
 
@@ -310,6 +325,8 @@ public defn map (f: (Type) -> Type, t: Type) -> Type :
          BundleType $
          for p in ports(t) map :
             Port(name(p), direction(p), f(type(p)))
+      (t:VectorType) :
+         VectorType(f(type(t)), size(t))
       (t) :
          t
 
@@ -325,6 +342,9 @@ public defn eqv? (t1:Type, t2:Type) :
       (t1:UnknownType, t2:UnknownType) : true
       (t1:UIntType, t2:UIntType) : true
       (t1:SIntType, t2:SIntType) : true
+      (t1:VectorType, t2:VectorType) :
+         size(t1) == size(t2) and
+         eqv?(type(t1), type(t2))
       (t1:BundleType, t2:BundleType) :
          length(ports(t1)) == length(ports(t2)) and
          all?(eqv?, ports(t1), ports(t2))
@@ -352,6 +372,7 @@ defmethod print (o:OutputStream, i:Immediate) :
    match(i) :
       (r:Ref) : print(o, name(r))
       (f:Field) : print-all(o, [imm(f) "." name(f)])
+      (f:Index) : print-all(o, [imm(f) "@" value(f)])
       (r:RegData) : print-all(o, [name(r) ".data"])
       (r:RegInit) : print-all(o, [name(r) ".init"])
       (p:InstPort) : print-all(o, [name(p) "." port(p)])
@@ -366,6 +387,8 @@ defmethod print (o:OutputStream, t:Type) :
          print(o, "{")
          print-all(o, join(ports(t), ", "))
          print(o, "}")
+      (t:VectorType) :
+         print-all(o, ["Vec(" type(t)  ", " size(t) ")"])
       (t) :
          error("Unable to print type")
 
@@ -435,16 +458,23 @@ defmethod print (o:OutputStream, c:Circuit) :
 defn is-var? (pattern:List) -> True|False :
   length(pattern) == 2 and pattern[0] == '@cap
 
-defn split (str: String, sep: Char) -> List<String> :
+defn is-splice-var? (pattern:List) -> True|False :
+  length(pattern) == 2 and pattern[0] == '@@
+
+defn split (str: String, seps: Array<Char>) -> List<String> :
   val strs = Vector<String>()
   var last : Int = 0
   for i in 0 to length(str) do :
-    if str[i] == sep :
+    if any?({ str[i] == _ }, seps) :
       add(strs, substring(str, last, i))
+      add(strs, substring(str, i, i + 1))
       last = i + 1
   if last < length(str) :
     add(strs, substring(str, last, length(str)))
   to-list(strs)
+
+defn split (str: String, sep: Char) -> List<String> :
+  split(str, to-array([sep]))
 
 defn check-type (exp, kind:Symbol) -> True|False :
   switch {kind == _} :
@@ -465,9 +495,9 @@ defn match? (pattern, exp) -> [List<KeyValue>, List, True|False] :
               val strs = split(to-string(p), "/"[0])
               if length(strs) == 1 :
                 [list(KeyValue(p, exp)), list(), true]
-              else if length(strs) == 2 :
+              else if length(strs) == 3 :
                 val name = to-symbol(strs[0])
-                val kind = to-symbol(strs[1])
+                val kind = to-symbol(strs[2])
                 [list(KeyValue(name, exp)), list(), check-type(exp, kind)]
               else :
                 error("bad pattern")
@@ -517,20 +547,25 @@ defn parse-ports (form: List) -> List<Port> :
 
 defn parse-type (form: List) -> Type :
    println("--- PARSING TYPE")
-   ;; BUNDLE TYPES
-   val [vals, rest, good?] = match?('(@do ?type ?width), form)
-   ;; match-val [rest, good?] = match?((@do ?type ?width), form)
-   if good? :
-     val width = IntWidth(lookup(vals, 'width) as Int)
-     val kind =
-       switch {lookup(vals, 'type) == _} :
-         'UInt : UIntType(width)
-         'SInt : SIntType(width)
-     kind
+   ;; VEC TYPES
+   val [vals, rest, vec-good?] = match?('(@do Vec ?type ?size), form)
+   if vec-good? :
+     val kind = parse-type(lookup(vals, 'type) as List)
+     VectorType(kind, lookup(vals, 'size) as Int)
    else :
-     val [vals, rest] = must-match?('(@afn . ?ports), form)
-     val ports = parse-ports(lookup(vals, 'ports) as List)     
-     BundleType(ports)
+     val [vals, rest, good?] = match?('(@do ?type ?width), form)
+     ;; match-val [rest, good?] = match?((@do ?type ?width), form)
+     if good? :
+       val width = IntWidth(lookup(vals, 'width) as Int)
+       val kind =
+         switch {lookup(vals, 'type) == _} :
+           'UInt : UIntType(width)
+           'SInt : SIntType(width)
+       kind
+     else : ;; BUNDLE TYPE
+       val [vals, rest] = must-match?('(@afn . ?ports), form)
+       val ports = parse-ports(lookup(vals, 'ports) as List)     
+       BundleType(ports)
 
 defn parse-instance (form: List) -> [DefInstance, List] :
    println("--- PARSING INSTANCE")
@@ -541,14 +576,32 @@ defn parse-instance (form: List) -> [DefInstance, List] :
 defn parse-ref (form: Symbol) -> Ref :
   Ref(form)
 
+;;; a.b[c] -> (@get a.b c)
+;;; a[b].c -> (@get a b) .c
+;;; a.b@c -> a . b @ c
+;;; a@b.c -> a @ b . c
+
 defn parse-immediate (form) -> Immediate :
-  defn syms-to-imm (x: List<Symbol>) -> Immediate :
-    if length(x) == 1 :
-      Ref(x[0])
+  defn syms-to-imm (imm: Immediate, x: List<Symbol>) -> Immediate :
+    if length(x) == 0 :
+      imm
     else :
-      Field(syms-to-imm(tail(x)), head(x))
-  val syms = map(to-symbol, split(to-string(form), "."[0]))
-  syms-to-imm(syms)
+      if length(x) >= 2 :
+        val kind = x[0]
+        val name = x[1]
+        val nxt-imm = 
+          if kind == '. :
+            Field(imm, name)
+          else if kind == '@ :
+            Index(imm, to-int(to-string(name)))
+          else :
+            error("Badly formed immediate")
+        syms-to-imm(nxt-imm, tail(tail(x)))
+      else :
+        error("Badly formed immediate")
+  val syms = map(to-symbol, split(to-string(form), to-array(["."[0], "@"[0]])))
+  println-all(["SYMS " syms])
+  syms-to-imm(Ref(head(syms)), tail(syms))
 
 defn parse-prim (form: List) -> [DoPrim, List] :
    println("--- PARSING DOPRIM")
@@ -568,11 +621,11 @@ defn parse-wire (form: List) -> [DefWire, List] :
    val [vals, rest] = must-match?('(wire ?name : ?kind), form)
    [DefWire(lookup(vals, 'name) as Symbol, parse-type(lookup(vals, 'kind))), rest]
 
-defn parse-vec (form: List) -> [DefVector, List] :
-   println("--- PARSING VEC")
-   val [vals, rest] = must-match?('(vec ?name = ?kind of ?args), form)
-   val args = parse-args(lookup(vals, 'args) as List<Symbol>)
-   [DefVector(lookup(vals, 'name) as Symbol, parse-type(lookup(vals, 'kind)), args), rest]
+;; defn parse-vec (form: List) -> [DefVector, List] :
+;;    println("--- PARSING VEC")
+;;    val [vals, rest] = must-match?('(vec ?name = ?kind of ?args), form)
+;;    val args = parse-args(lookup(vals, 'args) as List<Symbol>)
+;;    [DefVector(lookup(vals, 'name) as Symbol, parse-type(lookup(vals, 'kind)), args), rest]
 
 defn parse-accessor (form: List) -> [DefAccessor, List] :
    println("--- PARSING ACCESSOR")
@@ -641,7 +694,7 @@ defn parse-command (form: List) -> [Command, List] :
      'instance     : parse-instance(form)
      'register     : parse-register(form)
      'wire         : parse-wire(form)
-     'vec          : parse-vec(form)
+     ;; 'vec          : parse-vec(form)
      'memory       : parse-memory(form)
      'accessor     : parse-accessor(form)
      'connect      : parse-connect(form)

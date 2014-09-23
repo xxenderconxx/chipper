@@ -153,9 +153,9 @@ case class Field(val imm: Immediate, val name: String) extends Immediate {
   }
 }
 case class Index(val imm: Immediate, val value: Int) extends Immediate {
-  def name = "[" + value + "]"
+  def name = "@" + value
   def fullname = {
-    imm.fullname + "[" + value + "]"
+    imm.fullname + "@" + value
   }
 }
 
@@ -925,7 +925,7 @@ class Emitter {
       case e: UIntType => "UInt(" + emit(e.width) + ")"
       case e: SIntType => "SInt(" + emit(e.width) + ")"
       case e: BundleType => "{" + join(e.ports.map(x => emit(x)), " ") + "}"
-      case e: VectorType => "Vec(" + e.size + ", " + emit(e.kind) + ")"
+      case e: VectorType => "Vec(" + emit(e.kind) + ", " + e.size + ")"
     }
   }
   def emit(e: Command): String = {
