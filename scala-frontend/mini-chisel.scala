@@ -403,6 +403,17 @@ object PriorityMux
 }
 
 class Bits(val dir: Direction, val width: Int) extends Data {
+  private def binop(op: PrimOp, other: Bits): Bits = {
+    val d = new Bits(dir, width)
+    pushCommand(DefPrim(d.id, op, Array(this.ref, other.ref)))
+    d
+  }
+  protected def compop(op: PrimOp, other: Bits): Bool = {
+    val d = new Bool(dir)
+    pushCommand(DefPrim(d.id, op, Array(this.ref, other.ref)))
+    d
+  }
+
   def toPort: Port = 
     Port(id, dir, toType)
   def toType: Type = 
@@ -428,41 +439,26 @@ class Bits(val dir: Direction, val width: Int) extends Data {
   }
   def apply(x: Int, y: Int): Bits = 
     apply(UInt(x), UInt(y))
-  def + (other: Bits) = {
-   val d = new Bits(dir, width)
-    pushCommand(DefPrim(d.id, AddOp, Array(this.ref, other.ref)))
-    d
-  }
-  def +% (other: Bits) = {
-    val d = new Bits(dir, width)
-    pushCommand(DefPrim(d.id, AddModOp, Array(this.ref, other.ref)))
-    d
-  }
-  def - (other: Bits) = {
-    val d = new Bits(dir, width)
-    pushCommand(DefPrim(d.id, MinusOp, Array(this.ref, other.ref)))
-    d
-  }
-  def * (other: Bits) = {
-    val d = new Bits(dir, width)
-    pushCommand(DefPrim(d.id, TimesOp, Array(this.ref, other.ref)))
-    d
-  }
-  def < (other: Bits): Bool = {
-    val d = new Bool(dir)
-    pushCommand(DefPrim(d.id, LessOp, Array(this.ref, other.ref)))
-    d
-  }
-  def & (other: Bits): Bits = {
-    val d = new Bits(dir, width)
-    pushCommand(DefPrim(d.id, BitAndOp, Array(this.ref, other.ref)))
-    d
-  }
-  def | (other: Bits): Bits = {
-    val d = new Bits(dir, width)
-    pushCommand(DefPrim(d.id, BitOrOp, Array(this.ref, other.ref)))
-    d
-  }
+
+  def + (other: Bits) = binop(AddOp, other)
+  def +% (other: Bits) = binop(AddModOp, other)
+  def - (other: Bits) = binop(MinusOp, other)
+  def * (other: Bits) = binop(TimesOp, other)
+  def / (other: Bits) = binop(DivideOp, other)
+  def % (other: Bits) = binop(ModOp, other)
+  def << (other: Bits) = binop(ShiftLeftOp, other)
+  def >> (other: Bits) = binop(ShiftRightOp, other)
+
+  def & (other: Bits) = binop(BitAndOp, other)
+  def | (other: Bits) = binop(BitOrOp, other)
+  def ^ (other: Bits) = binop(BitXorOp, other)
+
+  def < (other: Bits) = compop(LessOp, other)
+  def > (other: Bits) = compop(GreaterOp, other)
+  def === (other: Bits) = compop(EqualOp, other)
+  def <= (other: Bits) = compop(LessEqOp, other)
+  def >= (other: Bits) = compop(GreaterEqOp, other)
+
   def orR: Bool = {
     val d = new Bool(dir)
     pushCommand(DefPrim(d.id, OrReduceOp, Array(this.ref)))
@@ -476,21 +472,6 @@ class Bits(val dir: Direction, val width: Int) extends Data {
   def xorR: Bool = {
     val d = new Bool(dir)
     pushCommand(DefPrim(d.id, XorReduceOp, Array(this.ref)))
-    d
-  }
-  def ^ (other: Bits): Bits = {
-    val d = new Bits(dir, width)
-    pushCommand(DefPrim(d.id, BitXorOp, Array(this.ref, other.ref)))
-    d
-  }
-  def > (other: Bits): Bool = {
-    val d = new Bool(dir)
-    pushCommand(DefPrim(d.id, GreaterOp, Array(this.ref, other.ref)))
-    d
-  }
-  def === (other: Bits): Bool = {
-    val d = new Bool(dir)
-    pushCommand(DefPrim(d.id, EqualOp, Array(this.ref, other.ref)))
     d
   }
 }
@@ -530,41 +511,26 @@ class UInt(dir: Direction, width: Int) extends Bits(dir, width) with Num[UInt] {
     res
   }
 
-  def + (other: UInt) = {
+  private def binop(op: PrimOp, other: UInt): UInt = {
     val d = new UInt(dir, width)
-    pushCommand(DefPrim(d.id, AddOp, Array(this.ref, other.ref)))
+    pushCommand(DefPrim(d.id, op, Array(this.ref, other.ref)))
     d
   }
-  def +% (other: UInt) = {
-    val d = new UInt(dir, width)
-    pushCommand(DefPrim(d.id, AddModOp, Array(this.ref, other.ref)))
-    d
-  }
-  def - (other: UInt) = {
-    val d = new UInt(dir, width)
-    pushCommand(DefPrim(d.id, MinusOp, Array(this.ref, other.ref)))
-    d
-  }
-  def * (other: UInt) = {
-    val d = new UInt(dir, width)
-    pushCommand(DefPrim(d.id, TimesOp, Array(this.ref, other.ref)))
-    d
-  }
-  def < (other: UInt): Bool = {
-    val d = new Bool(dir)
-    pushCommand(DefPrim(d.id, LessOp, Array(this.ref, other.ref)))
-    d
-  }
-  def > (other: UInt): Bool = {
-    val d = new Bool(dir)
-    pushCommand(DefPrim(d.id, GreaterOp, Array(this.ref, other.ref)))
-    d
-  }
-  def === (other: UInt): Bool = {
-    val d = new Bool(dir)
-    pushCommand(DefPrim(d.id, EqualOp, Array(this.ref, other.ref)))
-    d
-  }
+
+  def + (other: UInt) = binop(AddOp, other)
+  def +% (other: UInt) = binop(AddModOp, other)
+  def - (other: UInt) = binop(MinusOp, other)
+  def * (other: UInt) = binop(TimesOp, other)
+  def / (other: UInt) = binop(DivideOp, other)
+  def % (other: UInt) = binop(ModOp, other)
+  def << (other: UInt) = binop(ShiftLeftOp, other)
+  def >> (other: UInt) = binop(ShiftRightOp, other)
+
+  def < (other: UInt) = compop(LessOp, other)
+  def > (other: UInt) = compop(GreaterOp, other)
+  def === (other: UInt) = compop(EqualOp, other)
+  def <= (other: UInt) = compop(LessEqOp, other)
+  def >= (other: UInt) = compop(GreaterEqOp, other)
 }
 
 object UInt {
@@ -584,41 +550,26 @@ class SInt(dir: Direction, width: Int) extends Bits(dir, width) with Num[SInt] {
     res
   }
 
-  def + (other: SInt) = {
+  private def binop(op: PrimOp, other: SInt): SInt = {
     val d = new SInt(dir, width)
-    pushCommand(DefPrim(d.id, AddOp, Array(this.ref, other.ref)))
+    pushCommand(DefPrim(d.id, op, Array(this.ref, other.ref)))
     d
   }
-  def +% (other: SInt) = {
-    val d = new SInt(dir, width)
-    pushCommand(DefPrim(d.id, AddModOp, Array(this.ref, other.ref)))
-    d
-  }
-  def - (other: SInt) = {
-    val d = new SInt(dir, width)
-    pushCommand(DefPrim(d.id, MinusOp, Array(this.ref, other.ref)))
-    d
-  }
-  def * (other: SInt) = {
-    val d = new SInt(dir, width)
-    pushCommand(DefPrim(d.id, TimesOp, Array(this.ref, other.ref)))
-    d
-  }
-  def < (other: SInt): Bool = {
-    val d = new Bool(dir)
-    pushCommand(DefPrim(d.id, LessOp, Array(this.ref, other.ref)))
-    d
-  }
-  def > (other: SInt): Bool = {
-    val d = new Bool(dir)
-    pushCommand(DefPrim(d.id, GreaterOp, Array(this.ref, other.ref)))
-    d
-  }
-  def === (other: SInt): Bool = {
-    val d = new Bool(dir)
-    pushCommand(DefPrim(d.id, EqualOp, Array(this.ref, other.ref)))
-    d
-  }
+
+  def + (other: SInt) = binop(AddOp, other)
+  def +% (other: SInt) = binop(AddModOp, other)
+  def - (other: SInt) = binop(MinusOp, other)
+  def * (other: SInt) = binop(TimesOp, other)
+  def / (other: SInt) = binop(DivideOp, other)
+  def % (other: SInt) = binop(ModOp, other)
+  def << (other: SInt) = binop(ShiftLeftOp, other)
+  def >> (other: SInt) = binop(ShiftRightOp, other)
+
+  def < (other: SInt) = compop(LessOp, other)
+  def > (other: SInt) = compop(GreaterOp, other)
+  def === (other: SInt) = compop(EqualOp, other)
+  def <= (other: SInt) = compop(LessEqOp, other)
+  def >= (other: SInt) = compop(GreaterEqOp, other)
 }
 
 object SInt {
