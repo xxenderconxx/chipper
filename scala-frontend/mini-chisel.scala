@@ -61,8 +61,10 @@ object Builder {
 
   private val refmap = new HashMap[String,Immediate]()
 
-  def setRefForId(id: String, imm: Immediate) {
-    refmap(id) = imm
+  def setRefForId(id: String, name: String, overwrite: Boolean = false) {
+    if (overwrite || !refmap.contains(id)) {
+      refmap(id) = Ref(name)
+    }
   }
 
   def setFieldForId(parentid: String, id: String, name: String) {
@@ -756,7 +758,7 @@ abstract class Module extends Id {
   }
 
   def setRefs {
-    setRefForId(io.id, Ref("this"))
+    setRefForId(io.id, "this")
 
     for (m <- getClass.getDeclaredMethods) {
       val name = m.getName()
@@ -765,18 +767,18 @@ abstract class Module extends Id {
         val obj = m.invoke(this)
         obj match {
           case module: Module =>
-            setRefForId(module.id, Ref(name))
+            setRefForId(module.id, name)
             module.setRefs
           case bundle: Bundle =>
             if (name != "io") {
-              setRefForId(bundle.id, Ref(name))
+              setRefForId(bundle.id, name)
             }
           case mem: Mem[_] =>
-            setRefForId(mem.t.id, Ref(name))
+            setRefForId(mem.t.id, name)
           case vec: Vec[_] =>
-            setRefForId(vec.id, Ref(name))
+            setRefForId(vec.id, name)
           case data: Data =>
-            setRefForId(data.id, Ref(name))
+            setRefForId(data.id, name)
           // ignore anything not of those types
           case _ => null
         }
@@ -907,7 +909,7 @@ class Emitter {
       case e: DefInstance => {
         val mod = modules(e.id)
         // update all references to the modules ports
-        setRefForId(mod.io.id, Ref(e.name))
+        setRefForId(mod.io.id, e.name, true)
         "instance " + e.name + " of " + e.module
       }
       case e: Conditionally => "when " + emit(e.pred) + " { " + withIndent{ emit(e.conseq) } + newline + "}" + (if (e.alt.isInstanceOf[EmptyCommand]) "" else " else { " + withIndent{ emit(e.alt) } + newline + "}")
