@@ -61,8 +61,10 @@ object Builder {
 
   private val refmap = new HashMap[String,Immediate]()
 
-  def setRefForId(id: String, imm: Immediate) {
-    refmap(id) = imm
+  def setRefForId(id: String, name: String, overwrite: Boolean = false) {
+    if (overwrite || !refmap.contains(id)) {
+      refmap(id) = Ref(name)
+    }
   }
 
   def setFieldForId(parentid: String, id: String, name: String) {
@@ -216,8 +218,8 @@ abstract class Id {
 }
 
 abstract class Data extends Id {
-  def toPort: Port
   def toType: Type
+  def dir: Direction
   def :=(other: Data) = 
     pushCommand(Connect(this.ref, other.ref))
   def cloneType: this.type
@@ -238,6 +240,7 @@ abstract class Data extends Id {
     val elts = this.flatten
     Cat(elts.head, elts.tail:_*)
   }
+  def toPort: Port = Port(id, dir, toType)
 }
 
 object Wire {
@@ -276,23 +279,23 @@ class Mem[T <: Data](val t: T, val size: Int) {
 }
 
 object Vec {
-  def apply[T <: Data](dir: Direction, elts: Iterable[T]): Vec[T] = {
-    val vec = new Vec[T](i => elts.head.cloneType, dir)
+  def apply[T <: Data](elts: Iterable[T]): Vec[T] = {
+    val vec = new Vec[T](i => elts.head.cloneType)
     vec.self ++= elts
     // pushCommand(DefVector(t.id, t.toType, elts.map(_.ref)))
     vec
   }
-  def tabulate[T <: Data](n: Int, dir: Direction)(gen: (Int) => T): Vec[T] =
-    apply(dir, (0 until n).map(i => gen(i)))
-  def fill[T <: Data](n: Int, dir: Direction)(gen: => T): Vec[T] = 
-    Vec.tabulate(n, dir){ i => gen }
+  def tabulate[T <: Data](n: Int)(gen: (Int) => T): Vec[T] =
+    apply((0 until n).map(i => gen(i)))
+  def fill[T <: Data](n: Int)(gen: => T): Vec[T] = 
+    Vec.tabulate(n){ i => gen }
 }
 
 abstract class Aggregate extends Data {
   def collectElts: Unit;
 }
 
-class Vec[T <: Data](val gen: (Int) => T, val dir: Direction) extends Aggregate with VecLike[T] {
+class Vec[T <: Data](val gen: (Int) => T) extends Aggregate with VecLike[T] {
   val self = new ArrayBuffer[T]
   def apply(idx: UInt): T = {
     val x = self(0).cloneType
@@ -301,19 +304,19 @@ class Vec[T <: Data](val gen: (Int) => T, val dir: Direction) extends Aggregate 
   }
   def apply(idx: Int): T = 
     self(idx)
-  def toPort: Port = 
-    Port(id, dir, toType)
   def toPorts: Array[Port] = 
     self.map(d => d.toPort).toArray
   def toType: Type = 
     VectorType(self.size, self(0).toType)
   override def cloneType: this.type =
-    Vec.tabulate(size, dir)(i => self(i)).asInstanceOf[this.type]
+    Vec.tabulate(size)(i => self(i)).asInstanceOf[this.type]
 
   override def flatten: Array[Bits] = 
     self.map(_.flatten).reduce(_ ++ _)
   override def getWidth: Int = 
     flatten.map(_.getWidth).reduce(_ + _)
+
+  def dir = self(0).dir
 
   def collectElts: Unit = {
     for (i <- 0 until self.size) {
@@ -417,8 +420,6 @@ class Bits(val dir: Direction, val width: Int) extends Data {
     d
   }
 
-  def toPort: Port = 
-    Port(id, dir, toType)
   def toType: Type = 
     UIntType(if (width == -1) UnknownWidth() else IntWidth(width))
   override def cloneType: this.type = {
@@ -659,9 +660,7 @@ object Bundle {
     "toBool", "toSInt", "asDirectionless")
 }
 
-class Bundle(dir: Direction = NO_DIR) extends Aggregate {
-  def toPort: Port = 
-    Port(id, dir, toType)
+class Bundle(val dir: Direction = OUTPUT) extends Aggregate {
   def toPorts: Array[Port] = 
     elts.map(d => d.toPort).toArray
   def toType: BundleType = 
@@ -756,7 +755,7 @@ abstract class Module extends Id {
   }
 
   def setRefs {
-    setRefForId(io.id, Ref("this"))
+    setRefForId(io.id, "this")
 
     for (m <- getClass.getDeclaredMethods) {
       val name = m.getName()
@@ -765,18 +764,18 @@ abstract class Module extends Id {
         val obj = m.invoke(this)
         obj match {
           case module: Module =>
-            setRefForId(module.id, Ref(name))
+            setRefForId(module.id, name)
             module.setRefs
           case bundle: Bundle =>
             if (name != "io") {
-              setRefForId(bundle.id, Ref(name))
+              setRefForId(bundle.id, name)
             }
           case mem: Mem[_] =>
-            setRefForId(mem.t.id, Ref(name))
+            setRefForId(mem.t.id, name)
           case vec: Vec[_] =>
-            setRefForId(vec.id, Ref(name))
+            setRefForId(vec.id, name)
           case data: Data =>
-            setRefForId(data.id, Ref(name))
+            setRefForId(data.id, name)
           // ignore anything not of those types
           case _ => null
         }
@@ -907,7 +906,7 @@ class Emitter {
       case e: DefInstance => {
         val mod = modules(e.id)
         // update all references to the modules ports
-        setRefForId(mod.io.id, Ref(e.name))
+        setRefForId(mod.io.id, e.name, true)
         "instance " + e.name + " of " + e.module
       }
       case e: Conditionally => "when " + emit(e.pred) + " { " + withIndent{ emit(e.conseq) } + newline + "}" + (if (e.alt.isInstanceOf[EmptyCommand]) "" else " else { " + withIndent{ emit(e.alt) } + newline + "}")
