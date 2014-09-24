@@ -16,6 +16,7 @@ class UIntOps extends Module {
     val lessout = Bool(OUTPUT)
     val greatout = Bool(OUTPUT)
     val eqout = Bool(OUTPUT)
+    val noteqout = Bool(OUTPUT)
     val lesseqout = Bool(OUTPUT)
     val greateqout = Bool(OUTPUT)
   }
@@ -36,6 +37,7 @@ class UIntOps extends Module {
   io.lessout := a < b
   io.greatout := a > b
   io.eqout := a === b
+  io.noteqout := a != b
   io.lesseqout := a <= b
   io.greateqout := a >= b
 }
@@ -54,8 +56,10 @@ class SIntOps extends Module {
     val lessout = Bool(OUTPUT)
     val greatout = Bool(OUTPUT)
     val eqout = Bool(OUTPUT)
+    val noteqout = Bool(OUTPUT)
     val lesseqout = Bool(OUTPUT)
     val greateqout = Bool(OUTPUT)
+    val negout = SInt(OUTPUT, 16)
   }
 
   val a = Wire(SInt(NO_DIR, 16))
@@ -74,6 +78,8 @@ class SIntOps extends Module {
   io.lessout := a < b
   io.greatout := a > b
   io.eqout := a === b
+  io.noteqout := a != b
   io.lesseqout := a <= b
   io.greateqout := a >= b
+  io.negout := -a
 }

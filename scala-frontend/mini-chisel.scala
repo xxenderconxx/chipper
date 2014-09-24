@@ -127,7 +127,9 @@ object PrimOp {
   val GreaterOp = PrimOp("Greater");
   val GreaterEqOp = PrimOp("GreaterEq");
   val EqualOp = PrimOp("Equal");
+  val NotEqualOp = PrimOp("NotEqual");
   val NotOp = PrimOp("Not");
+  val NegOp = PrimOp("Neg");
   val MultiplexOp = PrimOp("Multiplex");
   val AndReduceOp = PrimOp("AndReduce");
   val OrReduceOp = PrimOp("OrReduce");
@@ -456,6 +458,7 @@ class Bits(val dir: Direction, val width: Int) extends Data {
   def < (other: Bits) = compop(LessOp, other)
   def > (other: Bits) = compop(GreaterOp, other)
   def === (other: Bits) = compop(EqualOp, other)
+  def != (other: Bits) = compop(NotEqualOp, other)
   def <= (other: Bits) = compop(LessEqOp, other)
   def >= (other: Bits) = compop(GreaterEqOp, other)
 
@@ -488,18 +491,18 @@ object Bits {
 }
 
 abstract trait Num[T <: Data] {
-  // def << (b: T): T;
-  // def >> (b: T): T;
-  // def unary_-(): T;
+  def << (b: T): T;
+  def >> (b: T): T;
+  //def unary_-(): T;
   def +  (b: T): T;
   def *  (b: T): T;
-  // def /  (b: T): T;
-  // def %  (b: T): T;
+  def /  (b: T): T;
+  def %  (b: T): T;
   def -  (b: T): T;
   def <  (b: T): Bool;
-  // def <= (b: T): Bool;
+  def <= (b: T): Bool;
   def >  (b: T): Bool;
-  // def >= (b: T): Bool;
+  def >= (b: T): Bool;
 
   def min(b: T): T = Mux(this < b, this.asInstanceOf[T], b)
   def max(b: T): T = Mux(this < b, b, this.asInstanceOf[T])
@@ -553,6 +556,12 @@ class SInt(dir: Direction, width: Int) extends Bits(dir, width) with Num[SInt] {
   private def binop(op: PrimOp, other: SInt): SInt = {
     val d = new SInt(dir, width)
     pushCommand(DefPrim(d.id, op, Array(this.ref, other.ref)))
+    d
+  }
+
+  def unary_- = {
+    val d = new SInt(dir, width)
+    pushCommand(DefPrim(d.id, NegOp, Array(this.ref)))
     d
   }
 
