@@ -119,6 +119,7 @@ object PrimOp {
   val BitAndOp = PrimOp("BitAnd");
   val BitOrOp = PrimOp("BitOr");
   val BitXorOp = PrimOp("BitXor");
+  val BitNotOp = PrimOp("BitNot");
   val ConcatOp = PrimOp("Concat");
   val BitSelectOp = PrimOp("Select");
   val BitsExtractOp = PrimOp("Extract");
@@ -454,6 +455,11 @@ class Bits(val dir: Direction, val width: Int) extends Data {
   def & (other: Bits) = binop(BitAndOp, other)
   def | (other: Bits) = binop(BitOrOp, other)
   def ^ (other: Bits) = binop(BitXorOp, other)
+  def unary_~ = {
+    val d = new Bits(dir, width)
+    pushCommand(DefPrim(d.id, BitNotOp, Array(this.ref)))
+    d
+  }
 
   def < (other: Bits) = compop(LessOp, other)
   def > (other: Bits) = compop(GreaterOp, other)
