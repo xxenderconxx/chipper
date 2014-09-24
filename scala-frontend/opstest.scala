@@ -21,11 +21,8 @@ class UIntOps extends Module {
     val greateqout = Bool(OUTPUT)
   }
 
-  val a = Wire(UInt(NO_DIR, 16))
-  val b = Wire(UInt(NO_DIR, 16))
-
-  io.a := a
-  io.b := b
+  val a = io.a
+  val b = io.b
 
   io.addout := a + b
   io.subout := a - b
@@ -62,11 +59,8 @@ class SIntOps extends Module {
     val negout = SInt(OUTPUT, 16)
   }
 
-  val a = Wire(SInt(NO_DIR, 16))
-  val b = Wire(SInt(NO_DIR, 16))
-
-  io.a := a
-  io.b := b
+  val a = io.a
+  val b = io.b
 
   io.addout := a + b
   io.subout := a - b

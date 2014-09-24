@@ -61,8 +61,10 @@ object Builder {
 
   private val refmap = new HashMap[String,Immediate]()
 
-  def setRefForId(id: String, name: String) {
-    refmap(id) = Ref(name)
+  def setRefForId(id: String, name: String, overwrite: Boolean = false) {
+    if (overwrite || !refmap.contains(id)) {
+      refmap(id) = Ref(name)
+    }
   }
 
   def setFieldForId(parentid: String, id: String, name: String) {
@@ -907,7 +909,7 @@ class Emitter {
       case e: DefInstance => {
         val mod = modules(e.id)
         // update all references to the modules ports
-        setRefForId(mod.io.id, e.name)
+        setRefForId(mod.io.id, e.name, true)
         "instance " + e.name + " of " + e.module
       }
       case e: Conditionally => "when " + emit(e.pred) + " { " + withIndent{ emit(e.conseq) } + newline + "}" + (if (e.alt.isInstanceOf[EmptyCommand]) "" else " else { " + withIndent{ emit(e.alt) } + newline + "}")
