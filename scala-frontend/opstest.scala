@@ -83,3 +83,19 @@ class SIntOps extends Module {
   io.greateqout := a >= b
   io.negout := -a
 }
+
+class BitsOps extends Module {
+  val io = new Bundle {
+    val a = Bits(INPUT, 16)
+    val b = Bits(INPUT, 16)
+    val notout = Bits(OUTPUT, 16)
+    val andout = Bits(OUTPUT, 16)
+    val orout = Bits(OUTPUT, 16)
+    val xorout = Bits(OUTPUT, 16)
+  }
+
+  io.notout := ~io.a
+  io.andout := io.a & io.b
+  io.orout := io.a | io.b
+  io.xorout := io.a ^ io.b
+}
