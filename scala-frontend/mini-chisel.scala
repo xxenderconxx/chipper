@@ -216,8 +216,8 @@ abstract class Id {
 }
 
 abstract class Data extends Id {
-  def toPort: Port
   def toType: Type
+  def dir: Direction
   def :=(other: Data) = 
     pushCommand(Connect(this.ref, other.ref))
   def cloneType: this.type
@@ -238,6 +238,7 @@ abstract class Data extends Id {
     val elts = this.flatten
     Cat(elts.head, elts.tail:_*)
   }
+  def toPort: Port = Port(id, dir, toType)
 }
 
 object Wire {
@@ -276,23 +277,23 @@ class Mem[T <: Data](val t: T, val size: Int) {
 }
 
 object Vec {
-  def apply[T <: Data](dir: Direction, elts: Iterable[T]): Vec[T] = {
-    val vec = new Vec[T](i => elts.head.cloneType, dir)
+  def apply[T <: Data](elts: Iterable[T]): Vec[T] = {
+    val vec = new Vec[T](i => elts.head.cloneType)
     vec.self ++= elts
     // pushCommand(DefVector(t.id, t.toType, elts.map(_.ref)))
     vec
   }
-  def tabulate[T <: Data](n: Int, dir: Direction)(gen: (Int) => T): Vec[T] =
-    apply(dir, (0 until n).map(i => gen(i)))
-  def fill[T <: Data](n: Int, dir: Direction)(gen: => T): Vec[T] = 
-    Vec.tabulate(n, dir){ i => gen }
+  def tabulate[T <: Data](n: Int)(gen: (Int) => T): Vec[T] =
+    apply((0 until n).map(i => gen(i)))
+  def fill[T <: Data](n: Int)(gen: => T): Vec[T] = 
+    Vec.tabulate(n){ i => gen }
 }
 
 abstract class Aggregate extends Data {
   def collectElts: Unit;
 }
 
-class Vec[T <: Data](val gen: (Int) => T, val dir: Direction) extends Aggregate with VecLike[T] {
+class Vec[T <: Data](val gen: (Int) => T) extends Aggregate with VecLike[T] {
   val self = new ArrayBuffer[T]
   def apply(idx: UInt): T = {
     val x = self(0).cloneType
@@ -301,19 +302,19 @@ class Vec[T <: Data](val gen: (Int) => T, val dir: Direction) extends Aggregate 
   }
   def apply(idx: Int): T = 
     self(idx)
-  def toPort: Port = 
-    Port(id, dir, toType)
   def toPorts: Array[Port] = 
     self.map(d => d.toPort).toArray
   def toType: Type = 
     VectorType(self.size, self(0).toType)
   override def cloneType: this.type =
-    Vec.tabulate(size, dir)(i => self(i)).asInstanceOf[this.type]
+    Vec.tabulate(size)(i => self(i)).asInstanceOf[this.type]
 
   override def flatten: Array[Bits] = 
     self.map(_.flatten).reduce(_ ++ _)
   override def getWidth: Int = 
     flatten.map(_.getWidth).reduce(_ + _)
+
+  def dir = self(0).dir
 
   def collectElts: Unit = {
     for (i <- 0 until self.size) {
@@ -417,8 +418,6 @@ class Bits(val dir: Direction, val width: Int) extends Data {
     d
   }
 
-  def toPort: Port = 
-    Port(id, dir, toType)
   def toType: Type = 
     UIntType(if (width == -1) UnknownWidth() else IntWidth(width))
   override def cloneType: this.type = {
@@ -659,9 +658,7 @@ object Bundle {
     "toBool", "toSInt", "asDirectionless")
 }
 
-class Bundle(dir: Direction = NO_DIR) extends Aggregate {
-  def toPort: Port = 
-    Port(id, dir, toType)
+class Bundle(val dir: Direction = OUTPUT) extends Aggregate {
   def toPorts: Array[Port] = 
     elts.map(d => d.toPort).toArray
   def toType: BundleType = 
