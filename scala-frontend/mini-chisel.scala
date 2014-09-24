@@ -3,8 +3,7 @@ import scala.collection.mutable.{ArrayBuffer, Stack, HashSet, HashMap}
 import java.lang.reflect.Modifier._
 
 /// TODO:
-/// uint, sint -- copy current implementation -- more to expand
-/// vecs -- subclass Data
+/// 
 /// init on regs -- need to figure this out
 /// tester -- need internal access
 /// multiple clock domains -- 
@@ -487,14 +486,15 @@ class Bits(val dir: Direction, val width: Int) extends Data {
 }
 
 object Bits {
-  def apply(dir: Direction, width: Int) = {
+  def apply(dir: Direction = OUTPUT, width: Int = -1) = 
     new Bits(dir, width)
-  }
-  def apply(value: Int, width: Int = -1) = {
+  def bitsLit(value: Int, width: Int) = {
     val b = new Bits(NO_DIR, width)
     pushCommand(DefUInt(b.id, value))
     b
   }
+  def apply(value: Int, width: Int) = bitsLit(value, width)
+  def apply(value: Int) = bitsLit(value, -1)
 }
 
 abstract trait Num[T <: Data] {
@@ -544,14 +544,15 @@ class UInt(dir: Direction, width: Int) extends Bits(dir, width) with Num[UInt] {
 }
 
 object UInt {
-  def apply(dir: Direction, width: Int) = {
+  def apply(dir: Direction = OUTPUT, width: Int = -1) = 
     new UInt(dir, width)
-  }
-  def apply(value: Int, width: Int = -1) = {
+  def uintLit(value: Int, width: Int) = {
     val b = new UInt(NO_DIR, width)
     pushCommand(DefUInt(b.id, value))
     b
   }
+  def apply(value: Int, width: Int) = uintLit(value, width)
+  def apply(value: Int) = uintLit(value, -1)
 }
 
 class SInt(dir: Direction, width: Int) extends Bits(dir, width) with Num[SInt] {
@@ -589,14 +590,15 @@ class SInt(dir: Direction, width: Int) extends Bits(dir, width) with Num[SInt] {
 }
 
 object SInt {
-  def apply(dir: Direction, width: Int) = {
+  def apply(dir: Direction = OUTPUT, width: Int = -1) = 
     new SInt(dir, width)
-  }
-  def apply(value: Int, width: Int = -1) = {
+  def sintLit(value: Int, width: Int) = {
     val b = new SInt(NO_DIR, width)
     pushCommand(DefSInt(b.id, value))
     b
   }
+  def apply(value: Int, width: Int) = sintLit(value, width)
+  def apply(value: Int) = sintLit(value, -1)
 }
 
 class Bool(dir: Direction) extends UInt(dir, 1) {

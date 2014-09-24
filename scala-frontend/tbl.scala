@@ -9,7 +9,7 @@ class Tbl extends Module {
     val  d  = Bits(INPUT,  16)
     val  o  = Bits(OUTPUT, 16)
   }
-  val m = Mem(Bits(NO_DIR, 10), 256)
+  val m = Mem(Bits(width = 10), 256)
   io.o := Bits(0)
   when (io.we) { m(io.i) := io.d }
   .otherwise   { io.o := m(io.i) }

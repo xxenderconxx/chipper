@@ -10,8 +10,8 @@ class GCD extends Module {
     val z  = Bits(OUTPUT, 16)
     val v  = Bool(OUTPUT)
   }
-  val x = Reg(Bits(NO_DIR, 16))
-  val y = Reg(Bits(NO_DIR, 16))
+  val x = Reg(Bits(width = 16))
+  val y = Reg(Bits(width = 16))
   when (x > y)   { y := y - x }
   .otherwise     { x := x - y }
   when (io.e) { x := io.a; y := io.b }
