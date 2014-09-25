@@ -16,6 +16,7 @@ object MiniChisel {
       case "uintops" => println(emitter.emit(build{ Module(new UIntOps) }))
       case "sintops" => println(emitter.emit(build{ Module(new SIntOps) }))
       case "bitsops" => println(emitter.emit(build{ Module(new BitsOps) }))
+      case "dirchange" => println(emitter.emit(build{ Module(new DirChange) }))
     }
   }
 }
