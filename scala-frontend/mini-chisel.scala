@@ -707,6 +707,10 @@ class Bundle(var dir: Direction = OUTPUT) extends Aggregate {
   override def getWidth: Int = 
     flatten.map(_.getWidth).reduce(_ + _)
 
+  // Methods like asInput, asOutput, and flip must be run
+  // after the elts have been collected.
+  // If the method is called before that occurs, we must save
+  // the action to be run at the end of collectElts
   val deferred = new ArrayBuffer[DeferredOp]()
 
   val elts = ArrayBuffer[Data]()
