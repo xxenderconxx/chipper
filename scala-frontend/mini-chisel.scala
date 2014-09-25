@@ -357,7 +357,8 @@ class Vec[T <: Data](val gen: (Int) => T) extends Aggregate with VecLike[T] {
 
   def length: Int = self.size
   def setDir(dir: Direction) {
-    self.foreach { d => d.setDir(dir) }
+    for (d <- self)
+      d.setDir(dir)
   }
 }
 
@@ -690,6 +691,11 @@ object Bundle {
     "toBool", "toSInt", "asDirectionless")
 }
 
+trait DeferredOp {}
+
+case class SetDir(dir: Direction) extends DeferredOp
+case class Flip extends DeferredOp
+
 class Bundle(var dir: Direction = OUTPUT) extends Aggregate {
   def toPorts: Array[Port] = 
     elts.map(d => d.toPort).toArray
@@ -700,6 +706,8 @@ class Bundle(var dir: Direction = OUTPUT) extends Aggregate {
     elts.map(_.flatten).reduce(_ ++ _)
   override def getWidth: Int = 
     flatten.map(_.getWidth).reduce(_ + _)
+
+  val deferred = new ArrayBuffer[DeferredOp]()
 
   val elts = ArrayBuffer[Data]()
   def collectElts: Unit = {
@@ -742,6 +750,15 @@ class Bundle(var dir: Direction = OUTPUT) extends Aggregate {
         }
       }
     }
+
+    elts.sortWith { (a, b) => a.id < b.id }
+
+    for (defer <- deferred) {
+      defer match {
+        case SetDir(dir) => setDir(dir)
+        case Flip() => flip
+      }
+    }
   }
 
   override def cloneType: this.type = {
@@ -761,14 +778,29 @@ class Bundle(var dir: Direction = OUTPUT) extends Aggregate {
 
   // set all elements to the same direction
   def setDir(dir: Direction) {
-    this.dir = OUTPUT
-    for (elt <- elts)
-      elt.setDir(dir)
+    if (elts.isEmpty) {
+      deferred += SetDir(dir)
+    } else {
+      // we have to set the direction to OUTPUT
+      // otherwise, all the child directions will be flipped
+      this.dir = OUTPUT
+      for (elt <- elts)
+        elt.setDir(dir)
+    }
   }
 
   // flip needs different logic because of setDir's different behavior
   override def flip = {
-    this.dir = flipDirection(this.dir)
+    if (elts.isEmpty) {
+      deferred += Flip()
+    } else if (this.dir == INPUT) {
+      // if this is an input, you can just switch it to output
+      this.dir = OUTPUT
+    } else {
+      // otherwise, flip all the members
+      for (elt <- elts)
+        elt.flip
+    }
     this
   }
 }
