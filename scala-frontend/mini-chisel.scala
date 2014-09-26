@@ -200,20 +200,19 @@ case class Circuit(val components: Array[Component], val main: String);
 
 /// COMPONENTS
 
-case class Direction(val name: String) {
+sealed abstract class Direction(val name: String) {
   override def toString = name
 }
 object Direction {
-  val INPUT  = new Direction("input")
-  val OUTPUT = new Direction("output")
-  val NO_DIR = new Direction("?")
+  object INPUT  extends Direction("input")
+  object OUTPUT extends Direction("output")
+  object NO_DIR extends Direction("?")
 
   def flipDirection(dir: Direction) = {
     dir match {
       case INPUT => OUTPUT
       case OUTPUT => INPUT
       case NO_DIR => NO_DIR
-      case _ => throw new Exception("Unrecognized direction")
     }
   }
 }
