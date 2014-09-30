@@ -187,7 +187,6 @@ case class DefPrim(val id: String, val op: PrimOp, val args: Array[Alias]) exten
 case class DefWire(val id: String, val kind: Type) extends Definition;
 case class DefRegister(val id: String, val kind: Type) extends Definition;
 case class DefMemory(val id: String, val kind: Type, val size: Int) extends Definition;
-// case class DefVector(val id: String, val kind: Type, val args: Iterable[Alias]) extends Definition;
 case class DefAccessor(val id: String, val source: Alias, val direction: Direction, val index: Alias) extends Definition;
 case class DefInstance(val id: String, val module: String) extends Definition;
 case class Conditionally(val pred: Alias, val conseq: Command, val alt: Command) extends Command;
@@ -281,7 +280,6 @@ object Vec {
   def apply[T <: Data](elts: Iterable[T]): Vec[T] = {
     val vec = new Vec[T](i => elts.head.cloneType)
     vec.self ++= elts
-    // pushCommand(DefVector(t.id, t.toType, elts.map(_.ref)))
     vec
   }
   def tabulate[T <: Data](n: Int)(gen: (Int) => T): Vec[T] =
