@@ -1,12 +1,11 @@
-include<"core/core.stanza">
-include<"core/verse.stanza">
 include<"core/stringeater.stanza">
 include<"compiler/lexer.stanza">
 include("ch/ch-ir.stanza")
 include("ch/ch-construct.stanza")
 include("ch/passes.stanza")
 include("ch/widthsolver.stanza")
-include-syntax(chipper)
+
+use-syntax(core + ch-macros)
 
 defpackage debug :
    import core
@@ -88,9 +87,9 @@ defmodule Test () :
 
 
 defn main () :
-   ;; val rcir = read-parse-file("debug.ch")
-   ;; println("PRINT BACK")
-   ;; println(rcir)
+   val rcir = read-parse-file("debug.ch")
+   println("\nPRINT BACK\n")
+   println(rcir)
    circuit c: Top()
    println(c)
    val c* = run-passes(c)

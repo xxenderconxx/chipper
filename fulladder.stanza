@@ -1,14 +1,15 @@
-include<"core/core.stanza">
-include<"core/verse.stanza">
 include("mj/mj-ir.stanza")
 include("mj/construct.stanza")
 include-syntax(mjolnir)
 
+use-syntax(core + ch-macros)
+
 defpackage fulladder :
    import core
    import verse
-   import mjolnir.mj-ir
-   import mjolnir.construct
+   import chipper.ch-ir
+   import chipper.construct
+   import chipper.passes
 
 defmodule FullAdder () :
    input a : IntT(1)

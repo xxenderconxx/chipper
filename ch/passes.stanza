@@ -86,17 +86,17 @@ defn resolve-kinds (m:Module) -> Module :
    defn find-kinds (c:Command) -> False :
       match(c) :
          (c:DefUInt|DefSInt|DoPrim) :
-            kind[name(c)] = 'node
+            kind[name(c)] = `node
          (c:DefWire) :
-            kind[name(c)] = 'wire
+            kind[name(c)] = `wire
          (c:DefRegister) :
-            kind[name(c)] = 'reg
+            kind[name(c)] = `reg
          (c:DefInstance) :
-            kind[name(c)] = 'inst
+            kind[name(c)] = `inst
          (c:DefMemory|DefVector) :
-            kind[name(c)] = 'source
+            kind[name(c)] = `source
          (c:DefAccessor) :
-            kind[name(c)] = 'accessor
+            kind[name(c)] = `accessor
          (c) :
             do(find-kinds, children(c))         
 
@@ -105,19 +105,19 @@ defn resolve-kinds (m:Module) -> Module :
          name(r as Ref)
       defn reg? (i:Immediate) :
          match(i) :
-            (i:Ref) : kind[name(i)] == 'reg
+            (i:Ref) : kind[name(i)] == `reg
             (i) : false
       defn inst? (i:Immediate) :
          match(i) :
-            (i:Ref) : kind[name(i)] == 'inst
+            (i:Ref) : kind[name(i)] == `inst
             (i) : false               
       match(i) :
          (i:Field) :
             switch _{imm(i)} :
                reg? :
                   switch {name(i) == _} :
-                     'data : RegData(ref-name(imm(i)))
-                     'init : RegInit(ref-name(imm(i)))
+                     `data : RegData(ref-name(imm(i)))
+                     `init : RegInit(ref-name(imm(i)))
                      else : error("Invalid register field")
                inst? :
                   InstPort(ref-name(imm(i)), name(i))
@@ -133,7 +133,7 @@ defn resolve-kinds (m:Module) -> Module :
 
    ;Find all kinds
    for p in ports(m) do :
-      kind[name(p)] = 'wire
+      kind[name(p)] = `wire
    find-kinds(body(m))
    Module(name(m),
           ports(m),
@@ -148,13 +148,13 @@ defn resolve-kinds (c:Circuit) -> Circuit :
 defn make-explicit-reset (c: Command) -> Command :
    match(c) :
       (c:DefInstance) :
-         val c2 = Connect(InstPort(name(c), 'reset), Ref('reset))
+         val c2 = Connect(InstPort(name(c), `reset), Ref(`reset))
          Begin(list(c, c2))
       (c) :
          map(make-explicit-reset{_ as Command}, c)
 
 defn make-explicit-reset (m: Module) :
-   val reset = Port('reset, INPUT, UIntType(IntWidth(1)))
+   val reset = Port(`reset, INPUT, UIntType(IntWidth(1)))
    Module(name(m),
           List(reset, ports(m)),
           make-explicit-reset(body(m)))
@@ -173,7 +173,7 @@ defn reg-inits (e: List<KeyValue<Symbol,Immediate>>) :
          for entry in e map :
             Connect(RegData(key(entry)), value(entry))
       Conditionally(
-         Ref('reset),
+         Ref(`reset),
          connections,
          EmptyCommand())
 
@@ -1137,9 +1137,9 @@ defn shim (c:Circuit) -> Circuit :
 
 ;================== INLINE MODULES =========================
 defn cat-name (p: String|Symbol, s: String|Symbol) -> Symbol :
-   if p == "" or p == 'this : ;; TODO: REMOVE THIS WHEN 'THIS GETS REMOVED
+   if p == "" or p == `this : ;; TODO: REMOVE THIS WHEN `THIS GETS REMOVED
       to-symbol(s)
-   else if s == 'this :       ;; TODO: DITTO
+   else if s == `this :       ;; TODO: DITTO
       to-symbol(p)
    else :
       symbol-join([p, "/", s])
@@ -1151,6 +1151,7 @@ defn inline-command (c: Command, mods: HashTable<Symbol, Module>, prefix: String
       match(i) :
          (r:Ref) :   rename(name(r))
          (f:Field) : cat-name(inline-name(imm(f)), name(f))
+         (f:Index) : cat-name(inline-name(imm(f)), to-string(value(f)))
    defn inline-imm (i:Immediate) -> Ref :
       Ref(inline-name(i), direction(i), type(i))
    match(c) :
@@ -1188,7 +1189,6 @@ defn inline-modules (c: Circuit) -> Circuit :
 ;============= FLO PRINTER ======================================
 ;;; TODO:
 ;;; not supported gt, lte
-;;; need top level module names perhaps done in inline-modules?
 
 defn flo-op-name (op:PrimOp) -> String :
    switch {op == _} :
@@ -1217,7 +1217,7 @@ defn flo-op-name (op:PrimOp) -> String :
       else : error $ string-join $
              ["Unable to print Primop: " op]
 
-defn emit (o:OutputStream, lits:HashTable<Symbol, DefUInt>, elt) :
+defn emit (o:OutputStream, top:Symbol, ports:HashTable<Symbol, Port>, lits:HashTable<Symbol, DefUInt>, elt) :
   match(elt) :
     (e:String|Symbol|Int) :
        print(o, e)
@@ -1226,6 +1226,8 @@ defn emit (o:OutputStream, lits:HashTable<Symbol, DefUInt>, elt) :
          val lit = lits[name(e)]
          print-all(o, [value(lit) "'" width(lit)])
        else :
+         if key?(ports, name(e)) :
+           print-all(o, [top "::"])
          print(o, name(e))
     (e:IntWidth) :
        print(o, value(e))
@@ -1235,8 +1237,8 @@ defn emit (o:OutputStream, lits:HashTable<Symbol, DefUInt>, elt) :
        println-all(["EMIT " e])
        error("Unable to emit")
 
-defn emit-all (o:OutputStream, lits:HashTable<Symbol, DefUInt>, elts: Streamable) :
-  for e in elts do : emit(o, lits, e)
+defn emit-all (o:OutputStream, top:Symbol, ports:HashTable<Symbol, Port>, lits:HashTable<Symbol, DefUInt>, elts: Streamable) :
+  for e in elts do : emit(o, top, ports, lits, e)
 
 defn prim-width (type:Type) -> Width :
   match(type) : 
@@ -1244,22 +1246,25 @@ defn prim-width (type:Type) -> Width :
     (t:SIntType) : width(t)
     (t) :          error("Bad prim width type")
 
-defn emit-command (o:OutputStream, cmd:Command, lits:HashTable<Symbol, DefUInt>, regs:HashTable<Symbol, DefRegister>, accs:HashTable<Symbol, DefAccessor>, outs:HashTable<Symbol, Port>) :
+defn emit-command (o:OutputStream, cmd:Command, top:Symbol, lits:HashTable<Symbol, DefUInt>, regs:HashTable<Symbol, DefRegister>, accs:HashTable<Symbol, DefAccessor>, ports:HashTable<Symbol, Port>, outs:HashTable<Symbol, Port>) :
   match(cmd) :
     (c:DefUInt) :
        lits[name(c)] = c
     (c:DefSInt) :
-       emit-all(o, lits, [name(c) " = " value(c) "'" width(c) "\n"])
+       emit-all(o, top, ports, lits, [name(c) " = " value(c) "'" width(c) "\n"])
     (c:DoPrim) : ;; NEED TO FIGURE OUT WHEN WIDTHS ARE NECESSARY AND EXTRACT
-       emit-all(o, lits, [name(c) " = " op(c)])
+       emit-all(o, top, ports, lits, [name(c) " = " op(c)])
        for arg in args(c) do : 
          print(o, " ")
-         emit(o, lits, arg)
+         emit(o, top, ports, lits, arg)
+       for const in consts(c) do : 
+         print(o, " ")
+         emit(o, top, ports, lits, const)
        print("\n")
     (c:DefRegister) :
        regs[name(c)] = c
     (c:DefMemory) :
-       emit-all(o, lits, [name(c) " : mem'" prim-width(type(c)) " " size(c) "\n"])
+       emit-all(o, top, ports, lits, [name(c) " : mem'" prim-width(type(c)) " " size(c) "\n"])
     (c:DefAccessor) :
        accs[name(c)] = c
     (c:Connect) :
@@ -1267,40 +1272,42 @@ defn emit-command (o:OutputStream, cmd:Command, lits:HashTable<Symbol, DefUInt>,
        val src = name(exp(c) as Ref)
        if key?(regs, dst) :
           val reg = regs[dst]
-          emit-all(o, lits, [dst " = reg'" prim-width(type(reg)) " 1'1 " exp(c) "\n"])
+          emit-all(o, top, ports, lits, [dst " = reg'" prim-width(type(reg)) " 0'" prim-width(type(reg)) " " exp(c) "\n"])
        else if key?(accs, dst) :
           val acc = accs[dst]
           ;; assert(direction(acc) == OUTPUT)
-          emit-all(o, lits, [dst " = wr " source(acc) " " index(acc) " " exp(c) "\n"])
+          emit-all(o, top, ports, lits, [dst " = wr " source(acc) " " index(acc) " " exp(c) "\n"])
        else if key?(outs, dst) :
           val out = outs[dst]
-          emit-all(o, lits, [dst " = out'" prim-width(type(out)) " " exp(c) "\n"])
+          emit-all(o, top, ports, lits, [top "::" dst " = out'" prim-width(type(out)) " " exp(c) "\n"])
        else if key?(accs, src) :
           val acc = accs[src]
           ;; assert(direction(acc) == INPUT)
-          emit-all(o, lits, [dst " = rd " source(acc) " " index(acc) "\n"])
+          emit-all(o, top, ports, lits, [dst " = rd " source(acc) " " index(acc) "\n"])
        else :
-          emit-all(o, lits, [dst " = mov " exp(c) "\n"])
+          emit-all(o, top, ports, lits, [dst " = mov " exp(c) "\n"])
     (c:Begin) :
-       do(emit-command{o, _, lits, regs, accs, outs}, body(c))
+       do(emit-command{o, _, top, lits, regs, accs, ports, outs}, body(c))
     (c:DefWire|EmptyCommand) :
        print("")
     (c) :
        error("Unable to print command")
 
 defn emit-module (o:OutputStream, m:Module) :
-   val regs = HashTable<Symbol, DefRegister>(symbol-hash)
-   val accs = HashTable<Symbol, DefAccessor>(symbol-hash)
-   val lits = HashTable<Symbol, DefUInt>(symbol-hash)
-   val outs = HashTable<Symbol, Port>(symbol-hash)
+   val regs  = HashTable<Symbol, DefRegister>(symbol-hash)
+   val accs  = HashTable<Symbol, DefAccessor>(symbol-hash)
+   val lits  = HashTable<Symbol, DefUInt>(symbol-hash)
+   val outs  = HashTable<Symbol, Port>(symbol-hash)
+   val portz = HashTable<Symbol, Port>(symbol-hash)
    for port in ports(m) do :
+      portz[name(port)] = port
       if direction(port) == OUTPUT :
          outs[name(port)] = port
-      else if name(port) == 'reset :
-         print-all(o, "reset = rst\n")
+      else if name(port) == `reset :
+         print-all(o, [name(m) "::reset = rst\n"])
       else :
-         emit-all(o, lits, [name(port) " = " "in'" prim-width(type(port)) "\n"])
-   emit-command(o, body(m), lits, regs, accs, outs)
+         print-all(o, [name(m) "::" name(port) " = " "in'" prim-width(type(port)) "\n"])
+   emit-command(o, body(m), name(m), lits, regs, accs, portz, outs)
 
 public defn emit-circuit (o:OutputStream, c:Circuit) :
    emit-module(o, modules(c)[0])

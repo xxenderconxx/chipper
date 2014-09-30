@@ -105,7 +105,7 @@ public defn Vec<?T> (vec-name:Symbol, builder:HBuilder<?T>, vec-args: Streamable
       defmethod get (this, i:Int) :
          args[i]
       defmethod get (this, idx:IntT|RegHandle<IntT>) :
-         val name = gen-scope-name('n)
+         val name = gen-scope-name(`n)
          val idx-imm = immediate(unwrap-register<IntT>(idx))
          push-command(DefAccessor(name, Ref(vec-name*), UNKNOWN-DIR, idx-imm))
          handle(builder, Ref(name))
@@ -131,10 +131,10 @@ public defstruct RegHandle<T> <: Handle :
    data-builder: HBuilder<T>
 
 public defn init<?T> (r:RegHandle<?T>) :
-   handle(data-builder(r), Field(ref(r), 'init))
+   handle(data-builder(r), Field(ref(r), `init))
 
 public defn register-data<?T> (r:RegHandle<?T>) :
-   handle(data-builder(r), Field(ref(r), 'data))
+   handle(data-builder(r), Field(ref(r), `data))
 
 public defn unwrap-register<T> (r:RegHandle<T>|T) -> T :
    match(r) :
@@ -166,7 +166,7 @@ public defn IntT () :
 
 ;=========== Int Operators =============
 defn do-op (op:PrimOp, h1:IntT|RegHandle<IntT>, h2:IntT|RegHandle<IntT>) :
-   val name = gen-scope-name('n)
+   val name = gen-scope-name(`n)
    val args = list(immediate(unwrap-register<IntT>(h1)),
                    immediate(unwrap-register<IntT>(h2)))
    push-command(DoPrim(name, op, args, List()))
@@ -215,7 +215,7 @@ public defn get (h1:IntT|RegHandle<IntT>, i:Int) :
 
 ;========= Constructors ================
 public defn CInt (value:Int, width:Width) :
-   val name = gen-scope-name('n)
+   val name = gen-scope-name(`n)
    push-command(DefUInt(name, value, width))
    handle(IntT(), Ref(name))
    

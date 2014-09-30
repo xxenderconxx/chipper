@@ -1,9 +1,9 @@
 ;Define the STANDALONE flag to run STANDALONE
-if-defined(STANDALONE) :
-   include<"core/core.stanza">
-   include<"core/verse.stanza">
-   include<"core/stringeater.stanza">
-   include<"compiler/lexer.stanza">
+;if-defined(STANDALONE) :
+;   include<"core/core.stanza">
+;   include<"core/verse.stanza">
+;   include<"core/stringeater.stanza">
+;   include<"compiler/lexer.stanza">
 
 defpackage widthsolver :
    import core
@@ -97,9 +97,9 @@ defn read-exp (x) :
       (x:List) :
          val tag = unwrap-token(x[1])
          switch {tag == _} :
-            'plus : EPlus(read-exp(x[2]), read-exp(x[3]))
-            'minus : EMinus(read-exp(x[2]), read-exp(x[3]))
-            'max : EMax(read-exp(x[2]), read-exp(x[3]))
+            `plus : EPlus(read-exp(x[2]), read-exp(x[3]))
+            `minus : EMinus(read-exp(x[2]), read-exp(x[3]))
+            `max : EMax(read-exp(x[2]), read-exp(x[3]))
             else : error $ string-join $
                    ["Improper expression: " x]
 
@@ -113,8 +113,8 @@ defn read (filename: String) :
       form = tailn(form, 3)
       add{cs, _} $
       switch {unwrap-token(op) == _} :
-         '= : WidthEqual(x, e)
-         '>= : WidthGreater(x, e)
+         `= : WidthEqual(x, e)
+         `>= : WidthGreater(x, e)
          else : error $ string-join $ ["Unsupported Operator: " op]
    cs
 ;============================================================
