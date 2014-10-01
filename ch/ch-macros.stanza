@@ -1,17 +1,8 @@
-defpackage chipper.macros :
+defpackage ch-macros :
    import core
    import verse
-   import stanza.macroexpander
-   import stanza.token-eater
    import stanza.parser
-   import stanza.core-macros
-
-val MJ-EXPANDER = MacroExpander([])
-defn new-macro (f: (List) -> List, priority:Int, pattern) -> False :
-   add(MJ-EXPANDER, Macro(priority, pattern, f))
-defn new-mask (priority:Int, pattern) -> False :
-   add(MJ-EXPANDER, Mask(priority, pattern))
-new-overlay('chipper, MJ-EXPANDER)
+   import stanza.macro-utils
 
 ;=============== EXPANSION EXCEPTION =======================
 defn ChipperMacroException (msg:String) :
@@ -27,7 +18,7 @@ defstruct ChipperType :
    name: Symbol
    num-params: Int
 val CHIPPER-TYPES = Vector<ChipperType>()
-new-chipper-type('IntT, 0)
+new-chipper-type(`IntT, 0)
 
 defn new-chipper-type (name: Symbol, num-params: Int) :
    add(CHIPPER-TYPES, ChipperType(name, num-params))
@@ -37,7 +28,7 @@ defn get-type-entry (type-name) :
       name(t) == unwrap-token(type-name)
 
 defn extract-type (form, param-names:List) :
-   if matches-pattern?(form, '(@do)) :
+   if tagged-list?(form, `@do) :
       val form = unwrap-token(form)
       val type-name = form[1]
       match(get-type-entry(type-name)) :
@@ -47,7 +38,7 @@ defn extract-type (form, param-names:List) :
                type-name
             else if length(args) >= num-params(entry) :
                val params = map(extract-type{_, param-names}, headn(args, num-params(entry)))
-               List('@of, type-name, params)
+               List(`@of, type-name, params)
             else :
                macro-exception $ [
                "Chipper type " type-name " expects " num-params(entry) " type parameters."]
@@ -61,7 +52,7 @@ defn extract-type (form, param-names:List) :
       else :
          macro-exception $ [
          "No type parameter with name: " form]
-               
+
 ;============== DEFMODULE MACRO ============================
 ;Syntax:
 ;   defmodule Adder (w:Int) :
@@ -83,419 +74,429 @@ defn extract-type (form, param-names:List) :
 ;      val build.reset = IntT(1)
 ;      defn instance (ref:Immediate) :
 ;         new Adder :
-;            defmethod a (this) : handle(build.a, Field(ref, 'a))
-;            defmethod b (this) : handle(build.b, Field(ref, 'b))
-;            defmethod z (this) : handle(build.z, Field(ref, 'z))
-;            defmethod reset (this) : handle(build.reset, Field(ref, 'reset))
+;            defmethod a (this) : handle(build.a, Field(ref, `a))
+;            defmethod b (this) : handle(build.b, Field(ref, `b))
+;            defmethod z (this) : handle(build.z, Field(ref, `z))
+;            defmethod reset (this) : handle(build.reset, Field(ref, `reset))
 ;      defn module () :
 ;         val ports = [
-;            Port('a, INPUT, type(build.a))
-;            Port('b, INPUT, type(build.b))
-;            Port('z, OUTPUT, type(build.z))]
-;         make-module{'Adder, ports, _} $ fn () :
-;            val this = instance(Ref('this))
+;            Port(`a, INPUT, type(build.a))
+;            Port(`b, INPUT, type(build.b))
+;            Port(`z, OUTPUT, type(build.z))]
+;         make-module{`Adder, ports, _} $ fn () :
+;            val this = instance(Ref(`this))
 ;            connect(z(this), a(this) + b(this))
 ;      instance(make-instance(name, module()))
 
-new-macro{_, 0, '(defmodule)} $ fn (tokens) :
-   ;== Macro Parsing ==
-   val eater = TokenEater(tail(tokens))
-   val [name targs] = let :
-      val form = eat(eater)
-      if matches-pattern?(form, '(@of false)) :
-         val form = unwrap-token(form)
-         [form[1] tailn(form, 2)]
-      else :
-         [form '()]
-   val args = eat-list(eater)
-   eat(eater, ':)
-   val port-dirs = Vector<Symbol>()
-   val port-names = Vector<?>()
-   val port-builders = Vector<?>()
-   val body = let :
-      val eater = TokenEater(eat-list(eater))
-      while match?(eater, '(input)) or match?(eater, '(output)) :
-         add(port-dirs, eat(eater, '(input output)))
-         add(port-names, eat-symbol(eater))
-         eat(eater, ':)
-         add(port-builders, eat(eater))
-      remaining(eater)
-   val rest = remaining(eater)
 
-   ;== Extractors ==
-   defn get-port-dir (dir) :
-      switch {_ == dir} :
-         'input : 'INPUT
-         'output : 'OUTPUT
+defoverlay ch-macros :
 
-   ;== Make form ==
-   val template = '(
-      definterface Name<Targs>
-      multis{defmulti port<Cargs> (x:Name<Cargs>) -> port-type}
-      defmulti reset (x:Name) -> IntT
-      defn Name<Cargs> (targs{Targ : HBuilder<?Targ>}, args...) :
-         new ModuleBuilder<Name<Targs>> :
-            defmethod handle (this, #name:Symbol) :
+   deftransformer(`term-exp, `(defmodule ...)) :
+      (defmodule ?name-form ?args:_ : (?body-form ...) ?rest ...) :
+         val [name targs] =
+            match-syntax(name-form) :
+               (@of ?name ?targs ...) :
+                  [name targs]
+               else :
+                  [name-form `()]
+         
+         val port-dirs = Vector<Symbol>()
+         val port-names = Vector<?>()
+         val port-builders = Vector<?>()
+         val body = parse-body(body-form) where :
+            defn* parse-body (rest:List) :
+               match-syntax(rest) :
+                  (input ?name:_ : ?builder ?rest ...) :
+                     add(port-dirs, `INPUT)
+                     add(port-names, unwrap-token(name))
+                     add(port-builders, builder)
+                     parse-body(rest)
+                  (output ?name:_ : ?builder ?rest ...) :
+                     add(port-dirs, `OUTPUT)
+                     add(port-names, unwrap-token(name))
+                     add(port-builders, builder)
+                     parse-body(rest)
+                  (?rest ...) :
+                     rest
+
+         val template = `(
+            definterface Name<Targs>
+            multis{defmulti port<Cargs> (x:Name<Cargs>) -> port-type}
+            defmulti reset (x:Name) -> IntT
+            defn Name<Cargs> (targs{Targ : HBuilder<?Targ>}, args...) :
+               new ModuleBuilder<Name<Targs>> :
+                  defmethod handle (this, #name:Symbol) :
+                     builders{val builder = builder-exp}
+                     val #reset-builder = IntT(1)
+                     defn #instance (#ref:Immediate) :
+                        new Name<Targs> :
+                           methods{defmethod port (this) : handle(builder, Field(#ref, `port))}
+                           defmethod reset (this) : handle(#reset-builder, Field(#ref, `reset))
+                     defn #this-instance () :
+                        new Name<Targs> :
+                           methods{defmethod port (this) : handle(builder, Ref(`port))}
+                           defmethod reset (this) : handle(#reset-builder, Ref(`reset))
+                     defn #module () :
+                        val #ports = [
+                           ports{Port(`port, dir, type(builder))}]
+                        make-module{`Name, #ports, _} $ fn () :
+                           val this = #this-instance()
+                           body
+                     #instance(make-instance(#name, #module()))         
+         )
+
+         val cargs = map(list{`@cap, _}, targs)
+         val builders = map(gensym{}, port-names)
+         val filled = fill-template(template, [
+            `Name => name
+            `Targs => splice(targs)
+            `Cargs => splice(cargs)
+            `multis => collect $ [
+               `port => port-names
+               `port-type => stream(extract-type{_, targs}, port-builders)]
+            `#name => gensym()
+            `args... => splice(args)
+            `targs => collect $ [
+               `Targ => targs]
+            `builders => collect $ [
+               `builder => builders
+               `builder-exp => port-builders]
+            `#instance => gensym()
+            `#this-instance => gensym()
+            `#ref => gensym()
+            `#reset-builder => gensym()
+            `methods => collect $ [
+               `port => port-names
+               `builder => builders]
+            `#module => gensym()
+            `#ports => gensym()
+            `ports => collect $ [
+               `port => port-names
+               `dir => port-dirs
+               `builder => builders]
+            `body => body])
+
+         println-all(["Filled = " filled])
+
+         ;== Result ==
+         List(filled, rest)
+
+                     
+            
+   ;============== DEFBUNDLE MACRO ============================
+   ;Syntax:
+   ;   defbundle DecoupledT<T> (w:Int) :
+   ;      input data: T
+   ;      input valid: IntT(w)
+   ;      output ready: IntT(w)
+   ;Expands to:
+   ;   defclass Decoupled<T> <: Handle
+   ;   defmulti data<?T> (x:Decoupled<?T>) -> T
+   ;   defmulti valid<?T> (x:Decoupled<?T>) -> IntT
+   ;   defmulti ready<?T> (x:Decoupled<?T>) -> IntT
+   ;
+   ;   public defn connect<?T> (h1:Decoupled<?T>, h2:Decoupled<T>) :
+   ;      connect-handles(h1, h2)
+   ;
+   ;   public defn data<?T> (x:Reghandle<Decoupled<?T>>) -> T :
+   ;      data(register-data(x))
+   ;   public defn valid<?T> (x:Reghandle<Decoupled<?T>>) -> T :
+   ;      data(register-data(x))
+   ;   public defn ready<?T> (x:Reghandle<Decoupled<?T>>) -> T :
+   ;      data(register-data(x))
+   ;   public defn connect<?T> (h1:RegHandle<Decoupled<?T>>, h2:Decoupled<T>) :
+   ;      connect(register-data(h1), h2)
+   ;   public defn connect<?T> (h1:Decoupled<?T>, h2:RegHandle<Decoupled<T>>) :
+   ;      connect(h1, register-data(h2))
+   ;   public defn connect<?T> (h1:RegHandle<Decoupled<?T>>, h2:RegHandle<Decoupled<T>>) :
+   ;      connect(register-data(h1), register-data(h2))
+   ;
+   ;   defn Decoupled<?T> (T: HBuilder<?T>, w:Int) :
+   ;      val builder.data = T
+   ;      val builder.valid = IntT(w)
+   ;      val builder.ready = IntT(w)
+   ;      new HBuilder<Decoupled<T>> :
+   ;         defmethod handle (this, ref:Immediate) :
+   ;            new Decoupled<T> :
+   ;               defmethod immediate (this) : ref
+   ;               defmethod data (this) : handle(builder.data, Field(ref, `data))
+   ;               defmethod valid (this) : handle(builder.valid, Field(ref, `valid))
+   ;               defmethod ready (this) : handle(builder.ready, Field(ref, `ready))
+   ;         defmethod type (this) :
+   ;            BundleType{to-list(_)} $ [
+   ;               Port(`data, INPUT, type(builder.data))
+   ;               Port(`valid, INPUT, type(builder.valid))
+   ;               Port(`ready, OUTPUT, type(builder.ready))]
+
+   deftransformer(`term-exp, `(defbundle ...)) :
+      (defbundle ?name-form ?args:_ : (?body-form ...) ?rest ...) :
+         val [name targs] =
+            match-syntax(name-form) :
+               (@of ?name ?targs ...) :
+                  [name targs]
+               else :
+                  [name-form `()]
+
+         val port-dirs = Vector<Symbol>()
+         val port-names = Vector<?>()
+         val port-builders = Vector<?>()
+         match-syntax(body-form) :
+            ((?dirs ?names:_ : ?builders) @...) :
+               for d in dirs do :
+                  add{port-dirs, _} $
+                     switch {unwrap-token(d) == _} :
+                        `input : `INPUT
+                        `output : `OUTPUT
+               for n in names do :
+                  add(port-names, unwrap-token(n))
+               for b in builders do :
+                  add(port-builders, b)
+
+         ;== Syntax Check ==
+         if unwrap-token(name) not-typeof Symbol :
+            macro-exception $ [
+            "Name given to defbundle " name " is not a symbol!"]
+
+         ;== Register Type ==   
+         new-chipper-type(unwrap-token(name), length(targs))
+
+         ;== Make form ==
+         val template = `(
+            defclass Name<Targs> <: Handle
+            defclass #Builder<Targs> <: HBuilder<Name<Targs>>
+            multis{defmulti port<Cargs> (x:Name<Cargs>) -> port-type}
+            defn connect<Cargs> (h1:Name<Cargs>, h2:Name<Targs>) :
+               connect-handles(h1, h2)
+               
+            regports{   
+               defn port<Cargs> (x:RegHandle<Name<Cargs>>) -> port-type :
+                  port(register-data(x))}
+            defn connect<Cargs> (h1:RegHandle<Name<Cargs>>, h2:Name<Targs>) :
+               connect(register-data(h1), h2)
+            defn connect<Cargs> (h1:Name<Cargs>, h2:RegHandle<Name<Targs>>) :
+               connect(h1, register-data(h2))
+            defn connect<Cargs> (h1:RegHandle<Name<Cargs>>, h2:RegHandle<Name<Targs>>) :
+               connect(register-data(h1), register-data(h2))
+            
+            defn Name<Cargs> (targs{Targ : HBuilder<?Targ>}, args...) :
                builders{val builder = builder-exp}
-               val #reset-builder = IntT(1)
-               defn #instance (#ref:Immediate) :
-                  new Name<Targs> :
-                     methods{defmethod port (this) : handle(builder, Field(#ref, 'port))}
-                     defmethod reset (this) : handle(#reset-builder, Field(#ref, 'reset))
-               defn #this-instance () :
-                  new Name<Targs> :
-                     methods{defmethod port (this) : handle(builder, Ref('port))}
-                     defmethod reset (this) : handle(#reset-builder, Ref('reset))
-               defn #module () :
-                  val #ports = [
-                     ports{Port('port, dir, type(builder))}]
-                  make-module{'Name, #ports, _} $ fn () :
-                     val this = #this-instance()
-                     body
-               #instance(make-instance(#name, #module()))         
-   )
-   val cargs = map(list{'@cap, _}, targs)
-   val builders = map(gensym{}, port-names)
-   val filled = fill-template(template, [
-      'Name => name
-      'Targs => splice(targs)
-      'Cargs => splice(cargs)
-      'multis => collect $ [
-         'port => port-names
-         'port-type => stream(extract-type{_, targs}, port-builders)]
-      '#name => gensym()
-      'args... => splice(args)
-      'targs => collect $ [
-         'Targ => targs]
-      'builders => collect $ [
-         'builder => builders
-         'builder-exp => port-builders]
-      '#instance => gensym()
-      '#this-instance => gensym()
-      '#ref => gensym()
-      '#reset-builder => gensym()
-      'methods => collect $ [
-         'port => port-names
-         'builder => builders]
-      '#module => gensym()
-      '#ports => gensym()
-      'ports => collect $ [
-         'port => port-names
-         'dir => stream(get-port-dir, port-dirs)
-         'builder => builders]
-      'body => body])
+               new #Builder<Targs> :
+                  defmethod handle (this, #ref:Immediate) :
+                     new Name<Targs> :
+                        defmethod immediate (this) : #ref
+                        methods{defmethod port (this) : handle(builder, Field(#ref, `port))}
+                  defmethod type (this) :
+                     BundleType{to-list(_)} $ [
+                        ports{Port(`port, dir, type(builder))}]
+         )
+         val cargs = map(list{`@cap, _}, targs)
+         val builders = map(gensym{}, port-names)
+         val port-types = map(extract-type{_, targs}, port-builders)
+         val filled = fill-template(template, [
+            `Name => name
+            `Targs => splice(targs)
+            `Cargs => splice(cargs)
+            `#Builder => gensym(string-join([name "Builder"]))
+            `multis => collect $ [
+               `port => port-names
+               `port-type => port-types]
+            `regports => collect $ [
+               `port => port-names
+               `port-type => port-types]
+            `args... => splice(args)
+            `targs => collect $ [
+               `Targ => targs]
+            `builders => collect $ [
+               `builder => builders
+               `builder-exp => port-builders]
+            `#ref => gensym()   
+            `methods => collect $ [
+               `port => port-names
+               `builder => builders]
+            `ports => collect $ [
+               `port => port-names
+               `dir => port-dirs
+               `builder => builders]])
 
-   ;== Result ==
-   List(filled, rest)
-
-      
-
-;============== DEFBUNDLE MACRO ============================
-;Syntax:
-;   defbundle DecoupledT<T> (w:Int) :
-;      input data: T
-;      input valid: IntT(w)
-;      output ready: IntT(w)
-;Expands to:
-;   defclass Decoupled<T> <: Handle
-;   defmulti data<?T> (x:Decoupled<?T>) -> T
-;   defmulti valid<?T> (x:Decoupled<?T>) -> IntT
-;   defmulti ready<?T> (x:Decoupled<?T>) -> IntT
-;
-;   public defn connect<?T> (h1:Decoupled<?T>, h2:Decoupled<T>) :
-;      connect-handles(h1, h2)
-;
-;   public defn data<?T> (x:Reghandle<Decoupled<?T>>) -> T :
-;      data(register-data(x))
-;   public defn valid<?T> (x:Reghandle<Decoupled<?T>>) -> T :
-;      data(register-data(x))
-;   public defn ready<?T> (x:Reghandle<Decoupled<?T>>) -> T :
-;      data(register-data(x))
-;   public defn connect<?T> (h1:RegHandle<Decoupled<?T>>, h2:Decoupled<T>) :
-;      connect(register-data(h1), h2)
-;   public defn connect<?T> (h1:Decoupled<?T>, h2:RegHandle<Decoupled<T>>) :
-;      connect(h1, register-data(h2))
-;   public defn connect<?T> (h1:RegHandle<Decoupled<?T>>, h2:RegHandle<Decoupled<T>>) :
-;      connect(register-data(h1), register-data(h2))
-;
-;   defn Decoupled<?T> (T: HBuilder<?T>, w:Int) :
-;      val builder.data = T
-;      val builder.valid = IntT(w)
-;      val builder.ready = IntT(w)
-;      new HBuilder<Decoupled<T>> :
-;         defmethod handle (this, ref:Immediate) :
-;            new Decoupled<T> :
-;               defmethod immediate (this) : ref
-;               defmethod data (this) : handle(builder.data, Field(ref, 'data))
-;               defmethod valid (this) : handle(builder.valid, Field(ref, 'valid))
-;               defmethod ready (this) : handle(builder.ready, Field(ref, 'ready))
-;         defmethod type (this) :
-;            BundleType{to-list(_)} $ [
-;               Port('data, INPUT, type(builder.data))
-;               Port('valid, INPUT, type(builder.valid))
-;               Port('ready, OUTPUT, type(builder.ready))]
-
-new-macro{_, 0, '(defbundle)} $ fn (tokens) :
-   ;== Macro Parsing ==
-   val eater = TokenEater(tail(tokens))
-   val [name targs] = let :
-      val form = eat(eater)
-      if matches-pattern?(form, '(@of false)) :
-         val form = unwrap-token(form)
-         [form[1] tailn(form, 2)]
-      else :
-         [form '()]
-   val args = eat-list(eater)
-   eat(eater, ':)
-   val port-dirs = Vector<Symbol>()
-   val port-names = Vector<?>()
-   val port-builders = Vector<?>()
-   let :
-      val eater = TokenEater(eat-list(eater))
-      while match?(eater, '(input)) or match?(eater, '(output)) :
-         add(port-dirs, eat(eater, '(input output)))
-         add(port-names, eat-symbol(eater))
-         eat(eater, ':)
-         add(port-builders, eat(eater))
-   val rest = remaining(eater)
-
-   ;== Syntax Check ==
-   if unwrap-token(name) not-typeof Symbol :
-      macro-exception $ [
-      "Name given to defbundle " name " is not a symbol!"]
-
-   ;== Register Type ==   
-   new-chipper-type(unwrap-token(name), length(targs))
-
-   ;== Extractors ==
-   defn get-port-dir (dir) :
-      switch {_ == dir} :
-         'input : 'INPUT
-         'output : 'OUTPUT
-
-   ;== Make form ==
-   val template = '(
-      defclass Name<Targs> <: Handle
-      defclass #Builder<Targs> <: HBuilder<Name<Targs>>
-      multis{defmulti port<Cargs> (x:Name<Cargs>) -> port-type}
-      defn connect<Cargs> (h1:Name<Cargs>, h2:Name<Targs>) :
-         connect-handles(h1, h2)
-         
-      regports{   
-         defn port<Cargs> (x:RegHandle<Name<Cargs>>) -> port-type :
-            port(register-data(x))}
-      defn connect<Cargs> (h1:RegHandle<Name<Cargs>>, h2:Name<Targs>) :
-         connect(register-data(h1), h2)
-      defn connect<Cargs> (h1:Name<Cargs>, h2:RegHandle<Name<Targs>>) :
-         connect(h1, register-data(h2))
-      defn connect<Cargs> (h1:RegHandle<Name<Cargs>>, h2:RegHandle<Name<Targs>>) :
-         connect(register-data(h1), register-data(h2))
-      
-      defn Name<Cargs> (targs{Targ : HBuilder<?Targ>}, args...) :
-         builders{val builder = builder-exp}
-         new #Builder<Targs> :
-            defmethod handle (this, #ref:Immediate) :
-               new Name<Targs> :
-                  defmethod immediate (this) : #ref
-                  methods{defmethod port (this) : handle(builder, Field(#ref, 'port))}
-            defmethod type (this) :
-               BundleType{to-list(_)} $ [
-                  ports{Port('port, dir, type(builder))}]
-   )
-   val cargs = map(list{'@cap, _}, targs)
-   val builders = map(gensym{}, port-names)
-   val port-types = map(extract-type{_, targs}, port-builders)
-   val filled = fill-template(template, [
-      'Name => name
-      'Targs => splice(targs)
-      'Cargs => splice(cargs)
-      '#Builder => gensym(string-join([name "Builder"]))
-      'multis => collect $ [
-         'port => port-names
-         'port-type => port-types]
-      'regports => collect $ [
-         'port => port-names
-         'port-type => port-types]
-      'args... => splice(args)
-      'targs => collect $ [
-         'Targ => targs]
-      'builders => collect $ [
-         'builder => builders
-         'builder-exp => port-builders]
-      '#ref => gensym()   
-      'methods => collect $ [
-         'port => port-names
-         'builder => builders]
-      'ports => collect $ [
-         'port => port-names
-         'dir => stream(get-port-dir, port-dirs)
-         'builder => builders]])
+         println-all(["filled = " filled])      
    
-   List(filled, rest)
+         List(filled, rest)
 
 
+   deftransformer(`exp, `(_ := ...)) :
+      (?x := ?y:#exp ?rest ...) :
+         qquote(connect(~ x, ~ y) ~@ rest)
 
-;=============== CONNECT MACRO ==============================
-new-macro{_, 0, '(false :=)} $ fn (tokens) :
-   val eater = TokenEater(tokens)
-   val x = eat(eater)
-   eat(eater, ':=)
-   val y = parse-next!(eater)
-   fill-template('(connect(x, y) rest), [
-      'x => x
-      'y => y
-      'rest => remaining(eater)])
+   deftransformer(`term-exp, `(wire ...)) :
+      (wire ?name:_ : ?type:#exp = ?value:#exp ?rest ...) :
+         val template = `(
+            val name = make-wire(`name, builder, value)
+            rest)
+         fill-template(template, [
+            `name => name
+            `builder => type
+            `value => value
+            `rest => splice(rest)])
+      (wire ?name:_ : ?type:#exp ?rest ...) :
+         val template = `(
+            val name = make-wire(`name, builder, false)
+            rest)
+         fill-template(template, [
+            `name => name
+            `builder => type
+            `rest => splice(rest)])
 
+   deftransformer(`term-exp, `(register ...)) :
+      (register ?name:_ : ?type:#exp = ?value:#exp ?rest ...) :
+         val template = `(
+            val name = make-register(`name, builder, value)
+            rest)
+         fill-template(template, [
+            `name => name
+            `builder => type
+            `value => value
+            `rest => splice(rest)])
+      (register ?name:_ : ?type:#exp ?rest ...) :
+         val template = `(
+            val name = make-register(`name, builder, false)
+            rest)
+         fill-template(template, [
+            `name => name
+            `builder => type
+            `rest => splice(rest)])
 
-;================ WIRE MACRO ================================
-new-macro{_, 0, '(wire)} $ fn (tokens) :
-   val eater = TokenEater(tail(tokens))
-   val name = eat-symbol(eater)
-   eat(eater, ':)
-   val type = eat(eater)
-   val value = 
-      if match?(eater, '(=)) :
-         eat(eater, '=)
-         parse-next!(eater)
+   deftransformer(`term-exp, `(instance ...)) :
+      (instance ?name:_ : ?module:#exp ?rest ...) :
+         val template = `(
+            val name = handle(module, `name)
+            rest)
+         fill-template(template, [
+            `module => module
+            `name => name
+            `rest => splice(rest)])
+
+   remove-transformer(`exp, `(_ when ...))
+   deftransformer(`term-exp, `(when ...)) :
+      (when ?pred:#exp : ?conseq:#exp ?rest-form ...) :
+         val [alt rest] =
+            match-syntax(rest-form) :
+               (else : ?alt:#exp ?rest ...) : [alt rest]
+               else : [false rest-form]
+         val template = `(
+            conditionally(pred,
+               fn () : conseq,
+               fn () : alt))
+         val filled = fill-template(template, [
+            `pred => pred
+            `conseq => conseq
+            `alt => alt])
+         List(filled, rest)   
+
+   deftransformer(`factor-exp, `(_ # ...)) :
+      (?x # ?y:#term-exp ?rest ...) :
+         qquote(bit-concat(~ x, ~ y) ~@ rest)
          
-   val template = '(
-      val name = make-wire('name, builder, value)
-      rest)
-   fill-template(template, [
-      'name => name
-      'builder => type
-      'value => value
-      'rest => remaining(eater)])      
-
-;================ REGISTER MACRO ===========================
-new-macro{_, 0, '(register)} $ fn (tokens) :
-   val eater = TokenEater(tail(tokens))
-   val name = eat-symbol(eater)
-   eat(eater, ':)
-   val type = eat(eater)
-   val value = 
-      if match?(eater, '(=)) :
-         eat(eater, '=)
-         parse-next!(eater)
-         
-   val template = '(
-      val name = make-register('name, builder, value)
-      rest)
-   fill-template(template, [
-      'name => name
-      'builder => type
-      'value => value
-      'rest => remaining(eater)])
-
-;================= INSTANCE MACRO ===========================
-new-macro{_, 0, '(instance)} $ fn (tokens) :
-   val eater = TokenEater(tail(tokens))
-   val name = eat-symbol(eater)
-   eat(eater, ':)
-   val module = parse-next!(eater)
-   val template = '(
-      val name = handle(module, 'name)
-      rest)
-   fill-template(template, [
-      'module => module
-      'name => name
-      'rest => remaining(eater)])
-
-;================= VEC MACRO ================================
-new-macro{_, 0, '(vec)} $ fn (tokens) :
-   val eater = TokenEater(tail(tokens))
-   val name = eat-symbol(eater)
-   eat(eater, ':)
-   val type = eat(eater)
-   eat(eater, 'of)
-   val args = parse-next!(eater)
-   val rest = remaining(eater)
-   val template = '(val name = Vec('name, type, args))
-   val filled = fill-template(template, [
-      'name => name
-      'type => type
-      'args => args])
-   List(filled, rest)   
-
-new-macro{_, 0, '(vec(false))} $ fn (tokens) :
-   val eater = TokenEater(tokens)
-   val len = eat-list(eater)[2]
-   val name = eat-symbol(eater)
-   eat(eater, ':)
-   val type = eat(eater)
-   eat(eater, 'of)
-   val func =
-      if match?(eater, '(:)) :
-         fill-template('(fn () body), [
-            'body => parse-next!(eater)])
-      else :
-         parse-next!(eater)
-   val rest = remaining(eater)
-   val template = '(
-      val name = Vec('name, size, type, func)
-      rest)
-   fill-template(template, [
-      'name => name
-      'size => len
-      'type => type
-      'func => func])
-
-;=============== WHEN MACRO =================================
-new-mask(0, '(false when))
-new-macro{_, 0, '(when)} $ fn (tokens) :
-   val eater = TokenEater(tail(tokens))
-   val pred = parse-next!(eater)
-   eat(eater, ':)
-   val conseq = parse-next!(eater)
-   val alt = 
-      if match?(eater, '(else)) :
-         eat(eater, 'else)
-         eat(eater, ':) when not match?(eater, '(when))
-         parse-next!(eater)
-   val template = '(
-      conditionally(pred,
-         fn () : conseq
-         fn () : alt))
-   val filled = fill-template(template, [
-      'pred => pred
-      'conseq => conseq
-      'alt => alt])
-
-   List(filled, remaining(eater))
-
-
-;================ CONCAT OPERATOR ===========================
-defn right-assoc-operator (op:Symbol, func:Symbol, level:Int) :
-   Macro{level, list(false, op), _} $ fn (tokens) :
-      val eater = TokenEater(tokens)
-      val a = eat(eater)
-      eat(eater, op)
-      val b = parse-next!(level + 1, eater)
-      fill-template('(op(a, b), rest), [
-         'op => func
-         'a => a
-         'b => b
-         'rest => splice(remaining(eater))])
-         
-add(MJ-EXPANDER, right-assoc-operator('#, 'bit-concat, FACTOR-LEVEL))
-add(MJ-EXPANDER, right-assoc-operator('EQV, 'bit-equal?, EXP-LEVEL))
-
-;================= CIRCUIT ==================================
-new-macro{_, 0, '(circuit)} $ fn (tokens) :
-   val eater = TokenEater(tail(tokens))
-   val name = eat-symbol(eater)
-   eat(eater, ':)
-   val module = parse-next!(eater)
-   val template = '(
-      val name = make-circuit(handle{module, gensym()})
-      rest)
-   fill-template(template, [
-      'name => name
-      'module => module
-      'rest => remaining(eater)])
+   deftransformer(`term-exp, `(circuit ...)) :
+      (circuit ?name:_ : ?module:#exp ?rest ...) :
+         val template = `(
+            val name = make-circuit(handle{module, gensym()})
+            rest)
+         fill-template(template, [
+            `name => name
+            `module => module
+            `rest => splice(rest)])
 
 
 
 
+;=============== MATCHER MACROS ============================
+defoverlay matcher :
 
+   ;============= if-match ===================================
+   defn is-var? (pattern:List) -> True|False :
+     length(pattern) >= 2 and unwrap-token(pattern[0]) == `$ and unwrap-token(pattern[1]) typeof Symbol
 
+   defn is-splice-var? (pattern:List) -> True|False :
+     length(pattern) >= 2 and unwrap-token(pattern[0]) == `$$ and unwrap-token(pattern[1]) typeof Symbol
+
+   defn is-splice-var-next? (pattern:List) -> True|False :
+     length(pattern) >= 1 and unwrap-token(pattern[0]) typeof List and is-splice-var?(pattern[0])
+
+   defn is-parse-var? (pattern:List) -> True|False :
+     length(pattern) == 3 and unwrap-token(pattern[0]) == `$? and unwrap-token(pattern[1]) typeof Symbol
+
+   defn do-match? (pattern, exp:Symbol, fail:Symbol) -> List :
+     println-all(["pattern " pattern])
+     match(pattern) :
+       (pat:List) :
+         if (pat == list()) :
+           qquote(if not empty?(~ exp) : (~ fail)())
+         else if unwrap-token(head(pat)) == `@tuple :
+           defn do-match-tup-elt? (pat:List, exp:Symbol, index:Int, fail:Symbol) -> List :
+             val elt = gensym("elt-") 
+             qquote(val ~ elt = (~ exp)[(~ index)]
+                    ~@ do-match?(pat[index], elt, fail))
+           val tup = tail(pat)
+           qquote(if not ((~ exp as ?) typeof Tuple) or length(~ exp) != (~ length(tup)) : (~ fail)()
+              ~@ reduce(append, `(), stream(do-match-tup-elt?{tup, exp, _, fail}, 0 to length(tup))))
+         else if is-var?(pat) :
+           val [ name, kind ] = [ pat[1], if length(pat) > 2: pat[2] else: `? ]
+           qquote(if not (~ exp typeof ~ kind) : (~ fail)() 
+              val ~ name = ~ exp as ~ kind)
+         else if is-parse-var?(pat) :
+           val [ name, kind ] = [ pat[1], pat[2] ]
+           val parse = symbol-join([kind, "-parse"])
+           qquote(val ~ name = (~ parse)(~ exp, ~ fail) as ~ kind)
+         else if is-splice-var-next?(pat) :
+           val splice-var = head(pat)
+           val [ name, kind ] = [ splice-var[1], if length(splice-var) > 2: splice-var[2] else: `? ]
+           qquote(if not all?({_ typeof ~ kind}, ~ exp) : (~ fail)() 
+              val ~ name = ~ exp as List<(~ kind)>)
+         else :
+           val hd = gensym("hd-")
+           val tl = gensym("tl-")
+           qquote(if (not (~ exp typeof List)) or (~ exp == `()) : (~ fail)()
+              val ~ hd = head(~ exp)
+              ~@ do-match?(head(pat), hd, fail)
+              val ~ tl = tail(~ exp)
+              ~@ do-match?(tail(pat), tl, fail))
+       (pat) :
+         qquote(if ~ exp != (@quote ~ pat) : (~ fail)())
+
+   defn gen-match? (pat, exp, body, alt) :
+     val fail  = gensym("fail-")
+     val matched = do-match?(pat, exp, fail)
+     val res   = gensym("res-")
+     val exit  = gensym("exit-")
+     val fail-value = gensym("fail-value-")
+     qquote(val ~ fail-value = list(99)
+            val ~ res = (label ~ exit : (defn ~ fail () : (~ exit)((~ fail-value)) ~ matched ~ body)) 
+            if ~ res == ~ fail-value: ~ alt else: ~ res)
+
+   ;; if-match pat = form : body
+   deftransformer(`term-exp, `(if-match ...)) :
+      (if-match ?pattern = ?value:#exp : ?conseq:#exp ?rest-form ...) :
+         val [alt rest] =
+            match-syntax(rest-form) :
+               (else : ?exp:#exp ?rest ...) : [exp rest]
+               (?rest ...) : [false rest]
+               
+         val exp = gensym("exp-")
+         val res = qquote(val ~ exp = ~ value ~ gen-match?(pattern, exp, conseq, alt))
+         println-all(["PAT " pattern " VALUE " value " IFM " res])
+         qquote(~ res ~@ rest)
+
+   ;=== Matches ===
+   deftransformer(`term-exp, `(matches ...)) :
+      (matches ?value:#exp : ((?pats:_ : ?bodies:#exp) @...) ?rest ...) :
+         val exp = gensym("exp-")
+         defn make-rules (pats:List, bodies:List) :
+            if empty?(pats) :
+               qquote(: error("no match"))
+            else :
+               qquote(if-match ~ head(pats) = ~ exp : ~ head(bodies) else
+                      ~@ make-rules(tail(pats), tail(bodies)))
+         val res = make-rules(pats, bodies)
+         qquote(val ~ exp = ~ value ~ res ~@ rest)
+
+   
