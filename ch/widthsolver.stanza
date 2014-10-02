@@ -1,9 +1,7 @@
 ;Define the STANDALONE flag to run STANDALONE
-;if-defined(STANDALONE) :
-;   include<"core/core.stanza">
-;   include<"core/verse.stanza">
-;   include<"core/stringeater.stanza">
-;   include<"compiler/lexer.stanza">
+if-defined(STANDALONE) :
+   include<"core/stringeater.stanza">
+   include<"compiler/lexer.stanza">
 
 defpackage widthsolver :
    import core
@@ -297,3 +295,4 @@ if-defined(STANDALONE) :
 
    main()
 ;============================================================
+

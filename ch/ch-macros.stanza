@@ -53,44 +53,43 @@ defn extract-type (form, param-names:List) :
          macro-exception $ [
          "No type parameter with name: " form]
 
-;============== DEFMODULE MACRO ============================
-;Syntax:
-;   defmodule Adder (w:Int) :
-;      input a : IntT(w)
-;      input b : IntT(w)
-;      output z : IntT(w + 1)
-;      z(this) := a(this) + b(this)
-;Expands to:
-;   definterface Adder 
-;   defmulti a (a:Adder) -> IntT
-;   defmulti b (a:Adder) -> IntT
-;   defmulti z (a:Adder) -> IntT
-;   defmulti reset (a:Adder) -> IntT
-;
-;   defn Adder (name:Symbol, w:Int) :
-;      val build.a = IntT(w)
-;      val build.b = IntT(w)
-;      val build.z = IntT(w + 1)
-;      val build.reset = IntT(1)
-;      defn instance (ref:Immediate) :
-;         new Adder :
-;            defmethod a (this) : handle(build.a, Field(ref, `a))
-;            defmethod b (this) : handle(build.b, Field(ref, `b))
-;            defmethod z (this) : handle(build.z, Field(ref, `z))
-;            defmethod reset (this) : handle(build.reset, Field(ref, `reset))
-;      defn module () :
-;         val ports = [
-;            Port(`a, INPUT, type(build.a))
-;            Port(`b, INPUT, type(build.b))
-;            Port(`z, OUTPUT, type(build.z))]
-;         make-module{`Adder, ports, _} $ fn () :
-;            val this = instance(Ref(`this))
-;            connect(z(this), a(this) + b(this))
-;      instance(make-instance(name, module()))
 
-
+;================= CHIPPER MACROS ==========================
 defoverlay ch-macros :
 
+   ;Syntax:
+   ;   defmodule Adder (w:Int) :
+   ;      input a : IntT(w)
+   ;      input b : IntT(w)
+   ;      output z : IntT(w + 1)
+   ;      z(this) := a(this) + b(this)
+   ;Expands to:
+   ;   definterface Adder 
+   ;   defmulti a (a:Adder) -> IntT
+   ;   defmulti b (a:Adder) -> IntT
+   ;   defmulti z (a:Adder) -> IntT
+   ;   defmulti reset (a:Adder) -> IntT
+   ;
+   ;   defn Adder (name:Symbol, w:Int) :
+   ;      val build.a = IntT(w)
+   ;      val build.b = IntT(w)
+   ;      val build.z = IntT(w + 1)
+   ;      val build.reset = IntT(1)
+   ;      defn instance (ref:Immediate) :
+   ;         new Adder :
+   ;            defmethod a (this) : handle(build.a, Field(ref, `a))
+   ;            defmethod b (this) : handle(build.b, Field(ref, `b))
+   ;            defmethod z (this) : handle(build.z, Field(ref, `z))
+   ;            defmethod reset (this) : handle(build.reset, Field(ref, `reset))
+   ;      defn module () :
+   ;         val ports = [
+   ;            Port(`a, INPUT, type(build.a))
+   ;            Port(`b, INPUT, type(build.b))
+   ;            Port(`z, OUTPUT, type(build.z))]
+   ;         make-module{`Adder, ports, _} $ fn () :
+   ;            val this = instance(Ref(`this))
+   ;            connect(z(this), a(this) + b(this))
+   ;      instance(make-instance(name, module()))
    deftransformer(`term-exp, `(defmodule ...)) :
       (defmodule ?name-form ?args:_ : (?body-form ...) ?rest ...) :
          val [name targs] =
@@ -476,11 +475,12 @@ defoverlay matcher :
    ;; if-match pat = form : body
    deftransformer(`term-exp, `(if-match ...)) :
       (if-match ?pattern = ?value:#exp : ?conseq:#exp ?rest-form ...) :
-         val [alt rest] =
-            match-syntax(rest-form) :
-               (else : ?exp:#exp ?rest ...) : [exp rest]
-               (?rest ...) : [false rest]
-               
+         val [alt rest] = parse-alt(rest-form) where :
+            defn parse-alt (rest:List) -> [? List] :
+               match-syntax(rest) :
+                  (else : ?exp:#exp ?rest ...) : [exp rest]
+                  (else if-match ?rest ...) : parse-alt(qquote(else : if-match ~@ rest))
+                  (?rest ...) : [false rest]               
          val exp = gensym("exp-")
          val res = qquote(val ~ exp = ~ value ~ gen-match?(pattern, exp, conseq, alt))
          println-all(["PAT " pattern " VALUE " value " IFM " res])
@@ -497,6 +497,8 @@ defoverlay matcher :
                qquote(if-match ~ head(pats) = ~ exp : ~ head(bodies) else
                       ~@ make-rules(tail(pats), tail(bodies)))
          val res = make-rules(pats, bodies)
-         qquote(val ~ exp = ~ value ~ res ~@ rest)
+         val filled = qquote(val ~ exp = ~ value ~ res)
+         println-all(["matches filled = " filled])
+         list(filled, rest)
 
    

@@ -70,26 +70,10 @@ defmodule Top () :
    z(this) := z(adder)
 
 
-
-defmodule Test () :
-   input a: Decoupled(IntT(1))
-   input b: Decoupled(IntT(1))
-   input c: Decoupled(IntT(1))
-   output z: Decoupled(IntT(1))
-
-   data(z(this)) := CInt(0)
-
-   register r: IntT(10)
-   r := data(a(this))
-
-   vec v: Decoupled(IntT(1)) of [a(this) b(this) c(this)]
-   v[CInt(0)] := v[CInt(1)]
-
-
 defn main () :
-   val rcir = read-parse-file("debug.ch")
-   println("\nPRINT BACK\n")
-   println(rcir)
+;   val rcir = read-parse-file("debug.ch")
+;   println("\nPRINT BACK\n")
+;   println(rcir)
    circuit c: Top()
    println(c)
    val c* = run-passes(c)

@@ -1,3 +1,2 @@
-name=$1
-shift
-ch/chipper -i $name.stanza -o $name.s -path ~/Docs/Programming/stanza/trunk $@
+#!/bin/sh
+/Users/psli/Docs/Programming/chipper/trunk/chipperc -path /Users/psli/Docs/Programming/stanza/trunk -platform os-x $@

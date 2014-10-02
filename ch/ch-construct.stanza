@@ -25,7 +25,7 @@ defn in-new-scope<?T> (f: () -> ?T) :
       fn (f) : SCOPE-NAMES = prev-scope)
 
 ;========== Command List ===============
-val COMMAND-LIST = Vector<Command>()
+var COMMAND-LIST:Vector<Command> = Vector<Command>()
 
 defn push-command (c:Command) :
    add(COMMAND-LIST, c)
