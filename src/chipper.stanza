@@ -1,0 +1,163 @@
+defpackage chipper :
+   import core
+   import verse
+   import firrtl/ir with :
+      prefix => f
+
+;Interface inherited by all handle classes
+public definterface CHExp
+public defmulti firrtl-exp (e:CHExp) -> fExpression
+
+;Interface inherited by all type classes
+public definterface CHType
+public defmulti handle (t:CHType, e:fExpression) -> CHExp
+public defmulti firrtl-type (t:CHType) -> fType
+
+;Interface inherited by all module classes
+public definterface CHModule
+public defmulti handle (m:CHModule, e:fExpression) -> CHExp
+public defmulti firrtl-module (m:CHModule) -> Symbol
+
+;WORKAROUND FOR STANZA BUG: Every multi needs to have at least one method.
+defmethod firrtl-exp (e:CHExp) : error("Unimplemented.")
+defmethod handle (t:CHType, e:fExpression) : error("Unimplemented.")
+defmethod firrtl-type (t:CHType) : error("Unimplemented.")
+defmethod handle (m:CHModule, e:fExpression) : error("Unimplemented.")
+defmethod firrtl-module (m:CHModule) : error("Unimplemented.")
+
+;=== Statement Vector ===
+var STATEMENT-VECTOR:Vector<fStmt> = Vector<fStmt>()
+defn build-statement (f: () -> ?) :
+   let-var STATEMENT-VECTOR = Vector<fStmt>() :
+      f()
+      fBegin(to-list(STATEMENT-VECTOR))
+
+;=== Module Vector ===
+var MODULE-VECTOR:Vector<fModule> = Vector<fModule>()
+defn Node (e:fExpression) :
+   val name = gensym(`tmp)
+   add(STATEMENT-VECTOR, fDefNode(name, e))
+   fRef(name, fUnknownType())
+
+;=== Component Creation ===
+public defn RegisterExp (name:Symbol, type:CHType) :
+   val name* = gensym(name)
+   add(STATEMENT-VECTOR, fDefRegister(name*, firrtl-type(type)))
+   handle(type, fRef(name*, fUnknownType()))
+
+public defn WireExp (name:Symbol, type:CHType) :
+   val name* = gensym(name)
+   add(STATEMENT-VECTOR, fDefWire(name*, firrtl-type(type)))
+   handle(type, fRef(name*, fUnknownType()))
+
+public defn InstanceExp (name:Symbol, module:CHModule) :
+   val name* = gensym(name)
+   add(STATEMENT-VECTOR, fDefInstance(name*, fRef(firrtl-module(module), fUnknownType())))
+   handle(module, fRef(name*, fUnknownType()))
+
+public defn CircuitExp (module:CHModule) :
+   let-var MODULE-VECTOR = Vector<fModule>() :
+      val main = firrtl-module(module)
+      fCircuit(to-list(MODULE-VECTOR), main)
+
+public defn ConnectExp (x:CHExp, y:CHExp) :
+   val x* = firrtl-exp(x)
+   val y* = firrtl-exp(y)
+   add(STATEMENT-VECTOR, fConnect(x*, y*))
+
+public defn WhenExp (pred:CHExp, conseq: () -> ?, alt: () -> ?) :
+   val p = firrtl-exp(pred)
+   val c = build-statement(conseq)
+   val a = build-statement(alt)
+   add(STATEMENT-VECTOR, fConditionally(p, c, a))
+   
+public defn WhenExp (pred:CHExp, conseq: () -> ?) :
+   val p = firrtl-exp(pred)
+   val c = build-statement(conseq)
+   add(STATEMENT-VECTOR, fConditionally(p, c, fEmptyStmt()))
+
+public defn ModuleExp (name, ports:List<fPort>, f: () -> ?) -> Symbol :
+   val name* = gensym(name)
+   val body = build-statement(f)
+   add(MODULE-VECTOR, fModule(name*, ports, body))
+   name*
+
+;Type Class for Vecs
+public defclass VecType <: CHType
+public defn VecType (t:CHType, len:Int) :
+   val t* = firrtl-type(t)
+   new VecType :
+      defmethod handle (this, e:fExpression) : Vec(t, len, e)
+      defmethod firrtl-type (this) : fVectorType(t*, len)
+
+;Handle class for Vecs
+public defclass Vec<T> <: CHExp & Streamable<T> & Lengthable
+public defmulti get<?T> (v:Vec<?T>, i:Int) -> T
+public defmulti get<?T> (v:Vec<?T>, i:CHExp) -> T
+public defn Vec (t:CHType, len:Int, e:fExpression) :
+   new Vec :
+      defmethod firrtl-exp (this) :
+         e
+      defmethod get (this, i:Int) :
+         val e* = fIndex(e, i, fUnknownType())
+         handle(t, e*)
+      defmethod get (this, i:CHExp) :
+         val name* = gensym(`a)
+         add(STATEMENT-VECTOR, fDefAccessor(name*, e, firrtl-exp(i)))
+         handle(t, fRef(name*, fUnknownType()))
+      defmethod to-stream (this) :
+         for i in 0 to len stream :
+            this[i]
+      defmethod length (this) :
+         len
+
+;Type Class for UInt
+public defclass UIntType <: CHType
+defn UIntType (w:fWidth) :
+   new UIntType :
+      defmethod handle (this, e:fExpression) : UInt(e)
+      defmethod firrtl-type (this) : fUIntType(w)
+public defn UIntType (w:Int) :
+   UIntType(fIntWidth(w))
+public defn UIntType () :
+   UIntType(fUnknownWidth())
+
+;Literal UInt Functions
+public defn UIntLiteral (v:Int) :
+   UInt(fUIntValue(v, fUnknownWidth()))
+public defn UIntLiteral (v:Int, w:Int) :
+   UInt(fUIntValue(v, fIntWidth(w)))
+
+;Handle Class for UInt
+public defclass UInt <: CHExp
+public defn UInt (e:fExpression) :
+   new UInt :
+      defmethod firrtl-exp (this) : e
+
+public defn binop (op:fPrimOp, x:UInt, y:UInt) -> UInt :
+   UInt $ Node $ fDoPrim(op, list(ex, ey), List(), fUnknownType()) where :
+      val ex = firrtl-exp(x)
+      val ey = firrtl-exp(y)   
+public defn plus (x:UInt, y:UInt) : binop(fADD-OP, x, y)
+public defn minus (x:UInt, y:UInt) : binop(fSUB-OP, x, y)
+public defn times (x:UInt, y:UInt) : binop(fMUL-OP, x, y)
+public defn divide (x:UInt, y:UInt) : binop(fDIV-OP, x, y)
+public defn modulo (x:UInt, y:UInt) : binop(fMOD-OP, x, y)
+public defn bit-and (x:UInt, y:UInt) : binop(fBIT-AND-OP, x, y)
+public defn bit-or (x:UInt, y:UInt) : binop(fBIT-OR-OP, x, y)
+public defn bit-xor (x:UInt, y:UInt) : binop(fBIT-XOR-OP, x, y)
+public defn bit-equal? (x:UInt, y:UInt) : binop(fEQUAL-OP, x, y)
+public defn less-eq? (x:UInt, y:UInt) : binop(fLESS-EQ-OP, x, y)
+public defn less? (x:UInt, y:UInt) : binop(fLESS-OP, x, y)
+public defn greater-eq? (x:UInt, y:UInt) : binop(fGREATER-EQ-OP, x, y)
+public defn greater? (x:UInt, y:UInt) : binop(fGREATER-OP, x, y)
+public defn concat (x:UInt, y:UInt) : binop(fCONCAT-OP, x, y)
+
+public defn get (x:UInt, i:Int) -> UInt :
+   UInt $ Node $ fDoPrim(fBIT-SELECT-OP, list(ex), list(i), fUnknownType()) where :
+      val ex = firrtl-exp(x)
+      
+public defn get (x:UInt, i:Int, j:Int) -> UInt :
+   UInt $ Node $ fDoPrim(fBITS-SELECT-OP, list(ex), list(i, j), fUnknownType()) where :
+      val ex = firrtl-exp(x)
+

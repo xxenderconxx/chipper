@@ -1,0 +1,311 @@
+defpackage firrtl/parser :
+   import core
+   import verse
+   import firrtl/ir
+   import stz/parser
+   import stz/lexer
+
+;======= Convenience Functions ========
+defn first-info? (form) -> FileInfo|False :
+   match(form) :
+      (form:Token) : info(form)
+      (form:List) : search(first-info?, form)
+      (form) : false
+
+defn first-info (form:List) :
+   match(first-info?(form)) :
+      (i:FileInfo) : i
+      (f:False) : FileInfo()
+
+defn FPE (form, x) :
+   throw $ new Exception :
+      defmethod print (o:OutputStream, this) :
+         print(o, "[~] FIRRTL Parsing Error: ~" << [first-info(form), x])
+
+defn* apply-suffix-ops (x, fs:List) :
+   if empty?(fs) : x
+   else : apply-suffix-ops(head(fs)(x), tail(fs))
+
+;======== Parser Utilities ==============
+defn atom? (x) : unwrap-token(x) not-typeof List
+
+defn primop (x:Symbol) : get?(OPERATORS, x, false)
+val OPERATORS = HashTable<Symbol, PrimOp>(symbol-hash)
+OPERATORS[`add] = ADD-OP
+OPERATORS[`add-uu] = ADD-UU-OP
+OPERATORS[`add-us] = ADD-US-OP
+OPERATORS[`add-su] = ADD-SU-OP
+OPERATORS[`add-ss] = ADD-SS-OP
+OPERATORS[`sub] = SUB-OP
+OPERATORS[`sub-uu] = SUB-UU-OP
+OPERATORS[`sub-us] = SUB-US-OP
+OPERATORS[`sub-su] = SUB-SU-OP
+OPERATORS[`sub-ss] = SUB-SS-OP
+OPERATORS[`mul] = MUL-OP
+OPERATORS[`mul-uu] = MUL-UU-OP
+OPERATORS[`mul-us] = MUL-US-OP
+OPERATORS[`mul-su] = MUL-SU-OP
+OPERATORS[`mul-ss] = MUL-SS-OP
+OPERATORS[`div] = DIV-OP
+OPERATORS[`div-uu] = DIV-UU-OP
+OPERATORS[`div-us] = DIV-US-OP
+OPERATORS[`div-su] = DIV-SU-OP
+OPERATORS[`div-ss] = DIV-SS-OP
+OPERATORS[`mod] = MOD-OP
+OPERATORS[`mod-uu] = MOD-UU-OP
+OPERATORS[`mod-us] = MOD-US-OP
+OPERATORS[`mod-su] = MOD-SU-OP
+OPERATORS[`mod-ss] = MOD-SS-OP
+OPERATORS[`quo] = QUO-OP
+OPERATORS[`quo-uu] = QUO-UU-OP
+OPERATORS[`quo-us] = QUO-US-OP
+OPERATORS[`quo-su] = QUO-SU-OP
+OPERATORS[`quo-ss] = QUO-SS-OP
+OPERATORS[`rem] = REM-OP
+OPERATORS[`rem-uu] = REM-UU-OP
+OPERATORS[`rem-us] = REM-US-OP
+OPERATORS[`rem-su] = REM-SU-OP
+OPERATORS[`rem-ss] = REM-SS-OP
+OPERATORS[`add-wrap] = ADD-WRAP-OP
+OPERATORS[`add-wrap-uu] = ADD-WRAP-UU-OP
+OPERATORS[`add-wrap-us] = ADD-WRAP-US-OP
+OPERATORS[`add-wrap-su] = ADD-WRAP-SU-OP
+OPERATORS[`add-wrap-ss] = ADD-WRAP-SS-OP
+OPERATORS[`sub-wrap] = SUB-WRAP-OP
+OPERATORS[`sub-wrap-uu] = SUB-WRAP-UU-OP
+OPERATORS[`sub-wrap-us] = SUB-WRAP-US-OP
+OPERATORS[`sub-wrap-su] = SUB-WRAP-SU-OP
+OPERATORS[`sub-wrap-ss] = SUB-WRAP-SS-OP
+OPERATORS[`lt] = LESS-OP
+OPERATORS[`lt-uu] = LESS-UU-OP
+OPERATORS[`lt-us] = LESS-US-OP
+OPERATORS[`lt-su] = LESS-SU-OP
+OPERATORS[`lt-ss] = LESS-SS-OP
+OPERATORS[`leq] = LESS-EQ-OP
+OPERATORS[`leq-uu] = LESS-EQ-UU-OP
+OPERATORS[`leq-us] = LESS-EQ-US-OP
+OPERATORS[`leq-su] = LESS-EQ-SU-OP
+OPERATORS[`leq-ss] = LESS-EQ-SS-OP
+OPERATORS[`gt] = GREATER-OP
+OPERATORS[`gt-uu] = GREATER-UU-OP
+OPERATORS[`gt-us] = GREATER-US-OP
+OPERATORS[`gt-su] = GREATER-SU-OP
+OPERATORS[`gt-ss] = GREATER-SS-OP
+OPERATORS[`geq] = GREATER-EQ-OP
+OPERATORS[`geq-uu] = GREATER-EQ-UU-OP
+OPERATORS[`geq-us] = GREATER-EQ-US-OP
+OPERATORS[`geq-su] = GREATER-EQ-SU-OP
+OPERATORS[`geq-ss] = GREATER-EQ-SS-OP
+OPERATORS[`equal] = EQUAL-OP
+OPERATORS[`equal-uu] = EQUAL-UU-OP
+OPERATORS[`equal-ss] = EQUAL-SS-OP
+OPERATORS[`mux] = MUX-OP
+OPERATORS[`mux-uu] = MUX-UU-OP
+OPERATORS[`mux-ss] = MUX-SS-OP
+OPERATORS[`pad] = PAD-OP
+OPERATORS[`pad-u] = PAD-U-OP
+OPERATORS[`pad-s] = PAD-S-OP
+OPERATORS[`as-UInt] = AS-UINT-OP
+OPERATORS[`as-UInt-u] = AS-UINT-U-OP
+OPERATORS[`as-UInt-s] = AS-UINT-S-OP
+OPERATORS[`as-SInt] = AS-SINT-OP
+OPERATORS[`as-SInt-u] = AS-SINT-U-OP
+OPERATORS[`as-SInt-s] = AS-SINT-S-OP
+OPERATORS[`shl] = SHIFT-LEFT-OP
+OPERATORS[`shl-u] = SHIFT-LEFT-U-OP
+OPERATORS[`shl-s] = SHIFT-LEFT-S-OP
+OPERATORS[`shr] = SHIFT-RIGHT-OP
+OPERATORS[`shr-u] = SHIFT-RIGHT-U-OP
+OPERATORS[`shr-s] = SHIFT-RIGHT-S-OP
+OPERATORS[`convert] = CONVERT-OP
+OPERATORS[`convert-u] = CONVERT-U-OP
+OPERATORS[`convert-s] = CONVERT-S-OP
+OPERATORS[`bit-and] = BIT-AND-OP
+OPERATORS[`bit-or] = BIT-OR-OP
+OPERATORS[`bit-xor] = BIT-XOR-OP
+OPERATORS[`concat] = CONCAT-OP
+OPERATORS[`bit] = BIT-SELECT-OP
+OPERATORS[`bits] = BITS-SELECT-OP
+
+;======== Parser Rules ==================
+defsyntax firrtl :
+   ;Useful Atoms
+   defrule atoms :
+      ;Unconditionally parse next form as identifier.
+      id = (?x) when atom?(x) :
+         match(unwrap-token(x)) :
+            (x:Symbol) : x
+            (x) : FPE(form, "Expected an identifier here. Got ~ instead." << [x])
+
+      ;Parses next form if integer literal
+      int = (?x) when unwrap-token(x) typeof Int :
+         unwrap-token(x)
+
+      ;Parses next form if symbol
+      sym = (?x) when unwrap-token(x) typeof Symbol :
+         unwrap-token(x)
+         
+   ;Error Handling Productions
+   defrule :
+      ;Error if not an identifier
+      id! = (?x:#id) : x
+      id! != () : FPE(form, "Expected an identifier here.")
+
+      ;Error if not a colon
+      :! = (:) : (`:)
+      :! != () : FPE(form, "Expected a colon here.")
+
+      ;Error if not 'of' keyword
+      of! = (of) : `of
+      of! != () : FPE(form, "Expected the 'of' keyword here.")
+
+      ;Error if not a =
+      =! = (=) : `=
+      =! != () : FPE(form, "Expected a '=' here.")
+
+      ;Error if not a single integer
+      int$ = (?i:#int ?rest ...) when empty?(rest) : i
+      int$ != () : FPE(form, "Expected a single integer literal here.")
+
+      ;Error if not a single width
+      width$ = (?w:#width ?rest ...) when empty?(rest) : w
+      width$ != () : FPE(form, "Expected a single width specifier here.")
+
+      ;Error if not a type
+      type! = (?t:#type) : t
+      type! != () : FPE(form, "Expected a type here.")
+
+      ;Error if not a vec type
+      vectype! = (?t:#type!) :
+         FPE(form, "Expected a vector type here.") when t not-typeof VectorType
+         t
+
+      ;Error if not an expression
+      exp! = (?e:#exp) : e
+      exp! != () : FPE(form, "Expected an expression here.")
+
+      ;Error if not a single expression
+      exp$ = (?e:#exp ?rest ...) when empty?(rest) : e
+      exp$ != () : FPE(form, "Expected a single expression here.")
+
+      ;Error if not a stmt
+      stmt! = (?s:#stmt) : s
+      stmt! != () : FPE(form, "Expected a statement here.")
+
+      ;Error if not a reference expression
+      ref! = (?e:#exp!) :
+         FPE(form, "Expected a reference expression here.") when e not-typeof Ref
+         e
+   
+   ;Main Circuit Production
+   defrule circuit :
+      circuit = (circuit ?name:#id! #:! (?ms:#module ... ?rest ...)) :
+         if not empty?(rest) :
+            FPE(rest, "Expected a module declaration here.")
+         Circuit(ms, name)
+      circuit != (circuit) :
+         FPE(form, "Invalid syntax for circuit definition.")
+
+   ;Main Module Production
+   defrule module :
+      module = (module ?name:#id! #:! (?ps:#port ... ?cs:#stmt ... ?rest ...)) :
+         if not empty?(rest) :
+            FPE(rest, "Expected a statement here.")
+         Module(name, ps, Begin(cs))
+      module != (module) :
+         FPE(form, "Invalid syntax for module definition.")
+   
+   defrule port :
+      port = (input ?name:#id! #:! ?type:#type!) : Port(name, INPUT, type)
+      port = (output ?name:#id! #:! ?type:#type!) : Port(name, OUTPUT, type)
+         
+   ;Main Type Productions
+   defrule type :
+      inttype = (UInt<?w:#width$>) : UIntType(w)
+      inttype = (UInt) : UIntType(UnknownWidth())
+      inttype = (SInt<?w:#width$>) : SIntType(w)
+      inttype = (SInt) : SIntType(UnknownWidth())
+
+      type = (?t:#typeterm ?ops:#typeop ...) : apply-suffix-ops(t, ops)
+      typeop = ((@get ?size:#int$)) : (fn (t) : VectorType(t, size))
+      
+      typeterm = (?t:#inttype) : t
+      typeterm = ({?fs:#field ... ?rest ...}) :
+         if not empty?(rest) :
+            FPE(rest, "Expected a bundle field declaration here.")
+         BundleType(fs)
+
+   defrule field :
+      field = (flip ?name:#id! #:! ?type:#type!) : Field(name, REVERSE, type)
+      field = (?name:#id #:! ?type:#type!) : Field(name, DEFAULT, type)
+
+   defrule width :
+      width = (?x:#int) : IntWidth(x)
+      width = (?) : UnknownWidth()
+
+   ;Main Statement Productions
+   defrule statements :
+      stmt = (wire ?name:#id! #:! ?t:#type!) : DefWire(name, t)
+      stmt = (reg ?name:#id! #:! ?t:#type!) : DefRegister(name, t)
+      stmt = (mem ?name:#id! #:! ?t:#vectype!) : DefMemory(name, t)
+      stmt = (inst ?name:#id! #of! ?m:#ref!) : DefInstance(name, m)
+      stmt = (node ?name:#id! #=! ?e:#exp!) : DefNode(name, e)
+      stmt = (accessor ?name:#id! #=! ?s:#exp![?i:#exp$]) : DefAccessor(name, s, i)
+      stmt = (?s:#stmt/when) : s
+
+      stmt = (?x:#exp := ?y:#exp!) : Connect(x, y)
+
+      stmt = ((?s:#stmt ?ss:#stmt ... ?rest ...)) :
+         if not empty?(rest) :
+            FPE(rest, "Expected a statement here.")
+         Begin(List(s, ss))
+      stmt = (()) :
+         Begin(List())
+         
+   defrule stmt/when :
+      stmt/when = (when ?pred:#exp! #:! ?conseq:#stmt! else ?alt:#stmt/when) :
+         Conditionally(pred, conseq, alt)
+      stmt/when = (when ?pred:#exp! #:! ?conseq:#stmt! else #:! ?alt:#stmt!) :
+         Conditionally(pred, conseq, alt)
+      stmt/when = (when ?pred:#exp! #:! ?conseq:#stmt!) :
+         Conditionally(pred, conseq, EmptyStmt())
+
+   ;Main Expressions
+   defrule exp :
+      ;Suffix Operators
+      exp = (?x:#expterm ?ops:#expop ...) : apply-suffix-ops(x, ops)      
+      expop = ((@get ?f:#int)) : (fn (x) : Index(x, f, UnknownType()))
+      expop = (. ?f:#id!) : (fn (x) : Subfield(x, f, UnknownType()))
+      
+      ;Prefix Operators
+      expterm = (?t:#inttype(?v:#int$)) :
+         match(t) :
+            (t:UIntType) : UIntValue(v, width(t))
+            (t:SIntType) : SIntValue(v, width(t))
+
+      expterm = (WritePort(?m:#exp, ?i:#exp, ?e:#exp)) : WritePort(m, i, UnknownType(), e)
+      expterm != (WritePort) : FPE(form, "Invalid syntax for WritePort expression.")
+
+      expterm = (ReadPort(?m:#exp, ?i:#exp, ?e:#exp)) : ReadPort(m, i, UnknownType(), e)
+      expterm != (ReadPort) : FPE(form, "Invalid syntax for ReadPort expression.")
+
+      expterm = (Register(?v:#exp, ?e:#exp)) : Register(UnknownType(), v, e)
+      expterm != (Register) : FPE(form, "Invalid syntax for Register expression.")
+
+      expterm = (?op:#sym(?es:#exp ... ?ints:#int ... ?rest ...)) :
+         if not empty?(rest) :
+            FPE(rest, "Illegal operands to primitive operator.")
+         match(primop(op)) :
+            (p:PrimOp) : DoPrim(p, es, ints, UnknownType())
+            (p:False) : FPE(form, "Unrecognized primitive operator '~'." << [op])
+      expterm = (?op:#sym) :
+         Ref(op, UnknownType())
+
+public defn parse-firrtl (forms:List) :
+   with-syntax(firrtl) :
+      match-syntax(forms) :
+         (?c:#circuit) : c
+         (_ ...) : FPE(form, "Invalid firrtl circuit.")
+
+public defn parse-firrtl-file (filename:String) :
+   parse-firrtl(lex-file(filename))

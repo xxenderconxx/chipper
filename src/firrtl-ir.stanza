@@ -1,0 +1,216 @@
+defpackage firrtl/ir :
+   import core
+   import verse
+   
+public definterface Direction
+public val INPUT = new Direction
+public val OUTPUT = new Direction
+
+public definterface Flip
+public val DEFAULT = new Flip
+public val REVERSE = new Flip
+
+public definterface Width
+public defstruct UnknownWidth <: Width
+public defstruct IntWidth <: Width :
+   width: Int
+
+public definterface PrimOp
+public val ADD-OP = new PrimOp
+public val ADD-UU-OP = new PrimOp
+public val ADD-US-OP = new PrimOp
+public val ADD-SU-OP = new PrimOp
+public val ADD-SS-OP = new PrimOp
+public val SUB-OP = new PrimOp
+public val SUB-UU-OP = new PrimOp
+public val SUB-US-OP = new PrimOp
+public val SUB-SU-OP = new PrimOp
+public val SUB-SS-OP = new PrimOp
+public val MUL-OP = new PrimOp
+public val MUL-UU-OP = new PrimOp
+public val MUL-US-OP = new PrimOp
+public val MUL-SU-OP = new PrimOp
+public val MUL-SS-OP = new PrimOp
+public val DIV-OP = new PrimOp
+public val DIV-UU-OP = new PrimOp
+public val DIV-US-OP = new PrimOp
+public val DIV-SU-OP = new PrimOp
+public val DIV-SS-OP = new PrimOp
+public val MOD-OP = new PrimOp
+public val MOD-UU-OP = new PrimOp
+public val MOD-US-OP = new PrimOp
+public val MOD-SU-OP = new PrimOp
+public val MOD-SS-OP = new PrimOp
+public val QUO-OP = new PrimOp
+public val QUO-UU-OP = new PrimOp
+public val QUO-US-OP = new PrimOp
+public val QUO-SU-OP = new PrimOp
+public val QUO-SS-OP = new PrimOp
+public val REM-OP = new PrimOp
+public val REM-UU-OP = new PrimOp
+public val REM-US-OP = new PrimOp
+public val REM-SU-OP = new PrimOp
+public val REM-SS-OP = new PrimOp
+public val ADD-WRAP-OP = new PrimOp
+public val ADD-WRAP-UU-OP = new PrimOp
+public val ADD-WRAP-US-OP = new PrimOp
+public val ADD-WRAP-SU-OP = new PrimOp
+public val ADD-WRAP-SS-OP = new PrimOp
+public val SUB-WRAP-OP = new PrimOp
+public val SUB-WRAP-UU-OP = new PrimOp
+public val SUB-WRAP-US-OP = new PrimOp
+public val SUB-WRAP-SU-OP = new PrimOp
+public val SUB-WRAP-SS-OP = new PrimOp
+public val LESS-OP = new PrimOp
+public val LESS-UU-OP = new PrimOp
+public val LESS-US-OP = new PrimOp
+public val LESS-SU-OP = new PrimOp
+public val LESS-SS-OP = new PrimOp
+public val LESS-EQ-OP = new PrimOp
+public val LESS-EQ-UU-OP = new PrimOp
+public val LESS-EQ-US-OP = new PrimOp
+public val LESS-EQ-SU-OP = new PrimOp
+public val LESS-EQ-SS-OP = new PrimOp
+public val GREATER-OP = new PrimOp
+public val GREATER-UU-OP = new PrimOp
+public val GREATER-US-OP = new PrimOp
+public val GREATER-SU-OP = new PrimOp
+public val GREATER-SS-OP = new PrimOp
+public val GREATER-EQ-OP = new PrimOp
+public val GREATER-EQ-UU-OP = new PrimOp
+public val GREATER-EQ-US-OP = new PrimOp
+public val GREATER-EQ-SU-OP = new PrimOp
+public val GREATER-EQ-SS-OP = new PrimOp
+public val EQUAL-OP = new PrimOp
+public val EQUAL-UU-OP = new PrimOp
+public val EQUAL-SS-OP = new PrimOp
+public val MUX-OP = new PrimOp
+public val MUX-UU-OP = new PrimOp
+public val MUX-SS-OP = new PrimOp
+public val PAD-OP = new PrimOp
+public val PAD-U-OP = new PrimOp
+public val PAD-S-OP = new PrimOp
+public val AS-UINT-OP = new PrimOp
+public val AS-UINT-U-OP = new PrimOp
+public val AS-UINT-S-OP = new PrimOp
+public val AS-SINT-OP = new PrimOp
+public val AS-SINT-U-OP = new PrimOp
+public val AS-SINT-S-OP = new PrimOp
+public val SHIFT-LEFT-OP = new PrimOp
+public val SHIFT-LEFT-U-OP = new PrimOp
+public val SHIFT-LEFT-S-OP = new PrimOp
+public val SHIFT-RIGHT-OP = new PrimOp
+public val SHIFT-RIGHT-U-OP = new PrimOp
+public val SHIFT-RIGHT-S-OP = new PrimOp
+public val CONVERT-OP = new PrimOp
+public val CONVERT-U-OP = new PrimOp
+public val CONVERT-S-OP = new PrimOp
+public val BIT-AND-OP = new PrimOp
+public val BIT-OR-OP = new PrimOp
+public val BIT-XOR-OP = new PrimOp
+public val CONCAT-OP = new PrimOp
+public val BIT-SELECT-OP = new PrimOp
+public val BITS-SELECT-OP = new PrimOp
+
+public definterface Expression
+public defmulti type (e:Expression) -> Type
+
+public defstruct Ref <: Expression :
+   name: Symbol
+   type: Type with: (as-method => true)
+public defstruct Subfield <: Expression :
+   exp: Expression
+   name: Symbol
+   type: Type with: (as-method => true)
+public defstruct Index <: Expression :
+   exp: Expression
+   value: Int
+   type: Type with: (as-method => true)
+public defstruct UIntValue <: Expression :
+   value: Int
+   width: Width
+public defstruct SIntValue <: Expression :
+   value: Int
+   width: Width
+public defstruct DoPrim <: Expression :
+   op: PrimOp
+   args: List<Expression>
+   consts: List<Int>
+   type: Type with: (as-method => true)
+public defstruct ReadPort <: Expression :
+   mem: Expression
+   index: Expression
+   type: Type with: (as-method => true)
+   enable: Expression
+public defstruct WritePort <: Expression :
+   mem: Expression
+   index: Expression
+   type: Type with: (as-method => true)
+   enable: Expression
+public defstruct Register <: Expression :
+   type: Type with: (as-method => true)
+   value: Expression
+   enable: Expression
+
+public definterface Stmt
+public defstruct DefWire <: Stmt :
+   name: Symbol
+   type: Type
+public defstruct DefRegister <: Stmt :
+   name: Symbol
+   type: Type
+public defstruct DefInstance <: Stmt :
+   name: Symbol
+   module: Expression
+public defstruct DefMemory <: Stmt :
+   name: Symbol
+   type: VectorType
+public defstruct DefNode <: Stmt :
+   name: Symbol
+   value: Expression
+public defstruct DefAccessor <: Stmt :
+   name: Symbol
+   source: Expression
+   index: Expression
+public defstruct Conditionally <: Stmt :
+   pred: Expression
+   conseq: Stmt
+   alt: Stmt
+public defstruct Begin <: Stmt :
+   body: List<Stmt>
+public defstruct Connect <: Stmt :
+   loc: Expression
+   exp: Expression
+public defstruct EmptyStmt <: Stmt
+
+
+public definterface Type
+public defstruct UIntType <: Type :
+   width: Width
+public defstruct SIntType <: Type :
+   width: Width
+public defstruct BundleType <: Type :
+   fields: List<Field>
+public defstruct VectorType <: Type :
+   type: Type
+   size: Int
+public defstruct UnknownType <: Type
+
+public defstruct Field :
+   name: Symbol
+   flip: Flip
+   type: Type
+
+public defstruct Port :
+   name: Symbol
+   direction: Direction
+   type: Type
+
+public defstruct Module :
+   name: Symbol
+   ports: List<Port>
+   body: Stmt
+
+public defstruct Circuit :
+   modules: List<Module>
+   main: Symbol

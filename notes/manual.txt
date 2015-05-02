@@ -1,0 +1,393 @@
+============================================================
+=============== Compilation and Running ====================
+============================================================
+
+For these steps, it will be assumed that Chipper is in the directory,
+/mydir/mychipper, and that Stanza is installed in the directory,
+/mydir/stanza.
+
+0. First install Stanza rev.375 from the lbstanza.org website. R375
+   should be backwards compatible and defines the let-var macro for
+   supporting dynamic scoping.
+
+1. Navigate to mydir/mychipper and type:
+
+   stanza -e src/chipper-syntax.stanza -o chipperc -flags OPTIMIZE
+
+   This will extend stanza with chipper macros and produce an extended
+   compiler called chipperc.
+   
+2. To create the run script for chipperc, type the following:
+
+   ./chipperc -platform os-x -path /mydir/stanza -install chipper
+
+   This will create a small script for running chipperc with the above
+   options. The path options tells chipperc where to find the system
+   source files.
+
+3. Now to compile an example, type:
+
+   ./chipper -i tests/gcd.stanza -o gcd
+
+   This compiles the chipper design gcd.stanza with the extended
+   compiler and produces the binary gcd.
+
+4. Run the design by typing:
+
+   ./gcd
+
+
+
+============================================================
+================== Provided Examples =======================
+============================================================
+
+adder.stanza
+
+   An implementation of an n-bit Adder. Demonstrates defining modules,
+   and instances, wires, as well as generating hardware using a for
+   loop.
+
+alu.stanza
+
+   An implementation of a simple ALU that performs addition and
+   subtraction between two operands.
+
+basicalu.stanza
+
+   An implementation of a more involved ALU that performs, addition
+   and some comparison operations.
+
+gcd.stanza
+
+   An implementation of a GCD circuit.
+
+dualgcd.stanza
+
+   An alternate implementation of the same GCD circuit above. It
+   demonstrates using a user-defined parametric bundle type.
+
+byteselector.stanza
+
+   An implementation of a byte selector circuit. Demonstrates
+   retrieving a subset of bits from a UInt.
+
+life.stanza
+
+   An implementation of Conway's Game of Life. 
+
+
+
+============================================================
+==================== Using Chipper =========================
+============================================================
+
+=== Defining a Module ===
+
+The following defines a module that adds two numbers together. There
+are two inputs, called a and b, each declared to be unsigned integers,
+and a single output, called z, declared to be an 4-bit unsigned
+integers. Each port in the module is defined with the keywords input,
+or output. After the port listing comes the body of the module where
+all the connections are made. The MyAdder module's body has a single
+statement that connects the output z to the result of adding a to b.
+
+   defmodule MyAdder :
+      input a: UInt<4>
+      input b: UInt<4>
+      output z: UInt<4>
+      z := a + b
+
+=== Parameterized Modules === 
+
+To parameterize a module, we can follow the module name with a list of
+arguments. The following example shows how to parameterize the width
+of the inputs and outputs of the MyAdder module.
+
+   defmodule MyAdder (w:Int) :
+      input a: UInt<w>
+      input b: UInt<w>
+      output z: UInt<w>
+      z := a + b
+
+=== Type-Parameterized Modules ===
+
+To parameterize a module by type, we can declare the type parameters
+following the module name surrounded with angle brackets. The
+following example shows a one-cycle delay module parameterized by
+type.
+
+   defmodule MyDelay<T> :
+      input a: T
+      output z: T
+
+      reg r: T
+      r := a
+      z := r
+
+=== Instantiating a Module ===
+
+To create an instance of a module we use the following syntax:
+
+   e.g. inst i of MyAdder(10)
+   e.g. inst i of MyDelay<UInt<4>>
+
+Notice that argument parameters and type parameters are specified
+differently. As a further example, the following module delays the
+inputs by a cycle before adding the result.
+
+   defmodule DelayedAdder (w:Int) :
+      input a: UInt<w>
+      input b: UInt<w>
+      output z: UInt<w>
+      
+      inst da of MyDelay<UInt<w>>
+      inst db of MyDelay<UInt<w>>
+      da.a := a
+      db.a := b
+
+      z := da.z + db.z
+
+
+=== Creating a Circuit ===
+
+At the top-most level, we create a circuit using the following syntax:
+
+   circuit c of MyAdder(10)
+
+This will create a circuit with the top-level module declared to be
+MyAdder. The value "c" will now contain the FIRRTL datastructure
+corresponding to the MyAdder circuit.
+
+=== Chipper Types ===
+
+Types in chipper are used in the declaration of ports, instances,
+registers, and wires. Chipper provides a small number of built-in
+types, and supports user-defined bundle types.
+
+This is an unsigned integer type:
+
+   UInt
+
+This is an unsigned integer type with a given bitwidth:
+
+   UInt<4>
+
+This type represents a vector of 10 unsigned integers.
+
+   UInt[10]
+
+This type represents a vector of 10 unsigned integers, each of
+bitwidth 4.
+
+   UInt<4>[10]
+
+This represents a type parameter, which must be declared in the type
+parameter list of a module or a bundle.
+
+   T
+
+This represents a user defined bundle type.
+
+   MyBundle
+
+This represents a user defined bundle type with the given argument
+parameters.
+
+   MyBundle(10)
+
+This represents a user defined bundle type with given type and
+argument parameters.
+
+   MyBundle<UInt>(10)
+
+=== Defining Your Own Bundle Types ===
+
+Users may define their own bundle types using the following syntax:
+
+   defbundle Cplx :
+      real: UInt
+      imag: UInt
+
+The above is an example of a bundle type called Cplx with two fields,
+real and imag, that are both declared to be unsigned integers of
+unknown bit-width.
+
+=== Parameterized Bundle Types ===
+
+User-defined bundle type can be parameterized in the same way as
+modules, with both argument parameters and type parameters. The
+following code shows how to define a parameterized Decoupled Type.
+
+   defbundle Decoupled<T> :
+      data: T
+      valid: UInt<1>
+      flip ready: UInt<1>
+
+Notice the keyword flip in the declaration of the ready field. This
+tells Chipper that the ready field allows connects in the opposite
+direction of the data and valid fields.
+
+=== User Defined Functions on Bundle Types ===
+
+Users may define their own functions on bundle types by creating a
+standard Stanza function. The following Stanza function defines a plus
+function that allows adding two Cplx values.
+
+   defn plus (a:Cplx, b:Cplx) -> Cplx :
+      wire z: Cplx
+      z.real := a.real + b.real
+      z.imag := a.imag + b.imag
+      z
+
+=== Example of Using Cplx ===
+
+Using the above two definitions of the Cplx bundle type and the plus
+function, we may write an adder module that is able to add two complex
+numbers together.   
+
+   defmodule CplxAdder :
+      input a: Cplx
+      input b: Cplx
+      output z: Cplx
+      z := plus(a, b)
+
+In Stanza however, the syntax "a + b" is equivalent to a call to the
+plus function "plus(a, b)". So the above module can be written more
+legibly like this:
+
+   defmodule CplxAdder :
+      input a: Cplx
+      input b: Cplx
+      output z: Cplx
+      z := a + b
+
+=== Defining Wires and Registers ===
+
+Wires and Registers are defined using the keywords wire, and reg,
+respectively.
+
+   wire w: UInt<1>
+   reg r: Cplx
+
+Users must provide a name and a Chipper type.
+
+=== Connect Operator ===
+
+The connect operator, :=, is used for connecting two circuit
+components.
+
+   x := y
+
+Note that the same operator is used both for connecting single wires
+as well as bundle and vector types. Here is an example of connecting
+two single wires:
+
+   wire x: UInt<1>
+   wire y: UInt<1>
+   x := y
+
+Here is an example of connecting two vector types.
+
+   wire x: UInt<1>[10]
+   wire y: UInt<1>[10]
+   x := y
+
+Here is an example of connecting two user-defined bundle types.
+
+   wire x: Cplx
+   wire y: Cplx
+   x := y
+
+Notice that the actual connect statement is the same for all three
+examples. The only difference is the type declaration of the wires.
+
+=== Unsigned Integer Literals ===
+
+Literals representing unsigned integers are specified like so. The
+following creates an unsigned integer with value 42, with its bitwidth
+left unspecified.
+
+   UInt(42)
+
+To explicitly give the literal a bitwidth, we may put it in angle
+brackets.
+
+   UInt<16>(42)
+
+=== When Statement ===
+
+The when statement is used to conditionally connect components. The
+following code connects x to 0 when enable is asserted otherwise
+connects x to 10.
+
+   wire x: UInt
+   when enable :
+      x := UInt(0)
+   else :
+      x := UInt(10)
+
+The else branch may be left off if there are no statements.
+
+   wire x: UInt
+   when enable :
+      x := UInt(0)
+
+=== Nested When Statements ===
+
+If the else branch in a when statement is another single when
+statement, Chipper allows the colon after the else to be elided for
+convenience.
+
+Thus the following code:
+
+   when e :
+      x := a
+   else :
+      when f :
+         x := b
+
+is equivalent to:
+
+   when e :
+      x := a
+   else when f :
+      x := b
+
+=== Accessing Bits and BitRanges within an Integer ===
+
+To extract a bit or a bitrange in an unsigned integer, we may use the
+following syntax:
+
+   wire w: UInt<16>
+   x := w[0]
+
+The above example connects x to the least significant bit in w. To
+extract a bitrange, we give two arguments.
+
+   wire w: UInt<16>
+   x := w[3, 0]
+
+As is tradition in hardware, the higher bit is specified first, and
+the lower bit specified second. The above example connects x to bits 3
+(inclusive) through 0 (inclusive) in the wire w.
+
+=== Accessing Elements within a Vector ===
+
+To access a single component within a vector, we may use the following
+syntax:
+
+   wire w: UInt<16>[10]
+   x := w[4]
+
+The above code connects x to the fifth component in w. 
+
+If we index into a vector type with an expression instead of an
+integer then an accessor is created to dynamically lookup the value at
+runtime.
+
+   input i: UInt
+   wire w: UInt<16>[10]
+   x := w[i]
+
+

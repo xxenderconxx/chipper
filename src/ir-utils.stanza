@@ -1,0 +1,240 @@
+defpackage firrtl/ir-utils :
+   import core
+   import verse
+   import firrtl/ir
+
+;============== PRINTERS ===================================
+
+defmethod print (o:OutputStream, d:Flip) :
+   print{o, _} $
+   switch {d == _} :
+      DEFAULT : ""
+      REVERSE: "flip"
+
+defmethod print (o:OutputStream, d:Direction) :
+   print{o, _} $
+   switch {d == _} :
+      INPUT : "input"
+      OUTPUT: "output"
+
+defmethod print (o:OutputStream, w:Width) :
+   print{o, _} $
+   match(w) :
+      (w:UnknownWidth) : "?"
+      (w:IntWidth) : width(w)
+
+defmethod print (o:OutputStream, op:PrimOp) :
+   print{o, _} $
+   switch {op == _} :
+      ADD-OP : "add"
+      ADD-UU-OP : "add-uu"
+      ADD-US-OP : "add-us"
+      ADD-SU-OP : "add-su"
+      ADD-SS-OP : "add-ss"
+      SUB-OP : "sub"
+      SUB-UU-OP : "sub-uu"
+      SUB-US-OP : "sub-us"
+      SUB-SU-OP : "sub-su"
+      SUB-SS-OP : "sub-ss"
+      MUL-OP : "mul"
+      MUL-UU-OP : "mul-uu"
+      MUL-US-OP : "mul-us"
+      MUL-SU-OP : "mul-su"
+      MUL-SS-OP : "mul-ss"
+      DIV-OP : "div"
+      DIV-UU-OP : "div-uu"
+      DIV-US-OP : "div-us"
+      DIV-SU-OP : "div-su"
+      DIV-SS-OP : "div-ss"
+      MOD-OP : "mod"
+      MOD-UU-OP : "mod-uu"
+      MOD-US-OP : "mod-us"
+      MOD-SU-OP : "mod-su"
+      MOD-SS-OP : "mod-ss"
+      QUO-OP : "quo"
+      QUO-UU-OP : "quo-uu"
+      QUO-US-OP : "quo-us"
+      QUO-SU-OP : "quo-su"
+      QUO-SS-OP : "quo-ss"
+      REM-OP : "rem"
+      REM-UU-OP : "rem-uu"
+      REM-US-OP : "rem-us"
+      REM-SU-OP : "rem-su"
+      REM-SS-OP : "rem-ss"
+      ADD-WRAP-OP : "add-wrap"
+      ADD-WRAP-UU-OP : "add-wrap-uu"
+      ADD-WRAP-US-OP : "add-wrap-us"
+      ADD-WRAP-SU-OP : "add-wrap-su"
+      ADD-WRAP-SS-OP : "add-wrap-ss"
+      SUB-WRAP-OP : "sub-wrap"
+      SUB-WRAP-UU-OP : "sub-wrap-uu"
+      SUB-WRAP-US-OP : "sub-wrap-us"
+      SUB-WRAP-SU-OP : "sub-wrap-su"
+      SUB-WRAP-SS-OP : "sub-wrap-ss"
+      LESS-OP : "lt"
+      LESS-UU-OP : "lt-uu"
+      LESS-US-OP : "lt-us"
+      LESS-SU-OP : "lt-su"
+      LESS-SS-OP : "lt-ss"
+      LESS-EQ-OP : "leq"
+      LESS-EQ-UU-OP : "leq-uu"
+      LESS-EQ-US-OP : "leq-us"
+      LESS-EQ-SU-OP : "leq-su"
+      LESS-EQ-SS-OP : "leq-ss"
+      GREATER-OP : "gt"
+      GREATER-UU-OP : "gt-uu"
+      GREATER-US-OP : "gt-us"
+      GREATER-SU-OP : "gt-su"
+      GREATER-SS-OP : "gt-ss"
+      GREATER-EQ-OP : "geq"
+      GREATER-EQ-UU-OP : "geq-uu"
+      GREATER-EQ-US-OP : "geq-us"
+      GREATER-EQ-SU-OP : "geq-su"
+      GREATER-EQ-SS-OP : "geq-ss"
+      EQUAL-OP : "equal"
+      EQUAL-UU-OP : "equal-uu"
+      EQUAL-SS-OP : "equal-ss"
+      MUX-OP : "mux"
+      MUX-UU-OP : "mux-uu"
+      MUX-SS-OP : "mux-ss"
+      PAD-OP : "pad"
+      PAD-U-OP : "pad-u"
+      PAD-S-OP : "pad-s"
+      AS-UINT-OP : "as-UInt"
+      AS-UINT-U-OP : "as-UInt-u"
+      AS-UINT-S-OP : "as-UInt-s"
+      AS-SINT-OP : "as-SInt"
+      AS-SINT-U-OP : "as-SInt-u"
+      AS-SINT-S-OP : "as-SInt-s"
+      SHIFT-LEFT-OP : "shl"
+      SHIFT-LEFT-U-OP : "shl-u"
+      SHIFT-LEFT-S-OP : "shl-s"
+      SHIFT-RIGHT-OP : "shr"
+      SHIFT-RIGHT-U-OP : "shr-u"
+      SHIFT-RIGHT-S-OP : "shr-s"
+      CONVERT-OP : "convert"
+      CONVERT-U-OP : "convert-u"
+      CONVERT-S-OP : "convert-s"
+      BIT-AND-OP : "bit-and"
+      BIT-OR-OP : "bit-or"
+      BIT-XOR-OP : "bit-xor"
+      CONCAT-OP : "concat"
+      BIT-SELECT-OP : "bit"
+      BITS-SELECT-OP : "bits"
+   
+defmethod print (o:OutputStream, e:Expression) :
+   print{o, _} $
+   match(e) :
+      (e:Ref) : name(e)
+      (e:Subfield) : "~.~" << [exp(e), name(e)]
+      (e:Index) : "~[~]" << [exp(e), value(e)]
+      (e:UIntValue) : "UInt<~>(~)" << [width(e), value(e)]
+      (e:SIntValue) : "SInt<~>(~)" << [width(e), value(e)]
+      (e:DoPrim) : "~(~@)" << [op(e), join(concat(args(e), consts(e)), ", ")]
+      (e:ReadPort) : "ReadPort(~, ~, ~)" << [mem(e), index(e), enable(e)]
+      (e:WritePort) : "WritePort(~, ~, ~)" << [mem(e), index(e), enable(e)]
+      (e:Register) : "Register(~, ~)" << [value(e), enable(e)]
+
+defmethod print (o:OutputStream, c:Stmt) :
+   val io = IndentedStream(o, 3)
+   match(c) :
+      (c:DefWire) :
+         print(o, "wire ~ : ~" << [name(c), type(c)])
+      (c:DefRegister) :
+         print(o, "reg ~ : ~" << [name(c), type(c)])
+      (c:DefMemory) :
+         print(o, "mem ~ : ~" << [name(c), type(c)])
+      (c:DefInstance) :
+         print(o, "inst ~ of ~" << [name(c), module(c)])
+      (c:DefNode) :
+         print(o, "node ~ = ~" << [name(c), value(c)])
+      (c:DefAccessor) :
+         print(o, "accessor ~ = ~[~]" << [name(c), source(c), index(c)])
+      (c:Conditionally) :
+         println(o, "when ~ :" << [pred(c)])
+         print(io,conseq(c))
+         if alt(c) not-typeof EmptyStmt :
+            print(o, "\nelse :")
+            print(io, "\n~" << [alt(c)])
+      (c:Begin) :
+         print-all(o, join(body(c), "\n"))
+      (c:Connect) :
+         print(o, "~ := ~" << [loc(c), exp(c)])
+      (c:EmptyStmt) :
+         print(o, "skip")
+
+defmethod print (o:OutputStream, t:Type) :
+   print{o, _} $
+   match(t) :
+      (t:UnknownType) : "?"
+      (t:UIntType) : "UInt<~>" << [width(t)]
+      (t:SIntType) : "SInt<~>" << [width(t)]
+      (t:BundleType) : "{~@}" << [join(fields(t), ", ")]
+      (t:VectorType) : "~[~]" << [type(t), size(t)]
+
+defmethod print (o:OutputStream, f:Field) :
+   val fstr = "flip " when flip(f) == REVERSE else ""
+   print(o, "~~ : ~" << [fstr, name(f), type(f)])
+
+defmethod print (o:OutputStream, p:Port) :
+   print(o, "~ ~ : ~" << [direction(p), name(p), type(p)])
+
+defmethod print (o:OutputStream, m:Module) :
+   println(o, "module ~ :" << [name(m)])
+   val io = IndentedStream(o, 3)
+   do(println{io, _}, ports(m))
+   print(io, body(m))
+
+defmethod print (o:OutputStream, c:Circuit) :
+   println(o, "circuit ~ :" << [main(c)])
+   val io = IndentedStream(o, 3)
+   do(println{io, _}, modules(c))
+
+;=================== MAPPERS ===============================
+public defn map<?T> (f: Type -> Type, t:?T&Type) -> T :
+   val type = 
+      match(t) :
+         (t:T&BundleType) :
+            BundleType $
+            for p in fields(t) map :
+               Field(name(p), flip(p), f(type(p)))
+         (t:T&VectorType) :
+            VectorType(f(type(t)), size(t))
+         (t) :
+            t
+   type as T&Type
+
+public defmulti map<?T> (f: Expression -> Expression, e:?T&Expression) -> T 
+defmethod map (f:Expression -> Expression, e:Expression) -> Expression :
+   match(e) :
+      (e:Subfield) : Subfield(f(exp(e)), name(e), type(e)) 
+      (e:Index) : Index(f(exp(e)), value(e), type(e))
+      (e:DoPrim) : DoPrim(op(e), map(f, args(e)), consts(e), type(e))
+      (e:ReadPort) : ReadPort(f(mem(e)), f(index(e)), type(e), enable(e))
+      (e:WritePort) : WritePort(f(mem(e)), f(index(e)), type(e), enable(e))
+      (e:Register) : Register(type(e), f(value(e)), f(enable(e)))
+      (e) : e
+
+public defmulti map<?T> (f:Expression -> Expression, c:?T&Stmt) -> T
+defmethod map (f:Expression -> Expression, c:Stmt) -> Stmt :
+   match(c) :
+      (c:DefAccessor) : DefAccessor(name(c), f(source(c)), f(index(c)))
+      (c:DefNode) : DefNode(name(c), f(value(c)))
+      (c:DefInstance) : DefInstance(name(c), f(module(c)))
+      (c:Conditionally) : Conditionally(f(pred(c)), conseq(c), alt(c))
+      (c:Connect) : Connect(f(loc(c)), f(exp(c)))
+      (c) : c
+
+public defmulti map<?T> (f: Stmt -> Stmt, c:?T&Stmt) -> T
+defmethod map (f: Stmt -> Stmt, c:Stmt) -> Stmt :
+   match(c) :
+      (c:Conditionally) : Conditionally(pred(c), f(conseq(c)), f(alt(c)))
+      (c:Begin) : Begin(map(f, body(c)))
+      (c) : c
+
+public defmulti children (c:Stmt) -> List<Stmt>
+defmethod children (c:Stmt) :
+   match(c) :
+      (c:Conditionally) : list(conseq(c), alt(c))
+      (c:Begin) : body(c)
+      (c) : List()

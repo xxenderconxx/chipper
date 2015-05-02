@@ -1,0 +1,30 @@
+#include("src/firrtl-ir.stanza")
+#include("src/ir-utils.stanza")
+#include("src/chipper.stanza")
+
+#use-syntax(core, chipper)
+
+defpackage byteselector :
+   import core
+   import verse
+   import chipper
+
+defmodule ByteSelector :
+   input in: UInt<32>
+   input offset: UInt<2>
+   output out: UInt<8>
+
+   when offset === UInt(0) :
+      out := in[7,0]
+   else when offset === UInt(1) :
+      out := in[15, 8]
+   else when offset === UInt(2) :
+      out := in[23,16]
+   else :
+      out := in[31,24]
+   
+defn main () :
+   circuit c of ByteSelector
+   println(c)
+
+main()

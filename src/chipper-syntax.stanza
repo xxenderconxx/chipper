@@ -1,0 +1,444 @@
+#if-defined(STANDALONE-CHIPPER) :
+   #include<"core/stringeater.stanza">
+   #include<"core/macro-utils.stanza">
+   #include<"compiler/stz-params.stanza">
+   #include<"compiler/stz-algorithms.stanza">
+   #include<"compiler/stz-lexer.stanza">
+   #include<"compiler/stz-parser.stanza">
+   #include<"compiler/stz-core-macros.stanza">
+
+defpackage chipper/syntax :
+   import core
+   import verse
+   import core/macro-utils
+   import stz/lexer
+
+;=============== CHIPPER PARSE STRUCTURES ==================
+definterface Type
+defstruct UIntT <: Type
+defstruct UIntWT <: Type : (width)
+defstruct SIntT <: Type
+defstruct SIntWT <: Type : (width)
+defstruct VecT <: Type : (type:Type, length)
+defstruct NamedT <: Type : (name, targs:List<Type>, args:List)
+defstruct ParamT <: Type : (name)
+
+defstruct Field : (flip:True|False, name, type:Type)
+defstruct DefBundle : (name, targs:List, arglist:List, fields:List<Field>)
+defstruct Port : (input?:True|False, name, type:Type)
+defstruct DefModule : (name, targs:List, arglist:List, ports:List<Port>, body:List)
+defstruct RegisterStmt : (name, type:Type)
+defstruct WireStmt : (name, type:Type)
+defstruct InstanceStmt : (name, module:Type)
+defstruct CircuitStmt : (name, module:Type)
+defstruct WhenStmt : (pred, conseq, alt)
+defstruct ConnectStmt : (x, y)
+;============================================================
+
+;============ DEBUG: PRINTING ===============================
+defn commas (xs) : join(xs, ", ")
+defmethod print (o:OutputStream, t:Type) :
+   print{o, _} $ match(t) :
+      (t:UIntT) : "UInt"
+      (t:UIntWT) : "UInt<~>" << [width(t)]
+      (t:SIntT) : "SInt"
+      (t:SIntWT) : "SInt<~>" << [width(t)]
+      (t:VecT) : "~[~]" << [type(t), length(t)]
+      (t:NamedT) : "~<~@>(~@)" << [name(t), commas(targs(t)), commas(args(t))]
+      (t:ParamT) : name(t)
+
+defmethod print (o:OutputStream, f:Field) :
+   print(o, "~~ : ~" << [
+      "flip " when flip(f) else ""
+      name(f)
+      type(f)])
+
+defmethod print (o:OutputStream, b:DefBundle) :
+   print(o, "defbundle ~<~@> ~ :" << [name(b), commas(targs(b)), arglist(b)])
+   for f in fields(b) do : print(o, "\n   ~" << [f])
+
+defmethod print (o:OutputStream, p:Port) :
+   print(o, "~ ~ : ~" << [
+      "input" when input?(p) else "output"
+      name(p)
+      type(p)])
+
+defmethod print (o:OutputStream, m:DefModule) :
+   print(o, "defmodule ~<~@> ~ :" << [name(m), targs(m), arglist(m)])
+   for p in ports(m) do : print(o, "\n   ~" << [p])
+   print(o, "\n   ~@" << [join(body(m), " ")])
+
+defmethod print (o:OutputStream, s:RegisterStmt) :
+   print(o, "reg ~ : ~" << [name(s), type(s)])
+
+defmethod print (o:OutputStream, s:WireStmt) :
+   print(o, "wire ~ : ~" << [name(s), type(s)])
+
+defmethod print (o:OutputStream, s:InstanceStmt) :
+   print(o, "inst ~ of ~" << [name(s), module(s)])
+
+defmethod print (o:OutputStream, s:CircuitStmt) :
+   print(o, "circuit ~ of ~" << [name(s), module(s)])
+
+defmethod print (o:OutputStream, s:WhenStmt) :
+   val io = IndentedStream(o, 3)
+   print(o, "when ~ :" << [pred(s)])
+   print(io, "\n~" << [conseq(s)])
+   print(o, "\nelse :")
+   print(io, "\n~" << [alt(s)])
+
+defmethod print (o:OutputStream, s:ConnectStmt) :
+   print(o, "~ := ~" << [x(s), y(s)])
+;============================================================
+
+;================= CHIPPER PARSER ===========================
+defn* apply-suffix-ops (t, fs:List) :
+   if empty?(fs) : t
+   else : apply-suffix-ops(head(fs)(t), tail(fs))
+
+defsyntax chipper :
+   ;Holds the current type parameters in scope
+   var TYPE-PARAMETERS:List<Symbol> = List()
+   defn add-params (ts) :
+      append(stream(unwrap-token, ts), TYPE-PARAMETERS)
+   defn tparam? (x) :
+      contains?(TYPE-PARAMETERS, unwrap-token(x))
+
+   ;Chipper Types
+   defrule :
+      symbol = (?x) when unwrap-token(x) typeof Symbol : x
+      ch/ts = ((@of ?ts:#ch/type ...)) : ts
+      ch/ts = () : List()
+      ch/es = ((@do ?es:#exp ...)) : es
+      ch/es = () : List()
+
+      ch/type = (?t:#ch/term ?ops:#ch/op ...) : apply-suffix-ops(t, ops)
+      ch/op = ((@get ?n:#exp)) : (fn (t) : VecT(t, n))
+      ch/term = (?x) when tparam?(x) : ParamT(x)
+      ch/term = (UInt<?e:#exp>) : UIntWT(e)
+      ch/term = (UInt) : UIntT()
+      ch/term = (SInt<?e:#exp>) : SIntWT(e)
+      ch/term = (SInt) : SIntT()
+      ch/term = (?x:#symbol ?ts:#ch/ts ?es:#ch/es) : NamedT(x, ts, es)
+
+   ;Helper Rules
+   defrule :
+      ch/targs = ((@of ?ts:#id! ...)) : ts
+      ch/targs = () : List()
+      ch/arglist = ((?arglist ...)) : arglist
+      ch/arglist = () : List()
+
+   ;Bundle Definition
+   defrule :
+      ch/field = (flip ?name:#id! : ?t:#ch/type) : Field(true, name, t)
+      ch/field = (?name:#id! : ?t:#ch/type) : Field(false, name, t)
+      prefix-op = (defbundle ?name:#id! ?ts:#ch/targs ?arglist:#ch/arglist :
+                      ?body ...) :
+         let-var TYPE-PARAMETERS = add-params(ts) :              
+            match-syntax(body) :
+               (?fs:#ch/field ...) :
+                  compile(DefBundle(name, ts, arglist, fs))
+
+   ;Module Definition
+   defrule :
+      ch/port = (input ?name:#id! : ?t:#ch/type) : Port(true, name, t)
+      ch/port = (output ?name:#id! : ?t:#ch/type) : Port(false, name, t)
+      prefix-op = (defmodule ?name:#id! ?ts:#ch/targs ?arglist:#ch/arglist :
+                      ?body ...) :
+         let-var TYPE-PARAMETERS = add-params(ts) :
+            match-syntax(body) :
+               (?ports:#ch/port ... ?stmts:#exps!) :
+                  compile(DefModule(name, ts, arglist, ports, stmts))
+
+   ;Register statement
+   defrule :
+      prefix-op = (reg ?name:#id! : ?type:#ch/type) :
+         compile(RegisterStmt(name, type))
+
+   ;Wire statement
+   defrule :
+      prefix-op = (wire ?name:#id! : ?type:#ch/type) :
+         compile(WireStmt(name, type))
+
+   ;Instance Statement
+   defrule :
+      prefix-op = (inst ?name:#id! of ?module:#ch/type) :
+         compile(InstanceStmt(name, module))
+
+   ;Circuit Statement
+   defrule :
+      prefix-op = (circuit ?name:#id! of ?module:#ch/type) :
+         compile(CircuitStmt(name, module))
+
+   ;When Statement
+   defrule when :
+      when-exp = (when ?pred:#exp! #:! ?conseq:#exp! else : ?alt:#exp!) :
+         compile(WhenStmt(pred, conseq, alt))
+      when-exp = (when ?pred:#exp! #:! ?conseq:#exp! else ?alt:#when-exp) :
+         compile(WhenStmt(pred, conseq, alt))
+      when-exp = (when ?pred:#exp! #:! ?conseq:#exp!) :
+         compile(WhenStmt(pred, conseq, false))
+      prefix-op = (?e:#when-exp) :
+         e         
+
+   ;Connect Statement
+   defrule :
+      suffix-op = (:= ?y:#exp!) :
+         fn (x) :
+            compile(ConnectStmt(x, y))
+
+   ;Bit Comparison Operator
+   defrule :
+      suffix-op = (=== ?y:#exp!) :
+         fn (x) :
+            expande $ qquote(bit-equal?(~ x, ~ y))
+
+   ;Dot Syntax for Field Access
+   defrule :
+      suffix-op = (. ?y:#id!) :
+         fn (x) :
+            val yname = to-symbol("~#field" << [y])
+            qquote($do ~ yname ~ x)
+
+   ;Literal Syntax
+   defrule :
+      prefix-op = (UInt(?v:#exp$)) :
+         expande $ qquote(chipper/UIntLiteral(~ v))
+      prefix-op = (UInt<?w:#exp$>(?v:#exp$)) :
+         expande $ qquote(chipper/UIntLiteral(~ v, ~ w))
+            
+;============================================================
+
+;================= CONTINUING EXPANSION =====================
+defn expande (form) :
+   with-syntax(core) :
+      match-syntax(form) :
+         (?e:#exp) : e
+;============================================================
+
+;================= TYPE COMPILATION =========================
+defn compile-to-type (t:Type) :
+   match(t) :
+      (t:UIntT) :
+         qquote(chipper/UIntType())
+      (t:UIntWT) :
+         qquote(chipper/UIntType(~ (width(t))))
+      (t:SIntT) :
+         qquote(chipper/SIntType())
+      (t:SIntWT) :
+         qquote(chipper/SIntType(~ (width(t))))
+      (t:VecT) :
+         fill-template(`(chipper/VecType(t, len)), [
+            `t => compile-to-type(type(t))
+            `len => length(t)])
+      (t:NamedT) :
+         fill-template(`(name(ts, args)), [
+            `name => to-symbol("~Type" << [name(t)])
+            `ts => splice(map(compile-to-type, targs(t)))
+            `args => splice(args(t))])
+      (t:ParamT) :
+         name(t)
+
+defn compile-to-module (t:Type) :
+   error("Not a module: ~" % [t]) when t not-typeof NamedT
+   val t* = t as NamedT
+   fill-template(`(name(ts, args)), [
+      `name => to-symbol("~Module" << [name(t*)])
+      `ts => splice(map(compile-to-type, targs(t*)))
+      `args => splice(args(t*))])
+
+defn compile-to-handle-type (t:Type) :
+   match(t) :
+      (t:UIntT|UIntWT) :
+         qquote(chipper/UInt)
+      (t:SIntT|SIntWT) :
+         qquote(chipper/SInt)
+      (t:VecT) :
+         fill-template(`(chipper/Vec<T>), [
+            `T => compile-to-handle-type(type(t))])
+      (t:NamedT) :
+         fill-template(`(name<Ts>), [
+            `name => name(t)
+            `Ts => splice(map(compile-to-handle-type, targs(t)))])
+      (t:ParamT) :
+         name(t)
+
+defn compile-handle-class (name, targs, arglist:List, fields:List<KeyValue<?,Type>>) :
+   val template = `((
+      defclass A<targs{T}> <: chipper/CHExp
+      fields{
+         defmulti fname<targs{T?}> (a:A<targs{T?}>) -> fht
+      }
+      defn A (fields{ft:chipper/CHType}, e:firrtl/ir/Expression) :
+         new A :
+            defmethod chipper/firrtl-exp (this) :
+               e
+            fields{
+               defmethod fname (this) :
+                  chipper/handle(ft, firrtl/ir/Subfield(e, `f, firrtl/ir/UnknownType())) as ?
+            }))
+   fill-template(template, [
+      `A => name
+      `a => gensym(`a)
+      `e => gensym(`e)
+      `targs => nested $ for v in targs stream :
+         [`T => v
+          `T? => list(`@cap, v)]
+      `fields => nested $ for f in fields stream :
+         [`f => key(f)
+          `fname => to-symbol("~#field" << [key(f)])
+          `ft => gensym(`T)
+          `fht => compile-to-handle-type(value(f))]])
+
+defn compile-handle-class (hname, targs, arglist:List, fields:List<Field>) :
+   val fs = for f in fields map : name(f) => type(f)
+   compile-handle-class(hname, targs, arglist, fs)
+
+defn compile-handle-class (hname, targs, arglist:List, ports:List<Port>) :
+   val ps = for p in ports map : name(p) => type(p)
+   compile-handle-class(hname, targs, arglist, ps)
+;============================================================
+
+;================= BUNDLE COMPILATION =======================
+defn compile-type-class (b:DefBundle) :
+   val template = `((
+      defclass AType <: chipper/CHType
+      defn AType (targs{T:chipper/CHType}, args) :
+         fields{val ft = type-exp}
+         new AType :
+            defmethod chipper/handle (this, e:firrtl/ir/Expression) :
+               A(fields{ft}, e)
+            defmethod chipper/firrtl-type (this) :
+               firrtl/ir/BundleType $ to-list $ [
+                  fields{
+                     firrtl/ir/Field(`f,
+                        flip{firrtl/ir/REVERSE}{firrtl/ir/DEFAULT},
+                        chipper/firrtl-type(ft))
+                  }]))
+   fill-template(template, [
+      `AType => to-symbol("~Type" << [name(b)])
+      `A => name(b)
+      `e => gensym(`e)
+      `fields => nested $ for f in fields(b) stream :
+         [`f => name(f)
+          `ft => gensym(`T)
+          `flip => choice(flip(f))
+          `type-exp => compile-to-type(type(f))]
+      `targs => collect $ [
+         `T => targs(b)]
+      `args => splice(arglist(b))])
+
+defn compile (b:DefBundle) :
+   expande $ list(list(
+      compile-handle-class(name(b), targs(b), arglist(b), fields(b))
+      compile-type-class(b)))
+;============================================================
+
+;================ DEFMODULE COMPILATION =====================
+defn compile-module-class (m:DefModule) :
+   val template = `((
+      defclass AModule <: chipper/CHModule
+      defn AModule (targs{T:chipper/CHType}, args) :         
+         fields{val ft = type-exp}
+         new AModule :
+            defmethod chipper/handle (this, e:firrtl/ir/Expression) :
+               A(fields{ft}, e)
+            defmethod chipper/firrtl-module (this) :
+               chipper/ModuleExp(`A,
+                  to-list([
+                     fields{
+                        firrtl/ir/Port(`f,
+                           dir{firrtl/ir/INPUT}{firrtl/ir/OUTPUT},
+                           chipper/firrtl-type(ft))}]),
+                  fn () :
+                     fields{val f = chipper/handle(ft, firrtl/ir/Ref(`f, firrtl/ir/UnknownType())) as fht}
+                     body)))
+   fill-template(template, [
+      `A => name(m)
+      `AModule => to-symbol("~Module" << [name(m)])
+      `targs => collect $ [`T => targs(m)]
+      `args => splice(arglist(m))
+      `fields => nested $ for p in ports(m) stream :
+         [`f => name(p)
+          `ft => gensym(`T)
+          `fht => compile-to-handle-type(type(p))
+          `type-exp => compile-to-type(type(p))
+          `dir => choice(input?(p))]
+      `body => body(m)])
+
+defn compile (m:DefModule) :
+   expande $ list(list(
+      compile-handle-class(name(m), targs(m), arglist(m), ports(m))
+      compile-module-class(m)))
+;============================================================
+
+;================= REGISTER COMPILATION =====================
+defn compile (s:RegisterStmt) :
+   val template = `(
+      val name = chipper/RegisterExp(`name, type) as ht)
+   expande $ fill-template(template, [
+      `name => name(s)
+      `type => compile-to-type(type(s))
+      `ht => compile-to-handle-type(type(s))])
+;============================================================
+
+;================= WIRE COMPILATION =========================
+defn compile (s:WireStmt) :
+   val template = `(
+      val name = chipper/WireExp(`name, type) as ht)
+   expande $ fill-template(template, [
+      `name => name(s)
+      `type => compile-to-type(type(s))
+      `ht => compile-to-handle-type(type(s))])
+;============================================================
+
+;=================== INSTANCE COMPILATION ===================
+defn compile (s:InstanceStmt) :
+   val template = `(
+      val name = chipper/InstanceExp(`name, module) as ht)
+   expande $ fill-template(template, [
+      `name => name(s)
+      `module => compile-to-module(module(s))
+      `ht => compile-to-handle-type(module(s))])
+;============================================================
+
+;================== CIRCUIT COMPILATION =====================
+defn compile (s:CircuitStmt) :
+   val template = `(
+      val name = chipper/CircuitExp(module))
+   expande $ fill-template(template, [
+      `name => name(s)
+      `module => compile-to-module(module(s))])
+;============================================================
+
+;================ CONNECT COMPILATION =======================
+defn compile (s:ConnectStmt) :
+   val template = `(chipper/ConnectExp(x, y))
+   expande $ fill-template(template, [
+      `x => x(s)
+      `y => y(s)])
+;============================================================
+
+;================== WHEN COMPILATION ========================
+defn compile (s:WhenStmt) :
+   val template = `(chipper/WhenExp(pred,
+                       fn () : conseq
+                       alt?{fn () : alt}{}))
+   expande $ fill-template(template, [
+      `pred => pred(s)
+      `conseq => conseq(s)
+      `alt? => choice(alt(s) != false)
+      `alt => alt(s)])
+;============================================================
+
+
+;================== STANDALONE TESTING ======================
+#if-defined(STANDALONE-CHIPPER) :
+   defn main () :
+      val lexed = lex-file(commandline-arguments()[1])
+      with-syntax(core, chipper) :
+         match-syntax(lexed) :
+            (?bs:#exp ...) :
+               do(println, bs)
+   main()
+;============================================================

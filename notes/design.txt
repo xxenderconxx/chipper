@@ -1,0 +1,79 @@
+=== WITHOUT MACROS ===
+
+Thunks for building statements.
+
+defn AdderModule (T:CHType, a:Int, b:Int) :
+   val a = PortDef(true, `a, T)
+   val b = PortDef(false, `b, UInt(T, a + b))
+   build-module(`Adder,
+      to-list([
+         T
+         UInt(T, a + b)])
+      fn () :
+         body)
+      
+
+=== DRIVING EXAMPLE ===
+use-syntax(core, chipper)
+
+defpackage gcd :
+   import core
+   import verse
+
+defbundle Dual<T> :
+   a: T
+   b: T
+
+defmodule GCD (w:Width) :
+   input in: Dual<UInt<w>>
+   input e: UInt<1>
+   output z: UInt
+   output v: UInt
+
+   reg x: UInt<w>
+   reg y: UInt<w>
+   when y <= x :
+      x := x - y
+   else :
+      y := y - x
+      
+   when e :
+      x := in.a
+      y := in.b
+
+   z := x
+   v := bit-equal?(y, UInt(0))
+
+defn main () :
+   circuit c of GCD<T>(w)
+   println(c)
+
+=== STACK EXAMPLE ===
+
+defmodule Stack (depth:Int) :
+   input push: UInt<1>
+   input pop: UInt<1>
+   input en: UInt<1>
+   input data-in: UInt<32>
+   output data-out: UInt<32>
+
+   mem stack-mem : UInt<32>[depth]
+   reg sp : UInt<log2Up(depth + 1)>
+   reg reg-out : UInt<32>
+   onreset :
+      sp := UInt(0)
+      reg-out := UInt(0)
+   
+   when en :
+      when push && sp < UInt(depth) :
+         stack-mem[sp] := data-in
+         sp := sp + UInt(1)
+      else when pop && sp > UInt(0) :
+         sp := sp - UInt(1)
+
+      when sp > UInt(0) :
+         reg-out := stack-mem[sp - UInt(1)]
+
+   data-out := reg-out
+
+

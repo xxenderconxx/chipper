@@ -1,0 +1,5 @@
+
+#!/bin/bash
+stanzac="/Users/jrb/bar/chipper/chipperc"
+estanzac="$(printf %q "$stanzac")  -path /Users/jrb/stanza-375 -platform os-x  $@"
+eval $estanzac

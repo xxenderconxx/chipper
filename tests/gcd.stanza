@@ -1,0 +1,34 @@
+#include("src/firrtl-ir.stanza")
+#include("src/ir-utils.stanza")
+#include("src/chipper.stanza")
+#use-syntax(core, chipper)
+
+defpackage gcd :
+   import core
+   import verse
+   import chipper
+
+defmodule GCD :
+   input a: UInt<16>
+   input b: UInt<16>
+   input e: UInt<1>
+   output z: UInt<16>
+   output v: UInt<1>
+
+   reg x: UInt
+   reg y: UInt
+   when x > y :
+      x := x - y
+   else :
+      y := y - x
+   when e :
+      x := a
+      y := b
+   z := x
+   v := y === UInt(0)
+
+defn main () :
+   circuit c of GCD
+   println(c)
+   
+main()

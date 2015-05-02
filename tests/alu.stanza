@@ -1,0 +1,31 @@
+#include("src/firrtl-ir.stanza")
+#include("src/ir-utils.stanza")
+#include("src/chipper.stanza")
+
+#use-syntax(core, chipper)
+
+defpackage alu :
+   import core
+   import verse
+   import chipper
+
+defmodule SimpleALU :
+   input a: UInt<4>
+   input b: UInt<4>
+   input opcode: UInt<2>
+   output output: UInt<4>
+
+   when opcode === UInt(0) :
+      output := a + b
+   else when opcode === UInt(0) :
+      output := a - b
+   else when opcode === UInt(0) :
+      output := a
+   else :
+      output := b      
+   
+defn main () :
+   circuit c of SimpleALU
+   println(c)
+
+main()
