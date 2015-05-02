@@ -1,1 +1,0 @@
-/Users/psli/Docs/Programming/stanza/trunk/make

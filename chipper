@@ -1,2 +1,0 @@
-#!/bin/sh
-/Users/psli/Docs/Programming/chipper/trunk/chipperc -path /Users/psli/Docs/Programming/stanza/trunk -platform os-x $@
