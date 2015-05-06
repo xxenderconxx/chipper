@@ -1,0 +1,37 @@
+#include("src/firrtl-ir.stanza")
+#include("src/ir-utils.stanza")
+#include("src/chipper.stanza")
+
+#use-syntax(core, chipper)
+
+defpackage stack :
+   import core
+   import verse
+   import chipper
+
+defmodule Stack (depth:Int) :
+  input push: UInt<1>
+  input pop: UInt<1>
+  input en: UInt<1>
+  input dataIn: UInt<32>
+  output dataOut: UInt<32>
+
+  mem stack_mem : UInt<32>[depth]
+  reg sp : UInt<sizeof(depth)> sp := UInt(0)
+  wire out : UInt<32> out := UInt(0)
+
+  when en :
+    when push & (sp < UInt(depth)) :
+      stack_mem[sp] := dataIn
+      sp := sp + UInt(1)
+    else when pop & (sp > UInt(0)) :
+      sp := sp - UInt(1)
+    when sp > UInt(0) :
+      out := stack_mem[sp - UInt(1)]
+  dataOut := out
+
+defn main () :
+   circuit c of Stack(16)
+   println(c)
+   
+main()

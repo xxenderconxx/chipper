@@ -4,6 +4,9 @@ defpackage chipper :
    import firrtl/ir with :
       prefix => f
 
+public defn sizeof (in: Int) -> Int :
+  max(1, ceil-log2(in + 1))
+
 ;Interface inherited by all handle classes
 public definterface CHExp
 public defmulti firrtl-exp (e:CHExp) -> fExpression
@@ -45,9 +48,17 @@ public defn RegisterExp (name:Symbol, type:CHType) :
    add(STATEMENT-VECTOR, fDefRegister(name*, firrtl-type(type)))
    handle(type, fRef(name*, fUnknownType()))
 
+public defn Reg<?T> (x:?T & CHExp) -> T :
+  RegisterExp(`reg, fUnknownType())
+
 public defn WireExp (name:Symbol, type:CHType) :
    val name* = gensym(name)
    add(STATEMENT-VECTOR, fDefWire(name*, firrtl-type(type)))
+   handle(type, fRef(name*, fUnknownType()))
+
+public defn MemExp (name:Symbol, type:CHType) :
+   val name* = gensym(name)
+   add(STATEMENT-VECTOR, fDefMemory(name*, firrtl-type(type) as fVectorType))
    handle(type, fRef(name*, fUnknownType()))
 
 public defn InstanceExp (name:Symbol, module:CHModule) :
@@ -111,6 +122,31 @@ public defn Vec (t:CHType, len:Int, e:fExpression) :
       defmethod length (this) :
          len
 
+public defn unaryop<?T> (fab:fExpression -> ?T op:fPrimOp, x:CHExp) -> T :
+   fab $ Node $ fDoPrim(op, list(ex), List(), fUnknownType()) where :
+      val ex = firrtl-exp(x)
+public defn binop<?T> (fab:fExpression -> ?T, op:fPrimOp, x:CHExp, y:CHExp) -> T :
+   fab $ Node $ fDoPrim(op, list(ex, ey), List(), fUnknownType()) where :
+      val ex = firrtl-exp(x)
+      val ey = firrtl-exp(y)   
+public defn cmpop (op:fPrimOp, x:CHExp, y:CHExp) -> Bool :
+   Bool $ Node $ fDoPrim(op, list(ex, ey), List(), fUnknownType()) where :
+      val ex = firrtl-exp(x)
+      val ey = firrtl-exp(y)   
+
+;Handle Class for Bits
+public definterface Bits <: CHExp
+public defn Bits (e:fExpression) :
+   UInt(e)
+
+public defn get (x:Bits, i:Int) -> UInt :
+   UInt $ Node $ fDoPrim(fBIT-SELECT-OP, list(ex), list(i), fUnknownType()) where :
+      val ex = firrtl-exp(x)
+      
+public defn get (x:Bits, i:Int, j:Int) -> UInt :
+   UInt $ Node $ fDoPrim(fBITS-SELECT-OP, list(ex), list(i, j), fUnknownType()) where :
+      val ex = firrtl-exp(x)
+
 ;Type Class for UInt
 public defclass UIntType <: CHType
 defn UIntType (w:fWidth) :
@@ -124,40 +160,137 @@ public defn UIntType () :
 
 ;Literal UInt Functions
 public defn UIntLiteral (v:Int) :
-   UInt(fUIntValue(v, fUnknownWidth()))
+;;   UInt(fUIntValue(v, fUnknownWidth()))
+   UInt(fUIntValue(v, fIntWidth(sizeof(v))))
 public defn UIntLiteral (v:Int, w:Int) :
    UInt(fUIntValue(v, fIntWidth(w)))
 
 ;Handle Class for UInt
-public defclass UInt <: CHExp
+public definterface UInt <: Bits
 public defn UInt (e:fExpression) :
    new UInt :
       defmethod firrtl-exp (this) : e
 
-public defn binop (op:fPrimOp, x:UInt, y:UInt) -> UInt :
-   UInt $ Node $ fDoPrim(op, list(ex, ey), List(), fUnknownType()) where :
-      val ex = firrtl-exp(x)
-      val ey = firrtl-exp(y)   
-public defn plus (x:UInt, y:UInt) : binop(fADD-OP, x, y)
-public defn minus (x:UInt, y:UInt) : binop(fSUB-OP, x, y)
-public defn times (x:UInt, y:UInt) : binop(fMUL-OP, x, y)
-public defn divide (x:UInt, y:UInt) : binop(fDIV-OP, x, y)
-public defn modulo (x:UInt, y:UInt) : binop(fMOD-OP, x, y)
-public defn bit-and (x:UInt, y:UInt) : binop(fBIT-AND-OP, x, y)
-public defn bit-or (x:UInt, y:UInt) : binop(fBIT-OR-OP, x, y)
-public defn bit-xor (x:UInt, y:UInt) : binop(fBIT-XOR-OP, x, y)
-public defn bit-equal? (x:UInt, y:UInt) : binop(fEQUAL-OP, x, y)
-public defn less-eq? (x:UInt, y:UInt) : binop(fLESS-EQ-OP, x, y)
-public defn less? (x:UInt, y:UInt) : binop(fLESS-OP, x, y)
-public defn greater-eq? (x:UInt, y:UInt) : binop(fGREATER-EQ-OP, x, y)
-public defn greater? (x:UInt, y:UInt) : binop(fGREATER-OP, x, y)
-public defn concat (x:UInt, y:UInt) : binop(fCONCAT-OP, x, y)
+public defn width (x: UInt) -> Int :
+  val uval = firrtl-exp(x) as fUIntValue
+  match(fwidth(uval)) :
+    (w:fIntWidth): fwidth(w)
+    (w): -1
 
-public defn get (x:UInt, i:Int) -> UInt :
-   UInt $ Node $ fDoPrim(fBIT-SELECT-OP, list(ex), list(i), fUnknownType()) where :
-      val ex = firrtl-exp(x)
-      
-public defn get (x:UInt, i:Int, j:Int) -> UInt :
-   UInt $ Node $ fDoPrim(fBITS-SELECT-OP, list(ex), list(i, j), fUnknownType()) where :
-      val ex = firrtl-exp(x)
+defn fab-uint (e:fExpression) -> UInt : UInt(e)
+
+public defn toUInt (x:UInt) -> UInt : x
+public defn toSInt (x:UInt) -> SInt:
+   val w = WireExp(`tmp, SIntType())
+   ConnectExp(w, x)
+   w as SInt
+public defn invert (x:UInt) : unaryop(fab-uint, fBIT-NOT-OP, x)
+public defn neg (x:UInt) : UIntLiteral(0) - x
+public defn plus (x:UInt, y:UInt) : binop(fab-uint, fADD-OP, x, y)
+public defn minus (x:UInt, y:UInt) : binop(fab-uint, fSUB-OP, x, y)
+public defn times (x:UInt, y:UInt) : binop(fab-uint, fMUL-OP, x, y)
+public defn divide (x:UInt, y:UInt) : binop(fab-uint, fDIV-OP, x, y)
+public defn modulo (x:UInt, y:UInt) : binop(fab-uint, fMOD-OP, x, y)
+public defn bit-and (x:UInt, y:UInt) : binop(fab-uint, fBIT-AND-OP, x, y)
+public defn bit-or (x:UInt, y:UInt) : binop(fab-uint, fBIT-OR-OP, x, y)
+public defn bit-xor (x:UInt, y:UInt) : binop(fab-uint, fBIT-XOR-OP, x, y)
+public defn concat (x:UInt, y:UInt) : binop(fab-uint, fCONCAT-OP, x, y)
+public defn bit-equal? (x:UInt, y:UInt) : cmpop(fEQUAL-OP, x, y)
+public defn less-eq? (x:UInt, y:UInt) : cmpop(fLESS-EQ-OP, x, y)
+public defn less? (x:UInt, y:UInt) : cmpop(fLESS-OP, x, y)
+public defn greater-eq? (x:UInt, y:UInt) : cmpop(fGREATER-EQ-OP, x, y)
+public defn greater? (x:UInt, y:UInt) : cmpop(fGREATER-OP, x, y)
+
+;Type Class for Bool
+public defclass BoolType <: CHType
+defn BoolType (w:fWidth) :
+   new BoolType :
+      defmethod handle (this, e:fExpression) : Bool(e)
+      defmethod firrtl-type (this) : fUIntType(fIntWidth(1))
+public defn BoolType (w:Int) :
+   BoolType(fIntWidth(w))
+public defn BoolType () :
+   BoolType(fUnknownWidth())
+
+;Literal Bool Functions
+public defn BoolLiteral (v:True|False) :
+   Bool(fUIntValue(1 when v else 0, fIntWidth(1)))
+
+;Handle Class for Bool
+public defclass Bool <: UInt
+public defn Bool (e:fExpression) :
+   new Bool :
+      defmethod firrtl-exp (this) : e
+
+;; public defn muxop<?T> (fab: (fExpression) -> ?T, op:fPrimOp, t:Bool, c:CHExp, a:CHExp) -> T :
+;;    fab $ Node $ fDoPrim(op, list(et, ec, ea), List(), fUnknownType()) where :
+;;       val et = firrtl-exp(t)
+;;       val ec = firrtl-exp(c)   
+;;       val ea = firrtl-exp(a)   
+
+;; public defn Mux<?T> (t:Bool, c:?T & CHExp, a:T & CHExp) -> T :
+;;    muxop(fab-uint, fMUX-OP, t, c, a)
+
+public defn muxop (op:fPrimOp, t:Bool, c:UInt, a:UInt) -> UInt :
+   UInt $ Node $ fDoPrim(op, list(et, ec, ea), List(), fUnknownType()) where :
+      val et = firrtl-exp(t)
+      val ec = firrtl-exp(c)   
+      val ea = firrtl-exp(a)   
+
+public defn Mux (t:Bool, c:UInt, a:UInt) -> UInt :
+   muxop(fMUX-OP, t, c, a)
+
+;Type Class for SInt
+public defclass SIntType <: CHType
+defn SIntType (w:fWidth) :
+   new SIntType :
+      defmethod handle (this, e:fExpression) : SInt(e)
+      defmethod firrtl-type (this) : fSIntType(w)
+public defn SIntType (w:Int) :
+   SIntType(fIntWidth(w))
+public defn SIntType () :
+   SIntType(fUnknownWidth())
+
+;Literal SInt Functions
+public defn SIntLiteral (v:Int) :
+;;   SInt(fSIntValue(v, fUnknownWidth()))
+   SInt(fSIntValue(v, fIntWidth(sizeof(v))))
+public defn SIntLiteral (v:Int, w:Int) :
+   SInt(fSIntValue(v, fIntWidth(w)))
+
+;Handle Class for SInt
+public definterface SInt <: Bits
+public defn SInt (e:fExpression) :
+   new SInt :
+      defmethod firrtl-exp (this) : e
+
+public defn width (x: SInt) -> Int :
+  val uval = firrtl-exp(x) as fSIntValue
+  match(fwidth(uval)) :
+    (w:fIntWidth): fwidth(w)
+    (w): -1
+
+defn fab-sint (e:fExpression) -> SInt : SInt(e)
+
+public defn toSInt (x:SInt) -> SInt : x
+public defn toUInt (x:SInt) -> UInt:
+   val w = WireExp(`tmp, UIntType())
+   ConnectExp(w, x)
+   w as UInt
+public defn invert (x:SInt) : unaryop(fab-sint, fBIT-NOT-OP, x)
+public defn neg (x:SInt) : SIntLiteral(0) - x
+public defn plus (x:SInt, y:SInt) : binop(fab-sint, fADD-OP, x, y)
+public defn minus (x:SInt, y:SInt) : binop(fab-sint, fSUB-OP, x, y)
+public defn times (x:SInt, y:SInt) : binop(fab-sint, fMUL-OP, x, y)
+public defn divide (x:SInt, y:SInt) : binop(fab-sint, fDIV-OP, x, y)
+public defn modulo (x:SInt, y:SInt) : binop(fab-sint, fMOD-OP, x, y)
+public defn bit-and (x:SInt, y:SInt) : binop(fab-sint, fBIT-AND-OP, x, y)
+public defn bit-or (x:SInt, y:SInt) : binop(fab-sint, fBIT-OR-OP, x, y)
+public defn bit-xor (x:SInt, y:SInt) : binop(fab-sint, fBIT-XOR-OP, x, y)
+public defn concat (x:SInt, y:SInt) : binop(fab-sint, fCONCAT-OP, x, y)
+public defn bit-equal? (x:SInt, y:SInt) : cmpop(fEQUAL-OP, x, y)
+public defn less-eq? (x:SInt, y:SInt) : cmpop(fLESS-EQ-OP, x, y)
+public defn less? (x:SInt, y:SInt) : cmpop(fLESS-OP, x, y)
+public defn greater-eq? (x:SInt, y:SInt) : cmpop(fGREATER-EQ-OP, x, y)
+public defn greater? (x:SInt, y:SInt) : cmpop(fGREATER-OP, x, y)
 

@@ -1,0 +1,37 @@
+#include("src/firrtl-ir.stanza")
+#include("src/ir-utils.stanza")
+#include("src/chipper.stanza")
+
+#use-syntax(core, chipper)
+
+defpackage memory-search :
+   import core
+   import verse
+   import chipper
+
+defmodule MemorySearch (depth:Int) :
+  input target: UInt<4>
+  input en: UInt<1>
+  output done: UInt<1>
+  input address: UInt<3>
+
+  val inits = [0, 4, 15, 14, 2, 5, 13]
+  wire vals: UInt<4>[7]
+  for i in 0 to length(inits) do:
+    vals[i] := UInt(inits[i])
+  ;; wire vals = inits.map({ UInt(_, 4) })
+  reg index : UInt<4>
+  wire elt : UInt elt := vals[index]
+  wire isDone : UInt<1> isDone := invert(en) & ((elt === target) | (index === UInt(7)))
+  when en :
+    index := UInt(0)
+  else when invert(isDone) :
+    index := index + UInt(1)
+  done := isDone
+  address := index
+
+defn main () :
+   circuit c of MemorySearch(16)
+   println(c)
+   
+main()

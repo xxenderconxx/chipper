@@ -108,6 +108,7 @@ public val CONVERT-S-OP = new PrimOp
 public val BIT-AND-OP = new PrimOp
 public val BIT-OR-OP = new PrimOp
 public val BIT-XOR-OP = new PrimOp
+public val BIT-NOT-OP = new PrimOp
 public val CONCAT-OP = new PrimOp
 public val BIT-SELECT-OP = new PrimOp
 public val BITS-SELECT-OP = new PrimOp

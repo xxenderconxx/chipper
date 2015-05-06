@@ -29,6 +29,7 @@ defstruct Port : (input?:True|False, name, type:Type)
 defstruct DefModule : (name, targs:List, arglist:List, ports:List<Port>, body:List)
 defstruct RegisterStmt : (name, type:Type)
 defstruct WireStmt : (name, type:Type)
+defstruct MemStmt : (name, type:Type)
 defstruct InstanceStmt : (name, module:Type)
 defstruct CircuitStmt : (name, module:Type)
 defstruct WhenStmt : (pred, conseq, alt)
@@ -152,13 +153,22 @@ defsyntax chipper :
 
    ;Register statement
    defrule :
+      prefix-op = (reg ?name:#id! : ?type:#ch/type = ?init:#exp!) :
+         expandf $ qquote((reg ~ name : ~ type ~ name := ~ init))
       prefix-op = (reg ?name:#id! : ?type:#ch/type) :
          compile(RegisterStmt(name, type))
 
    ;Wire statement
    defrule :
+      prefix-op = (wire ?name:#id! : ?type:#ch/type = ?init:#exp!) :
+         expandf $ qquote((wire ~ name : ~ type ~ name := ~ init))
       prefix-op = (wire ?name:#id! : ?type:#ch/type) :
          compile(WireStmt(name, type))
+
+   ;Mem statement
+   defrule :
+      prefix-op = (mem ?name:#id! : ?type:#ch/type) :
+         compile(MemStmt(name, type))
 
    ;Instance Statement
    defrule :
@@ -212,6 +222,11 @@ defsyntax chipper :
 ;================= CONTINUING EXPANSION =====================
 defn expande (form) :
    with-syntax(core) :
+      match-syntax(form) :
+         (?e:#exp) : e
+
+defn expandf (form) :
+   with-syntax(core, chipper) :
       match-syntax(form) :
          (?e:#exp) : e
 ;============================================================
@@ -386,6 +401,16 @@ defn compile (s:RegisterStmt) :
 defn compile (s:WireStmt) :
    val template = `(
       val name = chipper/WireExp(`name, type) as ht)
+   expande $ fill-template(template, [
+      `name => name(s)
+      `type => compile-to-type(type(s))
+      `ht => compile-to-handle-type(type(s))])
+;============================================================
+
+;================= Mem COMPILATION =========================
+defn compile (s:MemStmt) :
+   val template = `(
+      val name = chipper/MemExp(`name, type) as ht)
    expande $ fill-template(template, [
       `name => name(s)
       `type => compile-to-type(type(s))
