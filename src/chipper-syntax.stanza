@@ -235,20 +235,20 @@ defn expandf (form) :
 defn compile-to-type (t:Type) :
    match(t) :
       (t:UIntT) :
-         qquote(chipper/UIntType())
+         qquote(chipper/UInt(firrtl/ir/UnknownWidth(), firrtl/ir/None()))
       (t:UIntWT) :
-         qquote(chipper/UIntType(~ (width(t))))
+         qquote(chipper/UInt(firrtl/ir/IntWidth(~ (width(t))), firrtl/ir/None()))
       (t:SIntT) :
-         qquote(chipper/SIntType())
+         qquote(chipper/SInt(firrtl/ir/UnknownWidth(), firrtl/ir/None()))
       (t:SIntWT) :
-         qquote(chipper/SIntType(~ (width(t))))
+         qquote(chipper/SInt(firrtl/ir/IntWidth(~ (width(t))), firrtl/ir/None()))
       (t:VecT) :
-         fill-template(`(chipper/VecType(t, len)), [
+         fill-template(`(chipper/Vec(t, len, firrtl/ir/None())), [
             `t => compile-to-type(type(t))
             `len => length(t)])
       (t:NamedT) :
          fill-template(`(name(ts, args)), [
-            `name => to-symbol("~Type" << [name(t)])
+            `name => name(t)
             `ts => splice(map(compile-to-type, targs(t)))
             `args => splice(args(t))])
       (t:ParamT) :
@@ -278,82 +278,68 @@ defn compile-to-handle-type (t:Type) :
       (t:ParamT) :
          name(t)
 
-defn compile-handle-class (name, targs, arglist:List, fields:List<KeyValue<?,Type>>) :
+defn compile-handle-class (myname, targs, arglist:List, fields:List<Field>) :
    val template = `((
       defclass A<targs{T}> <: chipper/CHExp
       fields{
          defmulti fname<targs{T?}> (a:A<targs{T?}>) -> fht
       }
-      defn A (fields{ft:chipper/CHType}, e:firrtl/ir/Expression) :
+      defn A (fields{ft:chipper/CHExp}, e:firrtl/ir/Expression) :
          new A :
             defmethod chipper/firrtl-exp (this) :
                e
-            fields{
-               defmethod fname (this) :
-                  chipper/handle(ft, firrtl/ir/Subfield(e, `f, firrtl/ir/UnknownType())) as ?
-            }))
-   fill-template(template, [
-      `A => name
-      `a => gensym(`a)
-      `e => gensym(`e)
-      `targs => nested $ for v in targs stream :
-         [`T => v
-          `T? => list(`@cap, v)]
-      `fields => nested $ for f in fields stream :
-         [`f => key(f)
-          `fname => to-symbol("~#field" << [key(f)])
-          `ft => gensym(`T)
-          `fht => compile-to-handle-type(value(f))]])
-
-defn compile-handle-class (hname, targs, arglist:List, fields:List<Field>) :
-   val fs = for f in fields map : name(f) => type(f)
-   compile-handle-class(hname, targs, arglist, fs)
-
-defn compile-handle-class (hname, targs, arglist:List, ports:List<Port>) :
-   val ps = for p in ports map : name(p) => type(p)
-   compile-handle-class(hname, targs, arglist, ps)
-;============================================================
-
-;================= BUNDLE COMPILATION =======================
-defn compile-type-class (b:DefBundle) :
-   val template = `((
-      defclass AType <: chipper/CHType
-      defn AType (targs{T:chipper/CHType}, args) :
-         fields{val ft = type-exp}
-         new AType :
-            defmethod chipper/handle (this, e:firrtl/ir/Expression) :
-               A(fields{ft}, e)
             defmethod chipper/firrtl-type (this) :
                firrtl/ir/BundleType $ to-list $ [
                   fields{
                      firrtl/ir/Field(`f,
                         flip{firrtl/ir/REVERSE}{firrtl/ir/DEFAULT},
                         chipper/firrtl-type(ft))
-                  }]))
+                  }]
+            defmethod chipper/handle (this, e:firrtl/ir/Expression) :
+               A(fields{ft}, e)
+            fields{
+               defmethod fname (this) :
+                  chipper/handle(ft, firrtl/ir/Subfield(e, `f, firrtl/ir/UnknownType())) as ?
+            }))
    fill-template(template, [
-      `AType => to-symbol("~Type" << [name(b)])
-      `A => name(b)
+      `A => myname
+      `a => gensym(`a)
       `e => gensym(`e)
-      `fields => nested $ for f in fields(b) stream :
+      `targs => nested $ for v in targs stream :
+         [`T => v
+          `T? => list(`@cap, v)]
+      `fields => nested $ for f in fields stream :
          [`f => name(f)
+          `fname => to-symbol("~#field" << [name(f)])
           `ft => gensym(`T)
+          `fht => compile-to-handle-type(type(f))
           `flip => choice(flip(f))
-          `type-exp => compile-to-type(type(f))]
-      `targs => collect $ [
-         `T => targs(b)]
-      `args => splice(arglist(b))])
+          `type-exp => compile-to-type(type(f))]])
 
+;; defn compile-handle-class (hname, targs, arglist:List, fields:List<Field>) :
+;;    val fs = for f in fields map : name(f) => type(f)
+;;    compile-handle-class(hname, targs, arglist, fs)
+
+;; defn compile-handle-class (hname, targs, arglist:List, ports:List<Port>) :
+;;    val ps = for p in ports map : name(p) => type(p)
+;;    compile-handle-class(hname, targs, arglist, ps)
+
+defn compile-handle-class (hname, targs, arglist:List, ports:List<Port>) :
+   val fs = for p in ports map : Field(input?(p), name(p), type(p))
+   compile-handle-class(hname, targs, arglist, fs)
+;============================================================
+
+;================= BUNDLE COMPILATION =======================
 defn compile (b:DefBundle) :
    expande $ list(list(
-      compile-handle-class(name(b), targs(b), arglist(b), fields(b))
-      compile-type-class(b)))
+      compile-handle-class(name(b), targs(b), arglist(b), fields(b))))
 ;============================================================
 
 ;================ DEFMODULE COMPILATION =====================
 defn compile-module-class (m:DefModule) :
    val template = `((
       defclass AModule <: chipper/CHModule
-      defn AModule (targs{T:chipper/CHType}, args) :         
+      defn AModule (targs{T:chipper/CHExp}, args) :         
          fields{val ft = type-exp}
          new AModule :
             defmethod chipper/handle (this, e:firrtl/ir/Expression) :
