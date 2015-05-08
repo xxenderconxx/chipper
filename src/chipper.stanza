@@ -7,27 +7,27 @@ defpackage chipper :
 public defn sizeof (in: Int) -> Int :
   max(1, ceil-log2(in + 1))
 
+;Interface inherited by all handle classes
+public definterface Data
+public defmulti firrtl-exp (e:Data) -> fExpression
+public defmulti firrtl-type (t:Data) -> fType
+public defmulti handle<?T> (t:?T & Data, e:fExpression) -> T
+public defmulti width (e:Data) -> Int
+
+public defmulti flatten (e:Data) -> Streamable<UInt>
+
+public defmethod width (x:Data) -> Int :
+   reduce(plus, 0, map(width, to-list(flatten(x))))
+
+public defn toBits (x:Data) -> UInt :
+   reduce(cat, UIntLiteral(0), to-list(flatten(x)))
+
 public defn value (w: fWidth) -> Int :
   match(w) :
     (iw:fIntWidth): fwidth(iw)
     (o): -1
 
-;Interface inherited by all handle classes
-public definterface CHExp
-public defmulti firrtl-exp (e:CHExp) -> fExpression
-public defmulti firrtl-type (t:CHExp) -> fType
-public defmulti handle<?T> (t:?T & CHExp, e:fExpression) -> T
-public defmulti width (e:CHExp) -> Int
-
-public defmulti flatten (e:CHExp) -> Streamable<UInt>
-
-public defmethod width (x:CHExp) -> Int :
-   reduce(plus, 0, map(width, to-list(flatten(x))))
-
-public defn toBits (x:CHExp) -> UInt :
-   reduce(concat, UIntLiteral(0), to-list(flatten(x)))
-
-;; public defn fromBits<?T> (to:?T & CHExp, from:Bits) :
+;; public defn fromBits<?T> (to:?T & Data, from:Bits) :
 ;;    var i = 0
 ;;    for x in flatten(to) do :
 ;;      ConnectExp(x, from[i + width(x) - 1, i])
@@ -36,14 +36,14 @@ public defn toBits (x:CHExp) -> UInt :
 
 ;Interface inherited by all module classes
 public definterface CHModule
-public defmulti handle (m:CHModule, e:fExpression) -> CHExp
+public defmulti handle (m:CHModule, e:fExpression) -> Data
 public defmulti firrtl-module (m:CHModule) -> Symbol
 
 ;WORKAROUND FOR STANZA BUG: Every multi needs to have at least one method.
-defmethod width (t:CHExp) : error("Unimplemented.")
-defmethod firrtl-type (t:CHExp) : error("Unimplemented.")
-defmethod firrtl-exp (t:CHExp) : error("Unimplemented.")
-defmethod handle (t:CHExp, e:fExpression) : error("Unimplemented.")
+defmethod width (t:Data) : error("Unimplemented.")
+defmethod firrtl-type (t:Data) : error("Unimplemented.")
+defmethod firrtl-exp (t:Data) : error("Unimplemented.")
+defmethod handle (t:Data, e:fExpression) : error("Unimplemented.")
 defmethod handle (m:CHModule, e:fExpression) : error("Unimplemented.")
 defmethod firrtl-module (m:CHModule) : error("Unimplemented.")
 
@@ -62,26 +62,24 @@ defn Node (e:fExpression) :
    fRef(name, fUnknownType())
 
 ;=== Component Creation ===
-public defn RegisterExp (name:Symbol, type:CHExp) :
+public defn RegisterExp<?T> (name:Symbol, type:?T & Data) -> T :
    val name* = gensym(name)
    add(STATEMENT-VECTOR, fDefRegister(name*, firrtl-type(type)))
    handle(type, fRef(name*, fUnknownType()))
 
-;; TODO:
-;; public defn Reg<?T> (x:?T & CHExp) -> T :
-;;   RegisterExp(`reg, x)
+public defn Reg<?T> (x:?T & Data) -> T : RegisterExp(`reg, x)
 
-public defn WireExp (name:Symbol, type:CHExp) :
+public defn WireExp<?T> (name:Symbol, type:?T & Data) -> T :
    val name* = gensym(name)
    add(STATEMENT-VECTOR, fDefWire(name*, firrtl-type(type)))
    handle(type, fRef(name*, fUnknownType()))
 
-public defn MemExp (name:Symbol, type:CHExp) :
+public defn MemExp<?T> (name:Symbol, type:?T & Data) -> T :
    val name* = gensym(name)
    add(STATEMENT-VECTOR, fDefMemory(name*, firrtl-type(type) as fVectorType))
    handle(type, fRef(name*, fUnknownType()))
 
-public defn InstanceExp (name:Symbol, module:CHModule) :
+public defn InstanceExp (name:Symbol, module:CHModule) -> Data :
    val name* = gensym(name)
    add(STATEMENT-VECTOR, fDefInstance(name*, fRef(firrtl-module(module), fUnknownType())))
    handle(module, fRef(name*, fUnknownType()))
@@ -91,18 +89,18 @@ public defn CircuitExp (module:CHModule) :
       val main = firrtl-module(module)
       fCircuit(to-list(MODULE-VECTOR), main)
 
-public defn ConnectExp (x:CHExp, y:CHExp) :
+public defn ConnectExp (x:Data, y:Data) :
    val x* = firrtl-exp(x)
    val y* = firrtl-exp(y)
    add(STATEMENT-VECTOR, fConnect(x*, y*))
 
-public defn WhenExp (pred:CHExp, conseq: () -> ?, alt: () -> ?) :
+public defn WhenExp (pred:Data, conseq: () -> ?, alt: () -> ?) :
    val p = firrtl-exp(pred)
    val c = build-statement(conseq)
    val a = build-statement(alt)
    add(STATEMENT-VECTOR, fConditionally(p, c, a))
    
-public defn WhenExp (pred:CHExp, conseq: () -> ?) :
+public defn WhenExp (pred:Data, conseq: () -> ?) :
    val p = firrtl-exp(pred)
    val c = build-statement(conseq)
    add(STATEMENT-VECTOR, fConditionally(p, c, fEmptyStmt()))
@@ -114,10 +112,10 @@ public defn ModuleExp (name, ports:List<fPort>, f: () -> ?) -> Symbol :
    name*
 
 ;Handle class for Vecs
-public defclass Vec<T> <: CHExp & Streamable<T> & Lengthable
+public defclass Vec<T> <: Data & Streamable<T> & Lengthable
 public defmulti get<?T> (v:Vec<?T>, i:Int) -> T
-public defmulti get<?T> (v:Vec<?T>, i:CHExp) -> T
-public defn Vec (t:CHExp, len: Int, e:fExpression) :
+public defmulti get<?T> (v:Vec<?T>, i:Data) -> T
+public defn Vec (t:Data, len: Int, e:fExpression) :
    val t* = firrtl-type(t)
    new Vec :
       defmethod firrtl-exp (this) :
@@ -129,7 +127,7 @@ public defn Vec (t:CHExp, len: Int, e:fExpression) :
       defmethod get (this, i:Int) :
          val e* = fIndex(e, i, fUnknownType())
          handle(t, e*)
-      defmethod get (this, i:CHExp) :
+      defmethod get (this, i:Data) :
          val name* = gensym(`a)
          add(STATEMENT-VECTOR, fDefAccessor(name*, e, firrtl-exp(i)))
          handle(t, fRef(name*, fUnknownType()))
@@ -142,28 +140,29 @@ public defn Vec (t:CHExp, len: Int, e:fExpression) :
          concat-all(map(flatten, to-list(this)))
 
 ;Prim Creation
-public defn unaryop<?T> (op:fPrimOp, x:?T & CHExp) -> T :
-   handle{x, _} $ Node $ fDoPrim(op, list(ex), List(), fUnknownType()) where :
+public defn unaryop<?T> (op:fPrimOp, x:?T & Bits) -> T :
+   handle{x, fUnknownWidth(), _} $ Node $ fDoPrim(op, list(ex), List(), fUnknownType()) where :
       val ex = firrtl-exp(x)
-public defn binop<?T> (op:fPrimOp, x:?T & CHExp, y:T & CHExp) -> T :
-   handle{x, _} $ Node $ fDoPrim(op, list(ex, ey), List(), fUnknownType()) where :
+public defn binop<?T> (op:fPrimOp, x:?T & Bits, y:T & Bits) -> T :
+   handle{x, fUnknownWidth(), _} $ Node $ fDoPrim(op, list(ex, ey), List(), fUnknownType()) where :
       val ex = firrtl-exp(x)
       val ey = firrtl-exp(y)   
-public defn cmpop (op:fPrimOp, x:CHExp, y:CHExp) -> Bool :
+public defn cmpop (op:fPrimOp, x:Bits, y:Bits) -> Bool :
    Bool $ Node $ fDoPrim(op, list(ex, ey), List(), fUnknownType()) where :
       val ex = firrtl-exp(x)
       val ey = firrtl-exp(y)   
 
 ;Handle Class for Bits
-public definterface Bits <: CHExp
+public definterface Bits <: Data
 public defmulti toUInt (x:Bits) -> UInt
 public defmulti toSInt (x:Bits) -> SInt
+public defmulti zero<?T> (x:?T & Bits) -> T
+public defmulti handle<?T> (x:?T & Bits, nw:fWidth, e:fExpression) -> T
 public defn Bits () : Bits(fUnknownWidth())
 public defn Bits (w:fWidth) : Bits(w, fNone())
 public defn Bits (w:fWidth, e:fExpression) : UInt(w, e)
 public defn Bits (e:fExpression) : Bits(fUnknownWidth(), e)
-public defmethod flatten (x: Bits) -> Streamable<UInt> :
-    list(toUInt(x))
+public defmethod flatten (x: Bits) -> Streamable<UInt> : list(toUInt(x))
 
 public defn get (x:Bits, i:Int) -> UInt :
    UInt $ Node $ fDoPrim(fBIT-SELECT-OP, list(ex), list(i), fUnknownType()) where :
@@ -172,6 +171,26 @@ public defn get (x:Bits, i:Int) -> UInt :
 public defn get (x:Bits, i:Int, j:Int) -> UInt :
    UInt $ Node $ fDoPrim(fBITS-SELECT-OP, list(ex), list(i, j), fUnknownType()) where :
       val ex = firrtl-exp(x)
+
+public defn complement<?T> (x:?T & Bits) -> T : unaryop(fBIT-NOT-OP, x)
+public defn invert<?T> (x:?T & Bits) -> T  : unaryop(fBIT-NOT-OP, x)
+public defn neg<?T> (x:?T & Bits) -> T  : zero(x) - x
+public defn plus<?T> (x:?T & Bits, y:?T & Bits) -> T : binop(fADD-OP, x, y)
+public defn minus<?T> (x:?T & Bits, y:?T & Bits) -> T  : binop(fSUB-OP, x, y)
+public defn times<?T> (x:?T & Bits, y:?T & Bits) -> T  : binop(fMUL-OP, x, y)
+public defn divide<?T> (x:?T & Bits, y:?T & Bits) -> T  : binop(fDIV-OP, x, y)
+public defn modulo<?T> (x:?T & Bits, y:?T & Bits) -> T  : binop(fMOD-OP, x, y)
+public defn bit-and<?T> (x:?T & Bits, y:?T & Bits) -> T  : binop(fBIT-AND-OP, x, y)
+public defn bit-or<?T> (x:?T & Bits, y:?T & Bits) -> T  : binop(fBIT-OR-OP, x, y)
+public defn bit-xor<?T> (x:?T & Bits, y:?T & Bits) -> T  : binop(fBIT-XOR-OP, x, y)
+public defn cat<?T> (x:?T & Bits, y:?T & Bits) -> T  : binop(fCONCAT-OP, x, y)
+public defn cat<?T> (elts:Streamable<?T & Bits>) -> T  : reduce(cat, to-list(elts))
+public defn bit-equal?<?T> (x:?T & Bits, y:?T & Bits) -> Bool  : cmpop(fEQUAL-OP, x, y)
+public defn bit-not-equal?<?T> (x:?T & Bits, y:?T & Bits) -> Bool  : invert(bit-equal?(x, y))
+public defn less-eq?<?T> (x:?T & Bits, y:?T & Bits) -> Bool  : cmpop(fLESS-EQ-OP, x, y)
+public defn less?<?T> (x:?T & Bits, y:?T & Bits) -> Bool : cmpop(fLESS-OP, x, y)
+public defn greater-eq?<?T> (x:?T & Bits, y:?T & Bits) -> Bool : cmpop(fGREATER-EQ-OP, x, y)
+public defn greater?<?T> (x:?T & Bits, y:?T & Bits) -> Bool : cmpop(fGREATER-OP, x, y)
 
 ;Literal UInt Functions
 public defn UIntLiteral (v:Int) :
@@ -191,28 +210,22 @@ public defn UInt (w:fWidth, e:fExpression) :
       defmethod firrtl-exp (this) : e
       defmethod firrtl-type (this) : fUIntType(w)
       defmethod handle (this, e:fExpression) : UInt(w, e)
+      defmethod handle (this, nw:fWidth, e:fExpression) : UInt(nw, e)
+      defmethod zero (this) : UIntLiteral(0)
       defmethod toUInt (this) -> UInt : this
       defmethod toSInt (this) -> SInt:
         val w = WireExp(`tmp, SInt(fUnknownWidth(), fNone()))
         ConnectExp(w, this)
         w as SInt
 
-public defn invert (x:UInt) : unaryop(fBIT-NOT-OP, x)
-public defn neg (x:UInt) : UIntLiteral(0) - x
-public defn plus (x:UInt, y:UInt) : binop(fADD-OP, x, y)
-public defn minus (x:UInt, y:UInt) : binop(fSUB-OP, x, y)
-public defn times (x:UInt, y:UInt) : binop(fMUL-OP, x, y)
-public defn divide (x:UInt, y:UInt) : binop(fDIV-OP, x, y)
-public defn modulo (x:UInt, y:UInt) : binop(fMOD-OP, x, y)
-public defn bit-and (x:UInt, y:UInt) : binop(fBIT-AND-OP, x, y)
-public defn bit-or (x:UInt, y:UInt) : binop(fBIT-OR-OP, x, y)
-public defn bit-xor (x:UInt, y:UInt) : binop(fBIT-XOR-OP, x, y)
-public defn concat (x:UInt, y:UInt) : binop(fCONCAT-OP, x, y)
-public defn bit-equal? (x:UInt, y:UInt) : cmpop(fEQUAL-OP, x, y)
-public defn less-eq? (x:UInt, y:UInt) : cmpop(fLESS-EQ-OP, x, y)
-public defn less? (x:UInt, y:UInt) : cmpop(fLESS-OP, x, y)
-public defn greater-eq? (x:UInt, y:UInt) : cmpop(fGREATER-EQ-OP, x, y)
-public defn greater? (x:UInt, y:UInt) : cmpop(fGREATER-OP, x, y)
+defn toBool (x: UInt) -> Bool:
+   val w = WireExp(`tmp, Bool(fNone()))
+   ConnectExp(w, x)
+   w as Bool
+
+public defn bit-or-reduce (x:UInt) : invert(bit-equal?(x, UIntLiteral(0)))
+public defn bit-and-reduce (x:UInt) : bit-equal?(x, UIntLiteral(-1))
+public defn bit-xor-reduce (x:UInt) : unaryop(fBIT-XOR-REDUCE-OP, x)
 
 ;Literal Bool Functions
 public defn BoolLiteral (v:True|False) :
@@ -225,22 +238,21 @@ public defn Bool (e:fExpression) :
    val ft = fUIntType(fIntWidth(1))
    new Bool :
       defmethod width (this) : 1
-      defmethod handle (this, e:fExpression) : Bool(e)
+      defmethod handle (this, nw:fWidth, e:fExpression) : Bool(e)
       defmethod firrtl-type (this) : ft
       defmethod firrtl-exp (this) : e
 
-public defn muxop<?T> (t:Bool, c:?T & CHExp, a:?T & CHExp) -> T :
+public defn muxop<?T> (t:Bool, c:?T & Data, a:?T & Data) -> T :
    handle{c,_} $ Node $ fDoPrim(fMUX-OP, list(et, ec, ea), List(), fUnknownType()) where :
       val et = firrtl-exp(t)
       val ec = firrtl-exp(c)   
       val ea = firrtl-exp(a)   
 
-public defn Mux<?T> (t:Bool, c:?T & CHExp, a:?T & CHExp) -> T :
+public defn Mux<?T> (t:Bool, c:?T & Data, a:?T & Data) -> T :
    muxop(t, c, a)
 
 ;Literal SInt Functions
 public defn SIntLiteral (v:Int) :
-;;   SInt(fSIntValue(v, fUnknownWidth()))
    SInt(fSIntValue(v, fIntWidth(sizeof(v))))
 public defn SIntLiteral (v:Int, w:Int) :
    SInt(fSIntValue(v, fIntWidth(w)))
@@ -256,26 +268,62 @@ public defn SInt (w:fWidth, e:fExpression) :
       defmethod firrtl-exp (this) : e
       defmethod firrtl-type (this) : fSIntType(w)
       defmethod handle (this, e:fExpression) : SInt(w, e)
+      defmethod handle (this, nw:fWidth, e:fExpression) : SInt(nw, e)
+      defmethod zero (this) : SIntLiteral(0)
       defmethod toSInt (this) -> SInt : this
       defmethod toUInt (this) -> UInt:
         val w = WireExp(`tmp, UInt(fUnknownWidth(), fNone()))
         ConnectExp(w, this)
         w as UInt
 
-public defn invert (x:SInt) : unaryop(fBIT-NOT-OP, x)
-public defn neg (x:SInt) : SIntLiteral(0) - x
-public defn plus (x:SInt, y:SInt) : binop(fADD-OP, x, y)
-public defn minus (x:SInt, y:SInt) : binop(fSUB-OP, x, y)
-public defn times (x:SInt, y:SInt) : binop(fMUL-OP, x, y)
-public defn divide (x:SInt, y:SInt) : binop(fDIV-OP, x, y)
-public defn modulo (x:SInt, y:SInt) : binop(fMOD-OP, x, y)
-public defn bit-and (x:SInt, y:SInt) : binop(fBIT-AND-OP, x, y)
-public defn bit-or (x:SInt, y:SInt) : binop(fBIT-OR-OP, x, y)
-public defn bit-xor (x:SInt, y:SInt) : binop(fBIT-XOR-OP, x, y)
-public defn concat (x:SInt, y:SInt) : binop(fCONCAT-OP, x, y)
-public defn bit-equal? (x:SInt, y:SInt) : cmpop(fEQUAL-OP, x, y)
-public defn less-eq? (x:SInt, y:SInt) : cmpop(fLESS-EQ-OP, x, y)
-public defn less? (x:SInt, y:SInt) : cmpop(fLESS-OP, x, y)
-public defn greater-eq? (x:SInt, y:SInt) : cmpop(fGREATER-EQ-OP, x, y)
-public defn greater? (x:SInt, y:SInt) : cmpop(fGREATER-OP, x, y)
+;; MInt
+val hex-nibbles = "0123456789abcdef"
 
+defn as-digit (c: Char) -> Int :
+  index-of(hex-nibbles, c) as Int
+
+defn to-lower (c: Char) -> Char :
+  if to-int(c) >= to-int('a') and to-int(c) <= to-int('z') :
+    to-char(to-int(c) + to-int('A') - to-int('a'))
+  else :
+    c
+
+defn to-lit-val (x: String, shamt: Int) -> Int :
+  var res = 0
+  for c in x do :
+    if c != '_' :
+      if not contains?(hex-nibbles, to-lower(c)) :
+        ;; error("Literal: " + to-string(x) + " contains illegal character: " + to-string(c))
+        error("Bad Literal")
+      res = res * shamt + as-digit(c)
+  res
+
+defn map (f : Char -> Char, s : String) -> String :
+  val ls = map(f, to-list(s))
+  val buf = StringBuffer()
+  do(add{buf, _}, ls)
+  to-string(buf)
+
+defn parse-lit (x: String) -> [String, String, Int] :
+   [map(fn (c): if c == '?': '0' else: c,   x),
+    map(fn (c): if c == '?': '0' else: '1', x),
+    length(x)]
+
+public defclass MInt
+public defmulti width (x:MInt) -> Int
+public defmulti mask (x:MInt) -> String
+public defmulti bits (x:MInt) -> String
+public defn MInt (pat: String) :
+   val [bits, mask, width] = parse-lit(substring(pat, 1))
+   new MInt :
+      defmethod width (this) : width
+      defmethod bits (this) : bits
+      defmethod mask (this) : mask
+
+public defmethod to-string (m: MInt) -> String :
+  string-join(["MInt(" mask(m) "," bits(m) ")"])
+
+public defn bit-equal? (x:MInt, y:UInt) : 
+  bit-equal?((UIntLiteral(to-lit-val(mask(x), 2)) & y), UIntLiteral(to-lit-val(bits(x), 2)))
+public defn bit-not-equal? (x:MInt, y:UInt) : 
+  invert(bit-equal?(x, y))

@@ -13,7 +13,7 @@ public defn wrapAround (n: UInt, max: UInt) -> UInt :
   Mux(n > max, UInt(0), n)
 
 public defn counter (max: UInt, en: Bool, amt: UInt) -> UInt :
-  reg x : UInt<value(width(max))> x := UInt(0)
+  reg x : UInt<width(max)> = UInt(0)
   when en : x := wrapAround(x + amt, max)
   x
 

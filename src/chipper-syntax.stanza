@@ -154,14 +154,16 @@ defsyntax chipper :
    ;Register statement
    defrule :
       prefix-op = (reg ?name:#id! : ?type:#ch/type = ?init:#exp!) :
-         expandf $ qquote((reg ~ name : ~ type ~ name := ~ init))
+         val regstmt = compile(RegisterStmt(name, type))
+         expandf $ qquote((~ regstmt, ~ name := ~ init))
       prefix-op = (reg ?name:#id! : ?type:#ch/type) :
          compile(RegisterStmt(name, type))
 
    ;Wire statement
    defrule :
       prefix-op = (wire ?name:#id! : ?type:#ch/type = ?init:#exp!) :
-         expandf $ qquote((wire ~ name : ~ type ~ name := ~ init))
+         val wirestmt = compile(WireStmt(name, type))
+         expandf $ qquote((~ wirestmt ~ name := ~ init))
       prefix-op = (wire ?name:#id! : ?type:#ch/type) :
          compile(WireStmt(name, type))
 
@@ -197,11 +199,28 @@ defsyntax chipper :
          fn (x) :
             compile(ConnectStmt(x, y))
 
+   ;Invert expression
+   defrule :
+      prefix-op = (~ ! ?e:#exp!) :
+         expande $ qquote(chipper/invert(~ e))
+
    ;Bit Comparison Operator
    defrule :
       suffix-op = (=== ?y:#exp!) :
          fn (x) :
             expande $ qquote(bit-equal?(~ x, ~ y))
+      suffix-op = (!== ?y:#exp!) :
+         fn (x) :
+           expande $ qquote(bit-equal?(~ x, ~ y))
+
+   ;Bool Operators
+   defrule :
+      suffix-op = (&& ?y:#exp!) :
+         fn (x) :
+            expande $ qquote(bool-and(~ x, ~ y))
+      suffix-op = (|| ?y:#exp!) :
+         fn (x) :
+            expande $ qquote(bool-or(~ x, ~ y))
 
    ;Dot Syntax for Field Access
    defrule :
@@ -228,7 +247,9 @@ defn expande (form) :
 defn expandf (form) :
    with-syntax(core, chipper) :
       match-syntax(form) :
-         (?e:#exp) : e
+         (?e:#exp) :
+           println-all(["E " e])
+           e
 ;============================================================
 
 ;================= TYPE COMPILATION =========================
@@ -280,11 +301,11 @@ defn compile-to-handle-type (t:Type) :
 
 defn compile-handle-class (myname, targs, arglist:List, fields:List<Field>) :
    val template = `((
-      defclass A<targs{T}> <: chipper/CHExp
+      defclass A<targs{T}> <: chipper/Data
       fields{
          defmulti fname<targs{T?}> (a:A<targs{T?}>) -> fht
       }
-      defn A (fields{ft:chipper/CHExp}, e:firrtl/ir/Expression) :
+      defn A (fields{ft:chipper/Data}, e:firrtl/ir/Expression) :
          new A :
             defmethod chipper/firrtl-exp (this) :
                e
@@ -339,7 +360,7 @@ defn compile (b:DefBundle) :
 defn compile-module-class (m:DefModule) :
    val template = `((
       defclass AModule <: chipper/CHModule
-      defn AModule (targs{T:chipper/CHExp}, args) :         
+      defn AModule (targs{T:chipper/Data}, args) :         
          fields{val ft = type-exp}
          new AModule :
             defmethod chipper/handle (this, e:firrtl/ir/Expression) :

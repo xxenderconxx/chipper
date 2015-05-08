@@ -1,0 +1,240 @@
+public defn log2Up(in: Int) -> Int :
+  if in == 1: 1 else: to-int(ceil(log(in)/log(2)))
+
+public defn log2Ceil(in: Int) -> Int :
+  ceil(log(in)/log(2)).toInt
+
+public defn log2Down(in: Int) -> Int :
+  if (x == 1) 1 else floor(log(x)/log(2.0)).toInt
+
+public defn log2Floor(in: Int) -> Int :
+  floor(log(x)/log(2.0)).toInt
+
+public defn pow2? (in: Int) -> Boolean :
+  in > 0 and ((in & (in-1)) == 0)
+
+public defn to-bools (in: Bits) -> Streamable<Bool> :
+  map({ in[_] }, 0 to width(in))
+
+public defn fill-interleaved (n: Int, in: Bits) -> UInt :
+  fill-interleaved(n, to-bools(in))
+
+;; todo Vec from elts
+public defn fill-interleaved (n: Int, in: Streamable<Bool>) -> UInt :
+  to-bits(Vec(map(fill{n, _}, in)))
+
+;; Returns the number of bits set (i.e value is 1) in the input signal.
+public defn pop-count (in: Streamable<Bool>) -> UInt :
+  if length(in) == 0 :
+     UIntLiteral(0)
+  else if (length(in) == 1) :
+     head(in)
+  else :
+     pop-count(slice(in, 0, length(in)/2)) + pop-count(slice(in, length(in)/2, length(in)))
+
+public defn pop-count (in: Bits) -> UInt : pop-count(to-bools(in))
+
+
+;; Builds a Mux tree out of the input signal vector using a one hot encoded
+;; select signal. Returns the output of the Mux tree.
+defn Mux1H<?T> (sel: Streamable<Bool>, in: Streamable<?T & Data>) -> T :
+  if in.tail.isEmpty :
+    head(in)
+  else :
+    val masked = map(fn (s, i) -> Mux(s, to-bits(i), BitsLiteral(0)), sel, in)
+    from-bits(head(in), reduce-left(bit-or, masked))
+
+defn Mux1H<?T> (in: Streamable<KeyValue<Bool, ?T & Data>>) -> T :
+  val [sel, data] = unzip(in)
+  Mux1H(sel, data)
+
+defn Mux1H<?T> (sel: Bits, in: Streamable<?T & Data>) -> T :
+  Mux1H(to-bools(sel, in)
+
+defn Mux1H (sel: Bits, in: Bits) -> Bool :
+  bit-or-reduce(sel & in)
+
+;; Builds a Mux tree under the assumption that multiple select signals
+;; can be enabled. Priority is given to the first select signal.
+;; 
+;; Returns the output of the Mux tree.
+defn priority-mux<?T> (in: Streamable<KeyValue<Bool, ?T & Bits>>) -> T :
+  if length(in) == 1 :
+    key(head(in))
+  else :
+    Mux(key(head(in)), value(head(in)), priority-mux(tail(in)))
+
+defn priority-mux<?T> (sel: Streamable<Bool>, in: Streamable<?T & Bits>) -> T :
+  priority-mux(map(KeyValue, sel, in))
+
+defn priority-mux<?T> (sel: Bits, in: Streamable<?T & Bits>) -> T :
+  priority-mux(to-bools(sel), in)
+
+defn mux-lookup<?S,?T> (k: ?S & Bits, default: ?T & Data, mapping: Streamable<KeyValue<?S, ?T>>) -> T :
+   var res = default
+   val kvs = reverse(to-list(mapping))
+   for kv in kvs do :
+     res = Mux(key(kv) === k, value(kv), res)
+   res
+
+public defn fill (n: Int, x: Bool) -> UInt :
+  if n == 0 : UInt<0>(0)
+  else if n == 1 : x
+  else if n > 1 : UInt<n>(0) - UInt(x)
+  else error("Fill requires nonnegative integer")
+
+public defn fill (n: Int, y: UInt) -> UInt :
+  if n == 0 : UInt<0>(0)
+  else if n == 1 : y
+  else if n > 1 :
+    val p2 = Vector<UInt>()
+    add(p2, y)
+    for i in 1 to log2Up(n + 1) do :
+      add(p2, cat(p2[i - 1], p2[i - 1]))
+    cat(map({ p2[_] }, filter({ (x & (1 << _)) != 0 }, i in 0 to log2Up(x + 1))))
+  else :
+    error("Fill requires nonnegative integer")
+  ;;    case _ => throw new IllegalArgumentException(s"n (=$n) must be nonnegative integer.")
+
+public defn mux-case<?T> (default: ?T & Data, mapping: Streamable<KeyValue<Bool, ?T & Data>>) -> T :
+  ;; TODO: potentially order
+  var res = default
+  val kvs = reverse(to-list(mapping))
+  for kv in kvs do :
+    res = Mux(key(kv), value(kv), res)
+  res
+
+public defn list-lookup<?T> (addr: UInt, default: List<?T & Data>, mapping: Streamable<KeyValue<MInt, List<?T>>) -> List<T> = {
+  ;; TODO: check order
+  map(fn (d, m) -> fold-right(fn (kv, p) -> Mux(key(kv) === addr, value(kv), p), d, m))
+
+public defn lookup<?T> (addr: UInt, default: ?T & Bits, mapping: Streamable[KeyValue<MInt, ?T>]) -> T :
+  head(list-lookup(addr, List(default), map(fn (m) -> KeyValue(key(m), List(value(m))))))
+
+;; Litte/big bit endian convertion: reverse the order of the bits in a UInt.
+defn reverse (in: UInt, length: Int) -> UInt :
+  if length == 1 :
+    in
+  else if is-pow2(length) && length >= 8 && length <= 64 :
+    ;; Do it in logarithmic time to speed up C++.  Neutral for real HW.
+    defn* loop (shift: Int, res: UInt, mask: UInt) :
+      val nmask = mask ^ (mask(length-shift-1,0) << UInt(shift))
+      val nres  = ((res >> UInt(shift)) & mask) | (res(length-shift-1,0) << UInt(shift) & ~mask)
+      if (shift > 0) loop(shift >> 1, nres, nmask) else res
+    loop(length >> 1, in, UInt<length>((BigInt(1) << length) - 1))
+  else :
+    val half = (1 << log2Up(length)) / 2
+    cat(reverse(in[half - 1, 0], half), reverse(in[length - 1, half], length - half))
+
+public defn reverse (in: UInt) -> UInt : reverse(in, width(in))
+
+defn reg-next<?T> (in: ?T & Data) -> T :
+  val r = Reg(in)
+  r := in
+  r
+
+defn reg-enable<?T> (in: ?T & Data, en: Bool) -> T :
+  val r = Reg(in)
+  when en : r := in
+  r
+
+;; Returns the n-cycle delayed version of the input signal.
+defn shift-register<?T> (in: ?T & Data, n: Int, en: Bool = Bool(true)) -> T :
+  ;; The order of tests reflects the expected use cases.
+  if n == 1 :
+    reg-enable(in, en)
+  else if n != 0 :
+    reg(shift-register(in, n-1, en))
+  else :
+    in
+
+;; Returns the one hot encoding of the input UInt.
+public defn UInt-to-OH (in: UInt, width: Int = -1) -> UInt :
+  if width == -1 : UInt(1) << in
+  else : (UInt(1) << in[log2Up(width) - 1,0])[width - 1, 0]
+
+defclass Counter
+public defmulti inc(c: Counter) -> Bool
+public defmulti num(c: Counter) -> Int
+defn Counter (n: Int) :
+  reg value init UInt<log2Up>(0)
+  defmethod num(this) -> n
+  defmethod inc(this) -> Bool :
+    if n == 1 : Bool(true)
+    else :
+      node wrap = value === UInt(n - 1)
+      value := Mux(Bool(!isPow2(n)) && wrap, UInt(0), value + UInt(1))
+      wrap
+
+public defn Counter (cond: Bool, n: Int) -> [UInt, Bool] :
+  val c = Counter(n)
+  var wrap: Bool = null
+  when cond : wrap = inc(c)
+  [c.value, cond && wrap]
+
+defbundle ValidIO<T> :
+  valid: Bool
+  bits:  T
+
+defn fired<?T> (d: Valid<?T>) -> Bool : valid(d)
+
+;; Adds a ready-valid handshaking protocol to any interface.
+;;  The standard used is that the consumer uses the flipped
+;;  interface.
+defbundle DecoupledIO<T> :
+  valid: Bool
+  bits:  T
+  flip ready: Bool
+
+defn fired<?T> (d: DecoupledIO<?T>) -> Bool : ready(d) && valid(d)
+
+defmodule Queue<T> (val entries: Int, pipe: Boolean = false, flow: Boolean = false, _reset: Bool = null)
+  input enq: Decoupled<T>
+  output deq: Decoupled<T>
+  output count: UInt<log2Up(entries + 1)>
+
+  mem ram<T>[entries]
+  node enq-ptr = Counter(entries)
+  node deq-ptr = Counter(entries)
+  reg maybe-full = Bool(false)
+
+  node ptr_match = value(enq-ptr) === value(deq-ptr)
+  node empty = ptr_match && ! maybe_full
+  node full = ptr_match && maybe_full
+  node maybe-flow = Bool(flow) && empty
+  node do-flow = maybe-flow && ready(deq)
+
+  node do-enq = ready(enq) && valid(enq) && ! do-flow
+  node do-deq = ready(deq) && valid(deq) && ! do-flow
+  when do-enq :
+    ram[value(enq-ptr)] := bits(enq)
+    inc(enq_ptr)
+  when do-deq :
+    inc(deq_ptr)
+  when do_enq !== do_deq :
+    maybe-full := do-enq
+
+  valid(deq) := ! empty | Bool(flow) & valid(enq)
+  ready(enq) := ! full | Bool(pipe) & ready(deq)
+  bits(deq)  := Mux(maybe-flow, bits(enq), ram(value(deq-ptr)))
+
+  val ptr-diff = enq_ptr.value - deq_ptr.value
+  if is-pow2(entries) :
+    io.count := cat(maybe-full & ptr_match, ptr_diff)
+  else :
+    io.count := Mux(ptr-match, Mux(maybe-full, UInt(entries), UInt(0)), Mux(value(deq-ptr) > value(enq-ptr), UInt(entries) + ptr-diff, ptr-diff))
+
+;; Generic hardware queue. Required parameter entries controls
+;;  the depth of the queues. The width of the queue is determined
+;;  from the inputs.
+;;
+;;  Example usage:
+;;    val q = new Queue(UInt(), 16)
+;;    q.io.enq <> producer.io.out
+;;    consumer.io.in <> q.io.deq
+public defn Queue<?T> (enq: DecoupledIO<?T & Data>, entries: Int = 2, pipe: Boolean = false) -> DecoupledIO<T> :
+    inst q of Queue(bits(enq), entries, pipe)
+    valid(enq(q)) := valid(enq) // not using <> so that override is allowed
+    bits(enq(q))  := bits(enq)
+    ready(enq)    := ready(enq(q))
+    deq(q)

@@ -119,6 +119,7 @@ defmethod print (o:OutputStream, op:PrimOp) :
       BIT-AND-OP : "bit-and"
       BIT-OR-OP : "bit-or"
       BIT-XOR-OP : "bit-xor"
+      BIT-XOR-REDUCE-OP : "bit-xor-reduce"
       CONCAT-OP : "concat"
       BIT-SELECT-OP : "bit"
       BITS-SELECT-OP : "bits"
