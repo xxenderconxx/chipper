@@ -99,9 +99,15 @@ public val AS-SINT-S-OP = new PrimOp
 public val SHIFT-LEFT-OP = new PrimOp
 public val SHIFT-LEFT-U-OP = new PrimOp
 public val SHIFT-LEFT-S-OP = new PrimOp
+public val DYN-SHIFT-LEFT-OP = new PrimOp
+public val DYN-SHIFT-LEFT-U-OP = new PrimOp
+public val DYN-SHIFT-LEFT-S-OP = new PrimOp
 public val SHIFT-RIGHT-OP = new PrimOp
 public val SHIFT-RIGHT-U-OP = new PrimOp
 public val SHIFT-RIGHT-S-OP = new PrimOp
+public val DYN-SHIFT-RIGHT-OP = new PrimOp
+public val DYN-SHIFT-RIGHT-U-OP = new PrimOp
+public val DYN-SHIFT-RIGHT-S-OP = new PrimOp
 public val CONVERT-OP = new PrimOp
 public val CONVERT-U-OP = new PrimOp
 public val CONVERT-S-OP = new PrimOp
@@ -156,6 +162,22 @@ public defstruct Register <: Expression :
    type: Type with: (as-method => true)
    value: Expression
    enable: Expression
+public defstruct Pad <: Expression :
+   arg: Expression
+   width: Width
+
+public defmulti pad-to (x:Expression, w:Int, pad:Int) -> Expression
+
+public defmethod pad-to (x:Expression, w:Int, pad:Int) -> Expression :
+  ;; println-all(["PAD-TO E " x " W " w " PAD " pad])
+  if pad == 0 or (pad > 0 and pad == w): x else: Pad(x, (if pad == -1: UnknownWidth() else: IntWidth(pad)))
+
+public defmethod pad-to (x:SIntValue, w:Int, pad:Int) -> Expression :
+  if pad == -1: Pad(x,UnknownWidth()) else: if pad == 0: x else: SIntValue(value(x), IntWidth(pad))
+
+public defmethod pad-to (x:UIntValue, w:Int, pad:Int) -> Expression :
+  ;; println-all(["PAD-TO L " x " W " w " PAD " pad])
+  if pad == -1: Pad(x,UnknownWidth()) else: if pad == 0: x else: UIntValue(value(x), IntWidth(pad))
 
 public definterface Stmt
 public defstruct DefWire <: Stmt :

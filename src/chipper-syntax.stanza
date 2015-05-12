@@ -15,6 +15,7 @@ defpackage chipper/syntax :
 
 ;=============== CHIPPER PARSE STRUCTURES ==================
 definterface Type
+defstruct BoolT <: Type
 defstruct UIntT <: Type
 defstruct UIntWT <: Type : (width)
 defstruct SIntT <: Type
@@ -29,6 +30,7 @@ defstruct Port : (input?:True|False, name, type:Type)
 defstruct DefModule : (name, targs:List, arglist:List, ports:List<Port>, body:List)
 defstruct RegisterStmt : (name, type:Type)
 defstruct WireStmt : (name, type:Type)
+defstruct NodeStmt : (name, x)
 defstruct MemStmt : (name, type:Type)
 defstruct InstanceStmt : (name, module:Type)
 defstruct CircuitStmt : (name, module:Type)
@@ -40,6 +42,7 @@ defstruct ConnectStmt : (x, y)
 defn commas (xs) : join(xs, ", ")
 defmethod print (o:OutputStream, t:Type) :
    print{o, _} $ match(t) :
+      (t:BoolT) : "Bool"
       (t:UIntT) : "UInt"
       (t:UIntWT) : "UInt<~>" << [width(t)]
       (t:SIntT) : "SInt"
@@ -74,6 +77,9 @@ defmethod print (o:OutputStream, s:RegisterStmt) :
 
 defmethod print (o:OutputStream, s:WireStmt) :
    print(o, "wire ~ : ~" << [name(s), type(s)])
+
+defmethod print (o:OutputStream, s:NodeStmt) :
+   print(o, "node ~ : ~" << [name(s), x(s)])
 
 defmethod print (o:OutputStream, s:InstanceStmt) :
    print(o, "inst ~ of ~" << [name(s), module(s)])
@@ -116,6 +122,7 @@ defsyntax chipper :
       ch/type = (?t:#ch/term ?ops:#ch/op ...) : apply-suffix-ops(t, ops)
       ch/op = ((@get ?n:#exp)) : (fn (t) : VecT(t, n))
       ch/term = (?x) when tparam?(x) : ParamT(x)
+      ch/term = (Bool) : BoolT()
       ch/term = (UInt<?e:#exp>) : UIntWT(e)
       ch/term = (UInt) : UIntT()
       ch/term = (SInt<?e:#exp>) : SIntWT(e)
@@ -140,6 +147,18 @@ defsyntax chipper :
                (?fs:#ch/field ...) :
                   compile(DefBundle(name, ts, arglist, fs))
 
+;;    ;Enum Definition
+;;    defrule :
+;;       prefix-op = (defenum ?t:#ch/type : ?names:#id! ...)
+;;         for i in 0 to length(names) do :
+;;            val name = names[i]
+;;            val tname = gensym(`type)
+;;            val tdef = qquote(val ~ tname = ~ type)
+;;            val wirestmt = compile(WireStmt(name, tname))
+;;            val iname = gensym(`init)
+;;            val init = qquote(val ~iname = ($do ~ make-lit ~ tname ~ i))
+;;            expandf $ qquote((~ wirestmt ~ name := ~ iname))
+  
    ;Module Definition
    defrule :
       ch/port = (input ?name:#id! : ?t:#ch/type) : Port(true, name, t)
@@ -167,6 +186,11 @@ defsyntax chipper :
       prefix-op = (wire ?name:#id! : ?type:#ch/type) :
          compile(WireStmt(name, type))
 
+   ;Node statement
+   defrule :
+      prefix-op = (node ?name:#id! = ?x:#exp!) :
+         compile(NodeStmt(name, x))
+
    ;Mem statement
    defrule :
       prefix-op = (mem ?name:#id! : ?type:#ch/type) :
@@ -174,6 +198,10 @@ defsyntax chipper :
 
    ;Instance Statement
    defrule :
+      prefix-op = (inst-of ?module:#ch/type) :
+         val name = gensym(`mod)
+         val inststmt = compile(InstanceStmt(name, module))
+         expandf $ qquote((~ inststmt ~ name))
       prefix-op = (inst ?name:#id! of ?module:#ch/type) :
          compile(InstanceStmt(name, module))
 
@@ -231,6 +259,8 @@ defsyntax chipper :
 
    ;Literal Syntax
    defrule :
+      prefix-op = (Bool(?v:#exp$)) :
+         expande $ qquote(chipper/BoolLiteral(~ v))
       prefix-op = (UInt(?v:#exp$)) :
          expande $ qquote(chipper/UIntLiteral(~ v))
       prefix-op = (UInt<?w:#exp$>(?v:#exp$)) :
@@ -255,6 +285,8 @@ defn expandf (form) :
 ;================= TYPE COMPILATION =========================
 defn compile-to-type (t:Type) :
    match(t) :
+      (t:BoolT) :
+         qquote(chipper/Bool())
       (t:UIntT) :
          qquote(chipper/UInt(firrtl/ir/UnknownWidth(), firrtl/ir/None()))
       (t:UIntWT) :
@@ -285,6 +317,8 @@ defn compile-to-module (t:Type) :
 
 defn compile-to-handle-type (t:Type) :
    match(t) :
+      (t:BoolT) :
+         qquote(chipper/Bool)
       (t:UIntT|UIntWT) :
          qquote(chipper/UInt)
       (t:SIntT|SIntWT) :
@@ -412,6 +446,15 @@ defn compile (s:WireStmt) :
       `name => name(s)
       `type => compile-to-type(type(s))
       `ht => compile-to-handle-type(type(s))])
+;============================================================
+
+;================= NODE COMPILATION =========================
+defn compile (s:NodeStmt) :
+   val template = `(
+      val name = chipper/NodeExp(`name, x))
+   expande $ fill-template(template, [
+      `name => name(s)
+      `x => x(s)])
 ;============================================================
 
 ;================= Mem COMPILATION =========================

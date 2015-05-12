@@ -15,8 +15,8 @@ defmodule GCD :
    output z: UInt<16>
    output v: UInt<1>
 
-   reg x: UInt
-   reg y: UInt
+   reg x: UInt<16>
+   reg y: UInt<16>
    when x > y :
       x := x - y
    else :

@@ -1,0 +1,34 @@
+#include("src/firrtl-ir.stanza")
+#include("src/ir-utils.stanza")
+#include("src/chipper.stanza")
+
+#use-syntax(core, chipper)
+
+defpackage module-vec :
+   import core
+   import verse
+   import chipper
+
+defmodule PlusOne :
+  input in : UInt<32>
+  output out : UInt<32>
+  out := in + UInt(1)
+
+defmodule ModuleVec (n: Int) :
+  input ins  : UInt<32>[n]
+  output outs : UInt<32>[n]
+  ;; val pluses = Rom(n, fn () : (inst m of PlusOne, m))
+  ;; val pluses = Rom(n, fn () : inst-of PlusOne)
+  ;; val pluses = Rom(n, { inst-of PlusOne })
+  ;; val pluses = Rom(n, {(inst m of PlusOne, m)})
+  val pluses = Rom(n, fn () : (fn (): inst-of PlusOne)())
+  for i in 0 to n do :
+    pluses[i].in := ins[i]
+    outs[i]      := pluses[i].out 
+
+defn main () :
+   circuit c of ModuleVec(4)
+   println(c)
+
+main()
+

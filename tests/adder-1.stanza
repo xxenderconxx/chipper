@@ -36,7 +36,7 @@ defmodule Adder (n:Int) :
       carry[i + 1] := fa.cout
       sums[i] := fa.sum
 
-   sum := reduce(concat, sums)
+   sum := reduce(cat, sums)
    cout := carry[n]
    
 defn main () :

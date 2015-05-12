@@ -91,9 +91,9 @@ defmethod print (o:OutputStream, op:PrimOp) :
       GREATER-EQ-US-OP : "geq-us"
       GREATER-EQ-SU-OP : "geq-su"
       GREATER-EQ-SS-OP : "geq-ss"
-      EQUAL-OP : "equal"
-      EQUAL-UU-OP : "equal-uu"
-      EQUAL-SS-OP : "equal-ss"
+      EQUAL-OP : "eq"
+      EQUAL-UU-OP : "eq-uu"
+      EQUAL-SS-OP : "eq-ss"
       MUX-OP : "mux"
       MUX-UU-OP : "mux-uu"
       MUX-SS-OP : "mux-ss"
@@ -106,6 +106,12 @@ defmethod print (o:OutputStream, op:PrimOp) :
       AS-SINT-OP : "as-SInt"
       AS-SINT-U-OP : "as-SInt-u"
       AS-SINT-S-OP : "as-SInt-s"
+      DYN-SHIFT-LEFT-OP : "dshl"
+      DYN-SHIFT-LEFT-U-OP : "dshl-u"
+      DYN-SHIFT-LEFT-S-OP : "dshl-s"
+      DYN-SHIFT-RIGHT-OP : "dshr"
+      DYN-SHIFT-RIGHT-U-OP : "dshr-u"
+      DYN-SHIFT-RIGHT-S-OP : "dshr-s"
       SHIFT-LEFT-OP : "shl"
       SHIFT-LEFT-U-OP : "shl-u"
       SHIFT-LEFT-S-OP : "shl-s"
@@ -120,7 +126,7 @@ defmethod print (o:OutputStream, op:PrimOp) :
       BIT-OR-OP : "bit-or"
       BIT-XOR-OP : "bit-xor"
       BIT-XOR-REDUCE-OP : "bit-xor-reduce"
-      CONCAT-OP : "concat"
+      CONCAT-OP : "cat"
       BIT-SELECT-OP : "bit"
       BITS-SELECT-OP : "bits"
    
@@ -135,6 +141,7 @@ defmethod print (o:OutputStream, e:Expression) :
       (e:DoPrim) : "~(~@)" << [op(e), join(concat(args(e), consts(e)), ", ")]
       (e:ReadPort) : "ReadPort(~, ~, ~)" << [mem(e), index(e), enable(e)]
       (e:WritePort) : "WritePort(~, ~, ~)" << [mem(e), index(e), enable(e)]
+      (e:Pad) : "Pad(~, ~)" << [arg(e), width(e)]
       (e:Register) : "Register(~, ~)" << [value(e), enable(e)]
 
 defmethod print (o:OutputStream, c:Stmt) :
