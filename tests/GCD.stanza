@@ -1,12 +1,15 @@
 #include("src/firrtl-ir.stanza")
 #include("src/ir-utils.stanza")
 #include("src/chipper.stanza")
+#include("src/dl-tester.stanza")
+
 #use-syntax(core, chipper)
 
 defpackage gcd :
    import core
    import verse
    import chipper
+   import tester
 
 defmodule GCD :
    input a: UInt<16>
@@ -27,8 +30,32 @@ defmodule GCD :
    z := x
    v := y === UInt(0)
 
+defn gcd-tests () :
+  val t = Tester("GCD")
+  val [a, b, c] = [64, 48, 16]
+  defn* loop () -> True|False :
+    val first = if cycles(t) == 0: 1 else: 0
+    poke(t, "GCD.a", a)
+    poke(t, "GCD.b", b)
+    poke(t, "GCD.e", first)
+    step(t)
+    if cycles(t) > 100 :
+      println-all(["FAILURE "])
+      false
+    else if cycles(t) <= 1 or peek(t, "GCD.v") == 0 :
+      loop()
+    else :
+      val res = expect(t, "GCD.z", c)
+      println-all(["SUCCESS " res])
+      res 
+  run(t, loop)
+
 defn main () :
    circuit c of GCD
-   println(c)
+   val args = commandline-arguments()
+   if length(args) == 2 and args[1] == "--test" :
+     gcd-tests()
+   else :
+     println(c)
    
 main()
