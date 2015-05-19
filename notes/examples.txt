@@ -1,0 +1,136 @@
+defmodule Adder :
+   input a: UInt
+   input b: UInt
+   output z: UInt
+   z := a + b
+
+defn Adder (a:UInt, b:UInt) :
+   inst i of Adder
+   i.a := a
+   i.b := b
+   i.z
+
+defmodule Top :
+   input a: UInt
+   input b: UInt
+   output z: UInt
+
+   ;AVOID THIS
+   inst i of Adder
+   i.a := a
+   i.b := b
+   z := i.z
+
+   ;WANT THIS
+   z := Adder(a, b)
+
+======================================================
+
+defbundle Decoupled<T> :
+   data: T
+   valid: UInt<1>
+   ready: UInt<1>
+
+defmodule DCAdder :
+   input a: Decoupled<UInt>
+   input b: Decoupled<UInt>
+   output z: Decoupled<UInt>
+   z.data := a.data + b.data
+   z.valid := a.valid & b.valid
+   a.ready := z.ready
+   b.ready := z.ready
+   
+defn plus (a:Decoupled<UInt>, b:Decoupled<UInt>) :
+   inst i of DCAdder
+   i.a := a
+   i.b := b
+   i.z
+
+defmodule Top :
+   input a: Decoupled<UInt>
+   output z: Decoupled<UInt>
+   reg r: Decoupled<UInt>
+
+   z := plus(a, r)
+      OR 
+   z := a + r
+   
+
+
+   wire w: UInt<16>
+   
+      ... expands to ...
+      
+   val w = WireExp(`w, UIntType(16)) as UInt
+   
+
+
+==================================================
+defbundle Double :
+   a: UInt
+   b: UInt
+
+   ... expands to ...
+
+defclass Double <: CHExp
+defmulti a (d:Double) -> UInt
+defmulti b (d:Double) -> UInt
+
+defn Double (e:Expression) :
+   new Double :
+      defmethod firrtl-exp (this) : e
+      defmethod a (this) :
+         UInt(Subfield(e, `a))
+      defmethod b (this) :
+         UInt(Subfield(e, `b))
+
+defclass DoubleType <: CHType
+defn DoubleType () :
+   new DoubleType :
+      defmethod handle (this, e:Expression) :
+         Double(e)
+
+
+
+==================================================
+defmodule Dual :
+   input a: UInt
+   output b: UInt
+   mybody
+
+   ... expands to ...
+
+defclass Dual <: CHExp
+defmulti a (d:Dual) -> UInt
+defmulti b (d:Dual) -> UInt
+
+defn Dual (e:Expression) :
+   new Dual :
+      defmethod firrtl-exp (this) : e
+      defmethod a (this) :
+         UInt(Subfield(e, `a))
+      defmethod b (this) :
+         UInt(Subfield(e, `b))
+
+defclass DualModule <: CHModule
+defn DualModule () :
+   new DualModule :
+      defmethod handle (this, e:Expression) :
+         Dual(e)
+      defmethod firrtl-module (this) :
+         ModuleExp(
+            `Dual,
+            fn () : mybody)
+
+
+======= SUPPORTING FILE INFORMATION =============
+
+      x := x + y
+      
+      ... currently expands to ...
+      x := plus(x, y)
+
+      ... desired expansion is ...
+      x := let :
+         MOST-RECENT-OP-INFO = FileInfo("gcd.stanza", 42)
+         plus(x, y)

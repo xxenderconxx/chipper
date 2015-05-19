@@ -1,0 +1,337 @@
+val val-n-bytes = 1
+val val-all-ones = -1 ;; TODO
+val val-n-bits = val-n-bytes * 8
+val val-n-half-bits = val-n-bits / 2
+defn val-n-words (nbits: Int) -> Int : 1 + (nbits - 1) / val-n-bits
+defn val-n-half-words (nbits: Int) -> Int : (1 + (nbits - 1)) / val-n-half-bits
+defn val-top-bit (v: Int) -> Int : v >> (val-n-bits - 1)
+defn val-n-full-words (nbits: Int) -> Int : nbits / val-n-bits
+defn val-n-word-bits (nbits: Int) -> Int : nbits % val-n-bits
+defn mask-val (n: Int) : val-all-ones >> (val-n-bits - n)
+
+defclass BigInt <: Gettable & Settable & Lengthable
+defmulti to-bin (b: BigInt) -> String
+defmulti num-words (b: BigInt) -> Int
+defmulti dat (b: BigInt) -> Array<Int>
+defn BigInt (len: Int) :
+  val d = Array<Int>(val-n-words(len))
+  new BigInt :
+     defmethod get (this, i: Int) -> Int : d[i]
+     defmethod set (this, i: Int, x: Int) : d[i] = x
+     defmethod dat (this) -> Array<Int> : d
+     defmethod length (this) -> Int : len
+     defmethod num-words (this) -> Int : length(d)
+     defmethod to-bin (this) -> String :
+       string-join $
+       generate<Char> :
+         defn* loop (pos:Int) :
+           if (pos >= 0) :
+             yield(if (d[pos / val-n-bits] >> (pos % val-n-bits))&1 == 1: '1' else: '0')
+             loop(pos - 1)
+         loop(len - 1)
+     defmethod to-string (this) : string-join(["BigInt<" len ">(" to-bin(this) ")"])
+
+defmethod print (o:OutputStream, b:BigInt) :
+  print(o, to-string(b))
+
+defn assert (cond:True|False, msg:String) : if not cond: error(msg)
+
+defn assert (cond:True|False) : assert(cond, "failure")
+
+;; loop macro with starting values
+
+;; defn map-range (s:Int, e:Int, f: (Int) -> False) :
+;;   for i in s to e do : f(i)
+
+defn map! (f: (Int, Int) -> Int, d: BigInt, s0: BigInt, s1: BigInt) -> BigInt :
+  ;; assert(length(d) == length(s0) and length(s0) == length(s1),
+  ;;        string-join(["LENS != " num-words(d) " " num-words(s0) " " num-words(s1)]))
+  for i in 0 to num-words(d) do :
+    d[i] = f(s0[i], s1[i])
+  d
+
+defn mask! (d: BigInt) -> BigInt :
+  val n-full-words = val-n-full-words(length(d))
+  val n-word-bits  = val-n-word-bits(length(d))
+  for i in 0 to n-full-words do :
+    d[i] = val-all-ones
+  for i in n-full-words to num-words(d) do :
+    d[i] = 0
+  if n-word-bits > 0 :
+    d[n-full-words] = mask-val(n-word-bits)
+  d
+
+defn trim! (d:BigInt) -> BigInt :
+  val n-full-words = val-n-full-words(length(d))
+  val n-word-bits  = val-n-word-bits(length(d))
+  if n-word-bits > 0 :
+    d[n-full-words] = mask-val(n-word-bits)
+  d
+
+defn extract! (d:BigInt, s0:BigInt, e:Int, s:Int) -> BigInt :
+  trim!(rsh!(d, s0, s))
+
+defn extract-one (s0:BigInt, s:Int) -> Int :
+  val wi = s / val-n-bits
+  val bi = s % val-n-bits
+  s0[wi] >> bi
+
+defn inject! (d:BigInt, s0:BigInt, f:BigInt, start:Int) -> BigInt :
+  val bw          = length(f)
+  val msk         = mask!(BigInt(bw))
+  val msk-lsh     = msk << start
+  val inv-msk-lsh = bit-invert!(msk-lsh, msk-lsh)
+  val f-lsh   = f << start
+  (s0 & inv-msk-lsh) | f-lsh
+
+defn map! (f: (Int) -> Int, d: BigInt, s0: BigInt) -> BigInt :
+  ;; assert(length(d) == length(s0), string-join(["LENS != " num-words(d) " " num-words(s0)]))
+  for i in 0 to num-words(d) do :
+    d[i] = f(s0[i])
+  d
+
+defn fill! (f: (Int) -> Int, b: BigInt) :
+  for i in 0 to num-words(b) do :
+    b[i] = f(i)
+  b
+
+defmethod equal? (x:BigInt, y:BigInt) -> True|False :
+  var eq? = true
+  for i in 0 to num-words(x) do :
+    eq? = eq? and (x[i] == y[i])
+  eq?
+
+defn less?! (diff:BigInt, x:BigInt, y:BigInt) -> True|False :
+  sub!(diff, x, y)
+  val-top-bit(diff[num-words(diff) - 1]) == 1
+
+defn less? (x:BigInt, y:BigInt) -> True|False : op(less?!, x, y)
+
+defn less-eq?! (diff:BigInt, x:BigInt, y:BigInt) -> True|False :
+  sub!(diff, y, x)
+  val-top-bit(diff[num-words(diff) - 1]) == 0
+
+defn less-eq? (x:BigInt, y:BigInt) -> True|False : op(less-eq?!, x, y)
+
+defn greater?! (diff:BigInt, x:BigInt, y:BigInt) -> True|False : not less-eq?!(diff, x, y)
+
+defn greater? (x:BigInt, y:BigInt) -> True|False : op(greater?!, x, y)
+
+defn greater-eq?! (diff:BigInt, x:BigInt, y:BigInt) -> True|False : not less?!(diff, x, y)
+
+defn greater-eq? (x:BigInt, y:BigInt) -> True|False : op(greater-eq?!, x, y)
+
+defn BigIntLit (f: (Int) -> Int, len: Int) :
+  fill!(f, BigInt(len))
+
+val hex-nibbles = "0123456789abcdef"
+
+defn as-digit (c: Char) -> Int :
+  index-of(hex-nibbles, c) as Int
+
+defn BigIntLit (s: String) :
+  val base    = s[0]
+  val shamt   = if base == 'b': 1 else if base == 'x': 4 else: 2
+  val digits  = substring(s, 1)
+  val lit     = BigInt(length(digits) * shamt)
+  ;; println-all(["BASE " base " SHAMT " shamt " DIGITS " digits])
+  var word    = 0
+  for i in 0 to length(digits) do :
+    val off   = i * shamt
+    val wi    = off / val-n-bits
+    val bi    = off % val-n-bits
+    val pword = if bi == 0: 0 else: word
+    word      = (pword << shamt) | as-digit(digits[i]) 
+    lit[wi]   = word
+    ;; println-all(["OFF " off " wi " wi " bi " bi " PWORD " pword " WORD " word " LIT " lit])
+  ;; println-all(["RES = " lit])
+  lit
+
+public defn sizeof (in: Int) -> Int :
+  max(1, ceil-log2(in + 1))
+
+defn BigIntLit (x: Int, w: Int) :
+  fill!({_ + x}, BigInt(w))
+
+defn BigIntLit (x: Int) : BigIntLit(x, sizeof(x))
+
+defn op (f:(BigInt, BigInt, BigInt) -> True|False, x:BigInt, y:BigInt) -> True|False :
+  f(BigInt(max(length(x), length(y))), x, y)
+
+defn op (f:(BigInt, BigInt, BigInt) -> BigInt, x:BigInt, y:BigInt) -> BigInt :
+  f(BigInt(max(length(x), length(y))), x, y)
+
+defn op (f:(BigInt, BigInt) -> BigInt, x:BigInt) -> BigInt :
+  f(BigInt(length(x)), x)
+
+defn int (x: True|False) -> Int : if x : 1 else : 0
+
+defn plus! (d: BigInt, s0: BigInt, s1: BigInt) -> BigInt :
+  var carry = false
+  for i in 0 to num-words(d) do :
+    d[i] = s0[i] + s1[i] + int(carry)
+    carry = ((s0[i] + s1[i]) < s0[i]) or (d[i] < int(carry))
+  d
+
+defn plus (x:BigInt, y:BigInt) -> BigInt : op(plus!, x, y)
+
+defn sub! (d: BigInt, s0: BigInt, s1: BigInt) -> BigInt :
+  var borrow = false
+  for i in 0 to num-words(d) do :
+    d[i] = s0[i] - s1[i] + int(borrow)
+    borrow = (s0[i] < (s0[i] - s1[i])) or (s0[i] - s1[i]) < d[i]
+  d
+
+defn sub (x:BigInt, y:BigInt) -> BigInt : op(sub!, x, y)
+
+defn neg! (d: BigInt, s0: BigInt) -> BigInt :
+  var borrow = false
+  for i in 0 to num-words(d) do :
+    d[i] = neg(s0[i]) - int(borrow)
+    borrow = (s0[i] > 0) or (d[i] > 0)
+  d
+
+defn neg (x:BigInt) -> BigInt : op(neg!, x)
+
+defn rsha! (d:BigInt, s0:BigInt, amount:Int) -> BigInt :
+  val w = length(s0)
+  val nw = num-words(d)
+  val n-shift-bits     = amount % val-n-bits
+  val n-shift-words    = amount / val-n-bits
+  val n-rev-shift-bits = val-n-bits - n-shift-bits
+  val is-zero-carry    = n-shift-bits == 0
+  val msb              = s0[nw - 1] >> (w - nw * val-n-bits - 1)
+  var carry = 0;
+
+  if msb == 0 :
+    for i in 0 to n-shift-words do :
+      d[nw - i - 1] = 0
+
+  defn* loopy (i:Int) :
+    if i >= n-shift-words :
+      val x = s0[i]
+      d[i - n-shift-words] = (x >> n-shift-bits) | carry
+      carry                = if is-zero-carry: 0 else: x << n-rev-shift-bits
+      loopy(i - 1)
+  loopy(nw - 1)
+
+  if msb != 0 :
+    val boundary = (w - amount)
+
+    defn* loop (i:Int) :
+      if i >= 0 :
+        val idx = i * val-n-bits
+        if idx  > boundary :
+          d[i] = val-all-ones
+          loop(i - 1)
+        else :
+          d[i] = d[i] | (val-all-ones << (boundary - idx))
+          d[nw - 1] = d[nw - 1] & (val-all-ones >> ((nw - 1) * val-n-bits - w))
+    loop(nw - 1)
+  d
+
+defn signed-shift-right (b:BigInt, n:Int) -> BigInt : rsha!(BigInt(length(b)), b, n)
+
+defn rsh! (d:BigInt, s0:BigInt, amount:Int) -> BigInt :
+  val nw               = num-words(d)
+  var carry            = 0
+  val n-shift-bits     = amount % val-n-bits
+  val n-shift-words    = amount / val-n-bits
+  val n-rev-shift-bits = val-n-bits - n-shift-bits
+  val is-zero-carry    = n-shift-bits == 0
+  for i in 0 to n-shift-words do :
+    d[nw - i - 1] = 0
+  defn* loop (i:Int) :
+    if i >= n-shift-words :
+      val x = s0[i];
+      d[i - n-shift-words] = x >> n-shift-bits | carry
+      carry                = if is-zero-carry: 0 else: x << n-rev-shift-bits
+      loop(i - 1)
+  loop(nw - 1)
+  d
+
+defn shift-right (b:BigInt, n:Int) -> BigInt : rsh!(BigInt(length(b)), b, n)
+
+defn lsh! (d:BigInt, s0:BigInt, amount:Int) :
+  val n-shift-bits     = amount % val-n-bits
+  val n-shift-words    = amount / val-n-bits
+  val n-rev-shift-bits = val-n-bits - n-shift-bits
+  val is-zero-carry    = n-shift-bits == 0
+  for i in 0 to num-words(d) do :
+    d[i] = 0
+  var carry = 0;
+  ;; println-all(["LSH AMOUNT " amount " VNB " val-n-bits " NSB " n-shift-bits " NSW " n-shift-words " NRSB " n-rev-shift-bits])
+  for i in 0 to (num-words(d) - n-shift-words) do :
+    val x = s0[i]
+    ;; println-all(["  SHIFTING " (i + n-shift-words) " VAL " (x << n-shift-bits)])
+    d[i + n-shift-words] = (x << n-shift-bits) | carry
+    carry                = if is-zero-carry: 0 else: x >> n-rev-shift-bits
+  d
+
+defn shift-left (b:BigInt, n:Int) -> BigInt : lsh!(BigInt(length(b) + n), b, n)
+
+;; defn mul! (d: BigInt, s0: BigInt, s1: BigInt, nb0: Int, nb1: Int) -> BigInt :
+;;   ;; Adapted from Hacker's Delight, from Knuth
+;;   var nbd = nb0 + nb1
+;;   for i in 0 to val-n-words(nbd) do :
+;;     d[i] = 0
+;; 
+;;   half-val-t* w = reinterpret-cast<half-val-t*>(d);
+;;   half-val-t* u = reinterpret-cast<half-val-t*>(s0);
+;;   half-val-t* v = reinterpret-cast<half-val-t*>(s1);
+;;   val m = val-n-half-words(nb0)
+;;   val n = val-n-half-words(nb1)
+;;   val p = val-n-half-words(nbd)
+;; 
+;;   for j in 0 to n do :
+;;     var k = 0
+;;     for i in 0 to min(m, p - j) do :
+;;       val t = u[i] * v[j] + w[i + j] + k
+;;       w[i + j] = t
+;;       k = t >> val-n-half-bits()
+;;     if ((j + m) < p)
+;;       w[j + m] = k
+;;   d
+
+defn bit-xor! (d: BigInt, s0: BigInt, s1: BigInt) : map!(bit-xor, d, s0, s1)
+
+defn bit-xor (b0:BigInt, b1:BigInt) : op(bit-xor!, b0, b1)
+
+defn bit-or! (d: BigInt, s0: BigInt, s1: BigInt) : map!(bit-or, d, s0, s1)
+
+defn bit-or (b0:BigInt, b1:BigInt) : op(bit-or!, b0, b1)
+
+defn bit-and! (d: BigInt, s0: BigInt, s1: BigInt) : map!(bit-and, d, s0, s1)
+
+defn bit-and (b0:BigInt, b1:BigInt) : op(bit-and!, b0, b1)
+
+defn bit-invert! (d: BigInt, s0: BigInt) : map!(bit-xor, d, s0, mask!(d))
+
+defn bit-invert (b0:BigInt) : op(bit-invert!, b0)
+
+defn check (msg:String, x:BigInt, e:BigInt) :
+  println-all([msg " " x " E " e " ? " x == e])
+
+defn check (msg:String, x:BigInt) :
+  println-all([msg " " x])
+
+;; check("Ba ", BigIntLit({ _ },   1))
+;; check("Bb ", BigIntLit({ _ },  16))
+;; check("Bc ", BigIntLit({ _ },  32))
+;; check("Bd ", BigIntLit({ _ },  48))
+;; check("Be ", BigIntLit({ _ },  64))
+;; check("Bf ", BigIntLit({ _ },  65))
+;; check("B1 ", BigIntLit(1, 8))
+;; check("B2 ", BigIntLit(2, 8))
+;; check("B+ ", BigIntLit(3, 8) + BigIntLit(5, 8), BigIntLit(3 + 5, 8))
+;; check("B- ", BigIntLit(5, 8) + BigIntLit(3, 8), BigIntLit(5 + 3, 8))
+;; check("B| ", BigIntLit(5, 8) | BigIntLit(9, 8), BigIntLit(5 | 9, 8))
+;; check("B& ", BigIntLit(5, 8) & BigIntLit(9, 8), BigIntLit(5 & 9, 8))
+;; check("B^ ", BigIntLit(5, 8) ^ BigIntLit(9, 8), BigIntLit(5 ^ 9, 8))
+;; check("B< ", BigIntLit(5, 8) << 1, BigIntLit(5 << 1, 9))
+;; check("B< ", BigIntLit(5, 3) << 10, BigIntLit(5 << 1, 13))
+;; check("B< ", BigIntLit(5, 3) << 32, BigIntLit(5 << 1, 38))
+;; check("B< ", BigIntLit("b1010") << 1, BigIntLit(10 << 1, 5))
+check("B< ", BigIntLit("xfafa") << 16, BigIntLit(10 << 1, 5))
+;; check("B< ", BigIntLit(5, 3) << 64, BigIntLit(5 << 1, 67))
+;; check("BN ", neg(BigIntLit(2, 8)), BigIntLit(-2, 8))

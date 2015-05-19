@@ -170,7 +170,7 @@ defsyntax chipper :
                (?ports:#ch/port ... ?stmts:#exps!) :
                   compile(DefModule(name, ts, arglist, ports, stmts))
 
-   ;Register statement
+   ;Register statements
    defrule :
       prefix-op = (reg ?name:#id! : ?type:#ch/type = ?init:#exp!) :
          val regstmt = compile(RegisterStmt(name, type))
@@ -315,6 +315,24 @@ defn compile-to-module (t:Type) :
       `ts => splice(map(compile-to-type, targs(t*)))
       `args => splice(args(t*))])
 
+defn compile-to-handle-type-internal (t:Type) :
+   match(t) :
+      (t:BoolT) :
+         qquote(chipper/Bool)
+      (t:UIntT|UIntWT) :
+         qquote(chipper/UInt)
+      (t:SIntT|SIntWT) :
+         qquote(chipper/SInt)
+      (t:VecT) :
+         fill-template(`(chipper/Vec<T>), [
+            `T => compile-to-handle-type-internal(type(t))])
+      (t:NamedT) :
+         fill-template(`(name<Ts>), [
+            `name => name(t)
+            `Ts => splice(map(compile-to-handle-type-internal, targs(t)))])
+      (t:ParamT) :
+         `chipper/Data
+
 defn compile-to-handle-type (t:Type) :
    match(t) :
       (t:BoolT) :
@@ -339,7 +357,8 @@ defn compile-handle-class (myname, targs, arglist:List, fields:List<Field>) :
       fields{
          defmulti fname<targs{T?}> (a:A<targs{T?}>) -> fht
       }
-      defn A (fields{ft:chipper/Data}, e:firrtl/ir/Expression) :
+      defn A (targs{T:Data}, e:firrtl/ir/Expression) :
+         fields{ val ft = type-exp }
          new A :
             defmethod chipper/firrtl-exp (this) :
                e
@@ -351,12 +370,12 @@ defn compile-handle-class (myname, targs, arglist:List, fields:List<Field>) :
                         chipper/firrtl-type(ft))
                   }]
             defmethod chipper/handle (this, e:firrtl/ir/Expression) :
-               A(fields{ft}, e)
+               A(targs{T}, e)
             fields{
                defmethod fname (this) :
                   chipper/handle(ft, firrtl/ir/Subfield(e, `f, firrtl/ir/UnknownType())) as ?
             }))
-   fill-template(template, [
+   val res = fill-template(template, [
       `A => myname
       `a => gensym(`a)
       `e => gensym(`e)
@@ -370,6 +389,8 @@ defn compile-handle-class (myname, targs, arglist:List, fields:List<Field>) :
           `fht => compile-to-handle-type(type(f))
           `flip => choice(flip(f))
           `type-exp => compile-to-type(type(f))]])
+    println-all(["CHC = " res])
+    res
 
 ;; defn compile-handle-class (hname, targs, arglist:List, fields:List<Field>) :
 ;;    val fs = for f in fields map : name(f) => type(f)
@@ -409,7 +430,7 @@ defn compile-module-class (m:DefModule) :
                   fn () :
                      fields{val f = chipper/handle(ft, firrtl/ir/Ref(`f, firrtl/ir/UnknownType())) as fht}
                      body)))
-   fill-template(template, [
+   val res = fill-template(template, [
       `A => name(m)
       `AModule => to-symbol("~Module" << [name(m)])
       `targs => collect $ [`T => targs(m)]
@@ -417,10 +438,12 @@ defn compile-module-class (m:DefModule) :
       `fields => nested $ for p in ports(m) stream :
          [`f => name(p)
           `ft => gensym(`T)
-          `fht => compile-to-handle-type(type(p))
+          `fht => compile-to-handle-type-internal(type(p))
           `type-exp => compile-to-type(type(p))
           `dir => choice(input?(p))]
       `body => body(m)])
+   println-all(["CMC " res])
+   res
 
 defn compile (m:DefModule) :
    expande $ list(list(

@@ -1,0 +1,28 @@
+#include("src/chipper.stanza")
+
+#use-syntax(core, chipper)
+
+defpackage stack :
+   import core
+   import verse
+   import chipper
+
+defbundle DecoupledIO<T> :
+  valid: Bool
+  bits: T
+  flip ready: Bool
+
+defmodule Fifo<T> (entries: Int, pipe: True|False, flow: True|False) : ;; , _reset: Bool = null
+  input  enq: DecoupledIO<T>
+  output deq: DecoupledIO<T>
+  output count: UInt<sizeof(entries + 1)>
+  count := UInt(0)
+  deq   := enq
+
+defn main () :
+   circuit c of Fifo<UInt<16>>
+   println(c)
+   
+main()
+
+

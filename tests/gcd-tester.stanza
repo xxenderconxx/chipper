@@ -1,0 +1,29 @@
+#include("src/dl-tester.stanza")
+
+defpackage gcd :
+  import core
+  import verse
+  import tester
+
+defn gcd-tests () :
+  val t = Tester("GCD")
+  val [a, b, c] = [64, 48, 16]
+  defn* loop () -> True|False :
+    val first = 1 when (cycles(t) == 0) else 0
+    poke(t, "GCD.a", a)
+    poke(t, "GCD.b", b)
+    poke(t, "GCD.e", first)
+    step(t)
+    if cycles(t) > 100 :
+      println-all(["FAILURE "])
+      false
+    else if cycles(t) <= 1 or peek(t, "GCD.v") == 0 :
+      loop()
+    else :
+      val res = expect(t, "GCD.z", c)
+      println-all(["SUCCESS " res])
+      res 
+  run(t, loop)
+  println-all(["DONE"])
+
+gcd-tests()

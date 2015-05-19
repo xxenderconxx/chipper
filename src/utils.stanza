@@ -1,0 +1,18 @@
+defpackage utils :
+   import core
+   import verse
+
+public defn unzip<?S,?T> (keyvals: Streamable<KeyValue<?S,?T>>) -> [Vector<S>, Vector<T>] :
+  val keys = Vector<S>()
+  val vals = Vector<T>()
+  for kv in keyvals do :
+    add(keys, key(kv))
+    add(vals, value(kv))
+  [keys, vals]
+
+public defn map<?S,?T,?U> (f: (S,T) -> ?U, xs: Streamable<?S>, ys: Streamable<?T>) -> Streamable<U> :
+   generate<U> :
+     do({ yield(f(_,_) as U) }, xs, ys)
+
+public defn BigInt (x: Int) -> Int : x
+
