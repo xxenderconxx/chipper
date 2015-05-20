@@ -1,5 +1,6 @@
+#include("src/firrtl-ir.stanza")
+#include("src/ir-utils.stanza")
 #include("src/chipper.stanza")
-
 #use-syntax(core, chipper)
 
 defpackage stack :
