@@ -208,6 +208,9 @@ public defstruct Begin <: Stmt :
 public defstruct Connect <: Stmt :
    loc: Expression
    exp: Expression
+public defstruct OnReset <: Stmt :
+   loc: Expression
+   exp: Expression
 public defstruct EmptyStmt <: Stmt
 
 

@@ -1,3 +1,5 @@
+#include("src/firrtl-ir.stanza")
+#include("src/ir-utils.stanza")
 #include("src/chipper.stanza")
 
 #use-syntax(core, chipper)
@@ -20,7 +22,7 @@ defmodule Fifo<T> (entries: Int, pipe: True|False, flow: True|False) : ;; , _res
   deq   := enq
 
 defn main () :
-   circuit c of Fifo<UInt<16>>
+   circuit c of Fifo<UInt<16>>(4, false, false)
    println(c)
    
 main()

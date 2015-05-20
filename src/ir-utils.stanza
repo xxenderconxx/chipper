@@ -169,6 +169,8 @@ defmethod print (o:OutputStream, c:Stmt) :
          print-all(o, join(body(c), "\n"))
       (c:Connect) :
          print(o, "~ := ~" << [loc(c), exp(c)])
+      (c:OnReset) :
+         print(o, "onreset ~ := ~" << [loc(c), exp(c)])
       (c:EmptyStmt) :
          print(o, "skip")
 
@@ -232,6 +234,7 @@ defmethod map (f:Expression -> Expression, c:Stmt) -> Stmt :
       (c:DefInstance) : DefInstance(name(c), f(module(c)))
       (c:Conditionally) : Conditionally(f(pred(c)), conseq(c), alt(c))
       (c:Connect) : Connect(f(loc(c)), f(exp(c)))
+      (c:OnReset) : OnReset(f(loc(c)), f(exp(c)))
       (c) : c
 
 public defmulti map<?T> (f: Stmt -> Stmt, c:?T&Stmt) -> T

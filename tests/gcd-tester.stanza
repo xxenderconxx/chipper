@@ -1,3 +1,6 @@
+#include("src/firrtl-ir.stanza")
+#include("src/ir-utils.stanza")
+#include("src/chipper.stanza")
 #include("src/dl-tester.stanza")
 
 defpackage gcd :

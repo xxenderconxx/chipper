@@ -64,14 +64,14 @@ defn Node (e:fExpression) :
 
 ;=== Component Creation ===
 public defn RegisterExp<?T> (name:Symbol, type:?T&Data) :
-   val name* = gensym(name)
+   val name* = name ;; gensym(name)
    add(STATEMENT-VECTOR, fDefRegister(name*, firrtl-type(type)))
    handle(type, fRef(name*, fUnknownType()))
 
 public defn Reg<?T> (x:?T & Data) -> T : RegisterExp(`reg, x)
 
 public defn WireExp<?T> (name:Symbol, type:?T&Data) :
-   val name* = gensym(name)
+   val name* = name ;; gensym(name)
    add(STATEMENT-VECTOR, fDefWire(name*, firrtl-type(type)))
    handle(type, fRef(name*, fUnknownType()))
 
@@ -81,12 +81,12 @@ public defn NodeExp<?T> (name:Symbol, x:?T & Data) -> T :
    handle(type(x), fRef(name*, fUnknownType()))
 
 public defn MemExp<?T> (name:Symbol, type:?T&Data) -> T :
-   val name* = gensym(name)
+   val name* = name ;; gensym(name)
    add(STATEMENT-VECTOR, fDefMemory(name*, firrtl-type(type) as fVectorType))
    handle(type, fRef(name*, fUnknownType()))
 
 public defn InstanceExp<?T> (name:Symbol, module:?T&CHModule) :
-   val name* = gensym(name)
+   val name* = name ;; gensym(name)
    add(STATEMENT-VECTOR, fDefInstance(name*, fRef(firrtl-module(module), fUnknownType())))
    handle(module, fRef(name*, fUnknownType()))
 
@@ -100,6 +100,11 @@ public defn ConnectExp (x:Data, y:Data) :
    val y* = firrtl-exp(y)
    add(STATEMENT-VECTOR, fConnect(x*, y*))
 
+public defn OnResetExp (x:Data, y:Data) :
+   val x* = firrtl-exp(x)
+   val y* = firrtl-exp(y)
+   add(STATEMENT-VECTOR, fOnReset(x*, y*))
+
 public defn WhenExp (pred:Data, conseq: () -> ?, alt: () -> ?) :
    val p = firrtl-exp(pred)
    val c = build-statement(conseq)
@@ -112,7 +117,7 @@ public defn WhenExp (pred:Data, conseq: () -> ?) :
    add(STATEMENT-VECTOR, fConditionally(p, c, fEmptyStmt()))
 
 public defn ModuleExp (name, ports:List<fPort>, f: () -> ?) -> Symbol :
-   val name* = gensym(name)
+   val name* = name ;; gensym(name)
    val body = build-statement(f)
    add(MODULE-VECTOR, fModule(name*, ports, body))
    name*
@@ -273,7 +278,7 @@ public defn #UInt (e:fExpression) : #UInt(fUnknownWidth(), e)
 
 public defn UIntType (w:Int) : #UInt(fIntWidth(w), false)
 public defn UIntType () : #UInt(fUnknownWidth(), false)
-public defn UIntLit (v:Int) : #UInt(fUnknownWidth(), fUIntValue(v, fUnknownWidth()))
+public defn UIntLit (v:Int) : UIntLit(v, sizeof(v))
 public defn UIntLit (v:Int, w:Int) : #UInt(fIntWidth(w), fUIntValue(v, fIntWidth(w)))
 
 defn toBool (x: UInt) -> Bool:
@@ -286,7 +291,7 @@ public defn bool-and (x:Bool, y:Bool) -> Bool : bit-and(x, y)
 public defn bool-or (x:Bool, y:Bool) -> Bool : bit-or(x, y)
 
 public defn muxop<?T> (t:Bool, c:?T & Data, a:?T & Data) -> T :
-   handle{c,_} $ Node $ fDoPrim(fMUX-OP, list(et, ec, ea), List(), fUnknownType()) where :
+   handle{type(c),_} $ Node $ fDoPrim(fMUX-OP, list(et, ec, ea), List(), fUnknownType()) where :
       val et = firrtl-exp(t)
       val ec = firrtl-exp(c)   
       val ea = firrtl-exp(a)   
@@ -365,7 +370,7 @@ public defn #SInt (e:fExpression) : #SInt(fUnknownWidth(), e)
 
 public defn SIntType (w:Int) : #SInt(fIntWidth(w), false)
 public defn SIntType () : #SInt(fUnknownWidth(), false)
-public defn SIntLit (v:Int) : #SInt(fUnknownWidth(), fSIntValue(v, fUnknownWidth()))
+public defn SIntLit (v:Int) : SIntLit(v, sizeof(v) + 1)
 public defn SIntLit (v:Int, w:Int) : #SInt(fIntWidth(w), fSIntValue(v, fIntWidth(w)))
 
 ;; MInt
