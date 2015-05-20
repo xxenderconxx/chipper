@@ -1,8 +1,3 @@
-#include("src/firrtl-ir.stanza")
-#include("src/ir-utils.stanza")
-#include("src/chipper.stanza")
-#include("src/utils.stanza")
-
 #use-syntax(core, chipper)
 
 defpackage stdlib :
@@ -182,22 +177,22 @@ public defn UInt-to-OH (in: UInt, width: Int) -> UInt :
 public defclass Counter
 public defmulti inc (c: Counter) -> Bool
 public defmulti num (c: Counter) -> Int
-public defmulti count (c: Counter) -> UInt
+public defmulti value (c: Counter) -> UInt
 public defn Counter (n: Int) :
-  reg value : UInt<log2Up(n)> value <- UInt(0)
+  reg count : UInt<log2Up(n)> count <- UInt(0)
   new Counter :
-    defmethod count (this) -> UInt : value
+    defmethod value (this) -> UInt : count
     defmethod num (this) -> Int : n
     defmethod inc (this) -> Bool :
       if n == 1 : Bool(true)
       else :
-        node wrap = value === UInt(n - 1)
-        value := Mux(Bool(not is-pow2(n)) && wrap, UInt(0), value + UInt(1))
+        node wrap = count === UInt(n - 1)
+        count := Mux(Bool(not is-pow2(n)) && wrap, UInt(0), count + UInt(1))
         wrap
 
 public defn Counter (cond: Bool, n: Int) -> [UInt, Bool] :
   val c = Counter(n)
   var wrap: Bool = Bool(false)
   when cond : wrap = inc(c)
-  [count(c), cond && wrap]
+  [value(c), cond && wrap]
 
