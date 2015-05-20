@@ -270,6 +270,10 @@ defn #UInt (w:fWidth, e:fExpression|False) :
       defmethod toSInt (this) -> SInt:
          unaryop-as(fAS-SINT-OP, #SInt(), this, sum-width(this, 0))
 
+public defn bit-or-reduce (x:UInt) : invert(bit-equal?(x, UIntLit(0)))
+public defn bit-and-reduce (x:UInt) : bit-equal?(x, UIntLit(-1))
+public defn bit-xor-reduce (x:UInt) : unaryop(fBIT-XOR-REDUCE-OP, x, 1)
+
 public defmethod print (o:OutputStream, x:UInt) : print-all(["UInt()"])
 
 public defn #UInt () : #UInt(fUnknownWidth())

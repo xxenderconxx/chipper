@@ -1,3 +1,5 @@
+#include("src/firrtl-ir.stanza")
+#include("src/ir-utils.stanza")
 #include("src/chipper.stanza")
 #include("src/utils.stanza")
 
@@ -27,17 +29,19 @@ public defn is-pow2 (in: Int) -> True|False :
   in > 0 and ((in & (in - 1)) == 0)
 
 public defn to-bools (in: Bits) -> Streamable<Bool> :
-  map({ in[_] }, 0 to width(in))
+  stream({ in[_] }, 0 to width(in))
 
 public defn fill-interleaved (n: Int, in: Bits) -> UInt :
   fill-interleaved(n, to-list(to-bools(in)))
 
 ;; todo Vec from elts
-public defn fill-interleaved (n: Int, in: Streamable<Bool> & Lengthable) -> UInt :
-  to-bits(Rom(to-list(map(fill{n, _}, to-list(in)))))
+public defn fill-interleaved (n: Int, elts: Streamable<Bool> & Lengthable) -> UInt :
+  wire r : Bool[n]
+  for (e in elts, i in 0 to false) do : r[i] := e
+  to-bits(r)
 
 defn slice<?T> (x:Streamable<?T>, start:Int, end:Int) -> Streamable<T> :
-  select(x, map(fn (i:Int): i >= start and i < end, (0 to false)))
+  select(x, stream(fn (i:Int): i >= start and i < end, (0 to false)))
 
 ;; Returns the number of bits set (i.e value is 1) in the input signal.
 public defmulti pop-count (in) -> UInt
@@ -180,7 +184,7 @@ public defmulti inc (c: Counter) -> Bool
 public defmulti num (c: Counter) -> Int
 public defmulti count (c: Counter) -> UInt
 public defn Counter (n: Int) :
-  reg value : UInt = UInt<log2Up(n)>(0)
+  reg value : UInt<log2Up(n)> value <- UInt(0)
   new Counter :
     defmethod count (this) -> UInt : value
     defmethod num (this) -> Int : n

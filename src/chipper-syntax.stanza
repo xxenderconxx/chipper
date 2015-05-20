@@ -259,6 +259,15 @@ defsyntax chipper :
          fn (x) :
             expande $ qquote(bit-not-equal?(~ x, ~ y))
 
+   ;Bool Logical Operators
+   defrule :
+      suffix-op = (&& ?y:#exp!) :
+         fn (x) :
+            expande $ qquote(chipper/bool-and(~ x, ~ y))
+      suffix-op = (|| ?y:#exp!) :
+         fn (x) :
+            expande $ qquote(chipper/bool-or(~ x, ~ y))
+
    ;Dot Syntax for Field Access
    defrule :
       suffix-op = (. ?y:#id!) :
