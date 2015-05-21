@@ -1,0 +1,86 @@
+#include("src/firrtl-ir.stanza")
+#include("src/ir-utils.stanza")
+#include("src/chipper.stanza")
+
+#use-syntax(core, chipper)
+
+defpackage Fix :
+   import core
+   import verse
+   import firrtl/ir with :
+      prefix => f
+   import chipper
+
+public definterface Fix<B> <: Data
+defmulti type<?T,?B> (f:?T&Fix<?B>, nexp:Int, nw:fWidth)
+defmulti get-sext<?T,?B> (f:?T&Fix<?B>, src:Bits) -> UInt
+defmulti to-raw<?T,?B> (f:?T&Fix<?B>, a:Bits) -> B&Bits
+defmulti exp<?T,?B> (f:?T&Fix<?B>) -> Int
+defmulti to-uint<?T,?B> (f:?T&Fix<?B>) -> UInt
+
+defclass UFix <: Fix<UInt>
+
+defn UFix (exp:Int, w:fWidth, e:fExpression|False) :
+   new UFix :      
+      defmethod firrtl-exp (this) :
+         ensure-exp(e)
+      defmethod firrtl-type (this) :
+         fUIntType(w)
+      defmethod handle (this, e2:fExpression) :
+         ensure-type(e)
+         UFix(exp, w, e2)
+      defmethod type (this, nexp:Int, nw:fWidth) :
+         ensure-exp(e)
+         UFix(nexp, nw, false)   
+      defmethod type (this) :
+         type(this, exp, w)
+      defmethod erase-width (this) : ;; TODO: ???
+         type(this)
+      defmethod to-raw (this, a:Bits) -> UInt :
+         to-uint(a)
+      defmethod to-uint (this) -> UInt :
+         #UInt(w, e)
+      defmethod get-sext (this, src: Bits) -> UInt :
+         UIntLit(0, 1)
+defn UFix (exp:Int, w:fWidth) : UFix(exp, w, false)
+defn UFix (exp:Int, w:Int) : UFix(exp, fIntWidth(w), false)
+
+defn need-width (x:UInt) -> Int : width(x)
+
+defn aligned-with<?T,?B> (a:?T&Fix<?B>, b:?T&Fix<?B>) -> [B&Bits,B&Bits,Int] :
+  val teff_exp = exp(a) - need-width(to-uint(a))
+  val beff_exp = exp(b) - need-width(to-uint(b))
+  val int_exp = min(teff_exp, beff_exp)
+  ;; must zero extend on right side to lower effective exponents so everything matches
+  val t_adj_rd = to-raw(a, if teff_exp > int_exp: cat(to-uint(a), UIntLit(0, teff_exp - int_exp)) else: to-uint(a))
+  val b_adj_rd = to-raw(a, if beff_exp > int_exp: cat(to-uint(b), UIntLit(0, beff_exp - int_exp)) else: to-uint(b))
+  [t_adj_rd, b_adj_rd, int_exp]
+
+defn do-addsub<?T,?B> (a:?T&Fix<?B>, b:?T&Fix<?B>, sub?:True|False) -> T :
+  val [t_adj_rd, b_adj_rd, int_exp] = aligned-with(a, b)
+  val new_width = max(exp(a) - int_exp, exp(b) - int_exp) + 1
+  ;; note: exp - int_exp = width + eff_exp-int_exp where eff_exp = exp-width
+  val new_exp = int_exp + new_width
+  val raw-res = if sub?: t_adj_rd - b_adj_rd else: t_adj_rd + b_adj_rd
+  handle(type(a, new_exp, fIntWidth(new_width)), firrtl-exp(raw-res))
+
+defn do-lessthan<?T,?B> (a:?T&Fix<?B>, b:?T&Fix<?B>) -> Bool :
+  val [t_adj, b_adj, _] = aligned-with(a, b)
+  t_adj < b_adj
+
+defn plus<?T,?B> (a:?T&Fix<?B>, b:?T&Fix<?B>) -> T : do-addsub(a, b, false)
+defn minus<?T,?B> (a:?T&Fix<?B>, b:?T&Fix<?B>) -> T : do-addsub(a, b, true)
+defn less<?T,?B> (a:?T&Fix<?B>, b:?T&Fix<?B>) -> Bool : do-lessthan(a, b)
+
+defmodule FixAdder :
+  input in :  UFix(8,32)
+  output out : UFix(8,32)
+  out := in + in
+
+defn main () :
+   circuit c of FixAdder
+   println(c)
+   
+main()
+
+

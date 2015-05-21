@@ -57,7 +57,7 @@ defn build-statement (f: () -> ?) :
 
 ;=== Module Vector ===
 var MODULE-VECTOR:Vector<fModule> = Vector<fModule>()
-defn Node (e:fExpression) :
+public defn Node (e:fExpression) :
    val name = gensym(`tmp)
    add(STATEMENT-VECTOR, fDefNode(name, e))
    fRef(name, fUnknownType())
@@ -122,10 +122,10 @@ public defn ModuleExp (name, ports:List<fPort>, f: () -> ?) -> Symbol :
    add(MODULE-VECTOR, fModule(name*, ports, body))
    name*
 
-defn ensure-type (e:fExpression|False) :
+public defn ensure-type (e:fExpression|False) :
    if e not-typeof core/False :
       error("Cannot use expression handle as type.")
-defn ensure-exp (e:fExpression|False) :
+public defn ensure-exp (e:fExpression|False) :
    if e typeof core/False :
       error("Cannot use type handle as expression.")
    e as fExpression   
@@ -169,36 +169,41 @@ public defn Vec<?T> (t:?T&Data, len:Int) :
 ;Prim Creation
 defn width-of (w:Int) -> fWidth : if w == -1: fUnknownWidth() else: fIntWidth(w)
 
-public defn unaryop-as<?T> (op:fPrimOp, t:?T&Bits, x:Bits, w:Int) -> T :
-   handle{type(t), width-of(w), _} $ Node $ fDoPrim(op, list(ex), List(), fUnknownType()) where :
+defn unaryop-as<?T> (op:fPrimOp, t:?T&Bits, x:Bits, w:Int) -> T :
+   handle{type(t, width-of(w)), _} $ Node $ fDoPrim(op, list(ex), List(), fUnknownType()) where :
       val ex = firrtl-exp(x)
-public defn unaryop<?T> (op:fPrimOp, x:?T & Bits, w:Int) -> T :
-   handle{type(x), width-of(w), _} $ Node $ fDoPrim(op, list(ex), List(), fUnknownType()) where :
+defn unaryop<?T> (op:fPrimOp, x:?T & Bits, w:Int) -> T :
+   handle{type(x, width-of(w)), _} $ Node $ fDoPrim(op, list(ex), List(), fUnknownType()) where :
       val ex = firrtl-exp(x)
-public defn binop<?T> (op:fPrimOp, x:?T & Bits, y:T & Bits, w:Int) -> T :
-   handle{type(x), width-of(w), _} $ Node $ fDoPrim(op, list(ex, ey), List(), fUnknownType()) where :
+defn binop<?T> (op:fPrimOp, x:?T & Bits, y:T & Bits, w:Int) -> T :
+   handle{type(x, width-of(w)), _} $ Node $ fDoPrim(op, list(ex, ey), List(), fUnknownType()) where :
       val ex = firrtl-exp(x)
       val ey = firrtl-exp(y)   
-public defn binop<?T> (op:fPrimOp, x:?T & Bits, y:Int, w:Int) -> T :
-   handle{type(x), width-of(w), _} $ Node $ fDoPrim(op, list(ex), list(y), fUnknownType()) where :
+defn binop<?T> (op:fPrimOp, x:?T & Bits, y:Int, w:Int) -> T :
+   handle{type(x, width-of(w)), _} $ Node $ fDoPrim(op, list(ex), list(y), fUnknownType()) where :
       val ex = firrtl-exp(x)
-public defn cmpop (op:fPrimOp, x:Bits, y:Bits) -> Bool :
+defn cmpop (op:fPrimOp, x:Bits, y:Bits) -> Bool :
    #Bool $ Node $ fDoPrim(op, list(ex, ey), List(), fUnknownType()) where :
       val ex = firrtl-exp(x)
       val ey = firrtl-exp(y)
 
+public definterface Scalar <: Data
+public defmethod flatten (x: Scalar) -> Streamable<UInt> : list(to-uint(x))
+public defmulti to-sint (x:Scalar) -> SInt
+public defmulti as-uint (x:Scalar) -> UInt
+public defmulti to-uint (x:Scalar) -> UInt
+
 ;Handle Class for Bits
-public definterface Bits <: Data
-public defmulti toUInt (x:Bits) -> UInt
-public defmulti toSInt (x:Bits) -> SInt
+public definterface Bits <: Scalar
+public defmulti as-sint (x:Bits) -> SInt
 public defmulti lit-of<?T> (type:?T & Bits, x:Int, w:Int) -> T
 public defmulti zero<?T> (x:?T & Bits) -> T
-public defmulti handle<?T> (x:?T & Bits, nw:fWidth, e:fExpression) -> T
+public defmulti type<?T> (x:?T & Bits, nw:fWidth) -> T
+
 public defn Bits () : Bits(fUnknownWidth())
 public defn Bits (w:fWidth) : Bits(w, fNone())
 public defn Bits (w:fWidth, e:fExpression) : #UInt(w, e)
 public defn Bits (e:fExpression) : Bits(fUnknownWidth(), e)
-public defmethod flatten (x: Bits) -> Streamable<UInt> : list(toUInt(x))
 public defmethod print (o:OutputStream, x:Bits) : print-all(["Bits()"])
 
 public defn get (x:Bits, i:Int) -> Bool :
@@ -245,7 +250,7 @@ public defn shift-right<?T> (x:?T & Bits, y:Int) -> T  : binop(fSHIFT-RIGHT-OP, 
 
 ;=== Type Class for UInts ===
 public definterface UInt <: Bits
-defn #UInt (w:fWidth, e:fExpression|False) :
+public defn #UInt (w:fWidth, e:fExpression|False) :
    new UInt :      
       defmethod firrtl-exp (this) :
          ensure-exp(e)
@@ -254,21 +259,21 @@ defn #UInt (w:fWidth, e:fExpression|False) :
       defmethod handle (this, e2:fExpression) :
          ensure-type(e)
          #UInt(w, e2)
-      defmethod handle (this, nw:fWidth, e2:fExpression) :
-         ensure-type(e)
-         #UInt(nw, e2)
-      defmethod type (this) :
+      defmethod type (this, nw:fWidth) :
          ensure-exp(e)
-         #UInt(w, false)   
+         #UInt(nw, false)   
+      defmethod type (this) :
+         type(this, w)
       defmethod erase-width (this) :
          ensure-type(e)
          #UInt(fUnknownWidth(), false)   
       defmethod width (this) : value(w)
       defmethod zero (this) : UIntLit(0)
       defmethod lit-of (this, x:Int, w:Int) : UIntLit(x, w)
-      defmethod toUInt (this) -> UInt : this
-      defmethod toSInt (this) -> SInt:
-         unaryop-as(fAS-SINT-OP, #SInt(), this, sum-width(this, 0))
+      defmethod to-uint (this) -> UInt : this
+      defmethod to-sint (this) -> SInt: unaryop-as(fTO-SINT-OP, #SInt(), this, sum-width(this, 1))
+      defmethod as-uint (this) -> UInt : this
+      defmethod as-sint (this) -> SInt: unaryop-as(fAS-SINT-OP, #SInt(), this, sum-width(this, 0))
 
 public defn bit-or-reduce (x:UInt) : invert(bit-equal?(x, UIntLit(0)))
 public defn bit-and-reduce (x:UInt) : bit-equal?(x, UIntLit(-1))
@@ -305,9 +310,8 @@ public defn Mux<?T> (t:Bool, c:?T & Data, a:?T & Data) -> T :
 
 ;=== Type Class for Bools ===
 public defclass Bool <: UInt
-defn #Bool (e:fExpression|False) :
+public defn #Bool (e:fExpression|False) :
    new Bool :
-      defmethod lit-of (this, x:Int, w:Int) : Bool(x == 1)
       defmethod firrtl-exp (this) :
          ensure-exp(e)
       defmethod firrtl-type (this) :
@@ -315,21 +319,21 @@ defn #Bool (e:fExpression|False) :
       defmethod handle (this, e2:fExpression) :
          ensure-type(e)
          #Bool(e2)
-      defmethod handle (this, nw:fWidth, e2:fExpression) :
-         ensure-type(e)
-         #Bool(e2)
       defmethod type (this) :
          ensure-exp(e)
          #Bool(false)
+      defmethod type (this, nw:fWidth) :
+         type(this)
       defmethod erase-width (this) :
          ensure-type(e)
          this
+      defmethod lit-of (this, x:Int, w:Int) : Bool(x == 1)
       defmethod width (this) : 1
       defmethod zero (this) : Bool(false)
-      defmethod lit-of (this, x:Int, w:Int) : Bool(x == 1)
-      defmethod toUInt (this) -> UInt: this
-      defmethod toSInt (this) -> SInt: 
-         unaryop-as(fAS-SINT-OP, #SInt(), this, sum-width(this, 0))
+      defmethod to-uint (this) -> UInt: this
+      defmethod to-sint (this) -> SInt: unaryop-as(fTO-SINT-OP, #SInt(), this, sum-width(this, 1))
+      defmethod as-uint (this) -> UInt : this
+      defmethod as-sint (this) -> SInt: unaryop-as(fAS-SINT-OP, #SInt(), this, sum-width(this, 0))
 
 public defmethod print (o:OutputStream, x:Bool) : print-all(["Bool()"])
 
@@ -350,21 +354,21 @@ defn #SInt (w:fWidth, e:fExpression|False) :
       defmethod handle (this, e2:fExpression) :
          ensure-type(e)
          #SInt(w, e2)
-      defmethod handle (this, nw:fWidth, e2:fExpression) :
-         ensure-type(e)
-         #SInt(nw, e2)
-      defmethod type (this) :
+      defmethod type (this, nw:fWidth) :
          ensure-exp(e)
-         #SInt(w, false)   
+         #SInt(nw, false)   
+      defmethod type (this) :
+         type(this, w)
       defmethod erase-width (this) :
          ensure-type(e)
          #SInt(fUnknownWidth(), false)   
       defmethod width (this) : value(w)
       defmethod zero (this) : SIntLit(0)
       defmethod lit-of (this, x:Int, w:Int) : SIntLit(x, w)
-      defmethod toSInt (this) -> SInt : this
-      defmethod toUInt (this) -> UInt:
-         unaryop-as(fAS-UINT-OP, #UInt(), this, sum-width(this, 0))
+      defmethod to-sint (this) -> SInt : this
+      defmethod to-uint (this) -> UInt: unaryop-as(fTO-UINT-OP, #UInt(), this, sum-width(this, 0))
+      defmethod as-sint (this) -> SInt : this
+      defmethod as-uint (this) -> UInt: unaryop-as(fAS-UINT-OP, #UInt(), this, sum-width(this, 0))
 
 public defmethod print (o:OutputStream, x:SInt) : print-all(["SInt()"])
 
@@ -429,3 +433,4 @@ public defn bit-equal? (x:MInt, y:UInt) :
   bit-equal?((UIntLit(to-lit-val(mask(x), 2)) & y), UIntLit(to-lit-val(bits(x), 2)))
 public defn bit-not-equal? (x:MInt, y:UInt) : 
   invert(bit-equal?(x, y))
+
