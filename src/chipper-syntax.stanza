@@ -23,11 +23,13 @@ defstruct VecT <: Type : (type:Type, length)
 defstruct NamedT <: Type : (name, targs:List<Type>, args:List)
 defstruct ParamT <: Type : (name)
 defstruct ExpT <: Type : (erase?:True|False, exp)
+defstruct EscapeT <: Type : (exp)
 
-defstruct Field : (flip:True|False, name, type:Type)
-defstruct DefBundle : (name, targs:List, arglist:List, fields:List<Field>)
-defstruct Port : (input?:True|False, name, type:Type)
-defstruct DefModule : (name, targs:List, arglist:List, ports:List<Port>, body:List)
+defstruct TArg : (inherit:True|False, name, bound)
+defstruct Field : (inherit:True|False, flip:True|False, name, type:Type)
+defstruct DefBundle : (name, parent, targs:List<TArg>, arglist:List, fields:List<Field>)
+defstruct Port : (inherit:True|False, input?:True|False, name, type:Type)
+defstruct DefModule : (name, parent, targs:List<TArg>, arglist:List, ports:List<Port>, body:List)
 defstruct RegisterStmt : (name, type:Type)
 defstruct RegisterExp : (type:Type)
 defstruct NodeStmt : (name, x)
@@ -44,6 +46,13 @@ defstruct OnResetStmt : (x, y)
 
 ;============ DEBUG: PRINTING ===============================
 defn commas (xs) : join(xs, ", ")
+
+defmethod print (o:OutputStream, t:TArg) :
+   print(o, "~~ <: ~" << [
+      "inherit " when inherit(t) else ""
+      name(t),
+      bound(t)])
+
 defmethod print (o:OutputStream, t:Type) :
    print{o, _} $ match(t) :
       (t:UIntT) : "UInt"
@@ -54,25 +63,28 @@ defmethod print (o:OutputStream, t:Type) :
       (t:NamedT) : "~<~@>(~@)" << [name(t), commas(targs(t)), commas(args(t))]
       (t:ParamT) : name(t)
       (t:ExpT) : "typeof~(~)" << ["<?>" when erase?(t) else "", exp(t)]
+      (t:EscapeT) : "#{~}" << [exp(t)]
 
 defmethod print (o:OutputStream, f:Field) :
-   print(o, "~~ : ~" << [
+   print(o, "~~~ : ~" << [
+      "inherit " when inherit(f) else ""
       "flip " when flip(f) else ""
       name(f)
       type(f)])
 
 defmethod print (o:OutputStream, b:DefBundle) :
-   print(o, "defbundle ~<~@> ~ :" << [name(b), commas(targs(b)), arglist(b)])
+   print(o, "defbundle ~<~@> <: ~ ~ :" << [name(b), commas(targs(b)), parent(b), arglist(b)])
    for f in fields(b) do : print(o, "\n   ~" << [f])
 
 defmethod print (o:OutputStream, p:Port) :
-   print(o, "~ ~ : ~" << [
+   print(o, "~~ ~ : ~" << [
+      "inherit " when inherit(p) else ""
       "input" when input?(p) else "output"
       name(p)
       type(p)])
 
 defmethod print (o:OutputStream, m:DefModule) :
-   print(o, "defmodule ~<~@> ~ :" << [name(m), targs(m), arglist(m)])
+   print(o, "defmodule ~<~@> ~ ~ :" << [name(m), targs(m), parent(m), arglist(m)])
    for p in ports(m) do : print(o, "\n   ~" << [p])
    print(o, "\n   ~@" << [join(body(m), " ")])
 
@@ -114,7 +126,7 @@ defmethod print (o:OutputStream, s:ConnectStmt) :
    print(o, "~ := ~" << [x(s), y(s)])
 
 defmethod print (o:OutputStream, s:OnResetStmt) :
-   print(o, "onreset ~ := ~" << [x(s), y(s)])
+   print(o, "on-reset ~ := ~" << [x(s), y(s)])
 ;============================================================
 
 ;================= CHIPPER PARSER ===========================
@@ -124,11 +136,17 @@ defn* apply-suffix-ops (t, fs:List) :
 
 defsyntax chipper :
    ;Holds the current type parameters in scope
-   var TYPE-PARAMETERS:List<Symbol> = List()
-   defn add-params (ts) :
+   var TYPE-PARAMETERS:List<TArg> = List()
+   defn add-params (ts:List<TArg>) :
       append(stream(unwrap-token, ts), TYPE-PARAMETERS)
    defn tparam? (x) :
-      contains?(TYPE-PARAMETERS, unwrap-token(x))
+      val x* = unwrap-token(x)
+      for v in TYPE-PARAMETERS any? :
+         unwrap-token(name(v)) == x*
+   defn name? (x) :
+      match(unwrap-token(x)) :
+         (x:Symbol) : not contains?(`(& | : . <:), x)
+         (x) : false
 
    ;Chipper Types
    defrule :
@@ -143,6 +161,7 @@ defsyntax chipper :
       ch/term = (?x) when tparam?(x) : ParamT(x)
       ch/term = (typeof<?>(?e:#exp)) : ExpT(true, e)
       ch/term = (typeof(?e:#exp)) : ExpT(false, e)
+      ch/term = (~ #{?e:#exp}) : EscapeT(e)
       ch/term = (UInt<?e:#exp>) : UIntWT(e)
       ch/term = (UInt) : UIntT()
       ch/term = (SInt<?e:#exp>) : SIntWT(e)
@@ -151,32 +170,41 @@ defsyntax chipper :
 
    ;Helper Rules
    defrule :
-      ch/targs = ((@of ?ts:#id! ...)) : ts
+      ch/name = (?x) when name?(x) : unwrap-token(x)
+      ch/name! = (?x:#ch/name) : x
+      ch/name! != () : error("Not a name: ~" % [form])
+      ch/inherit = (inherit) : true
+      ch/inherit = () : false
+      ch/targ = (?i:#ch/inherit ?t:#ch/name! <: ?b:#type!) : TArg(i, t, b)
+      ch/targ = (?i:#ch/inherit ?t:#ch/name!) : TArg(i, t, `chipper/Data)
+      ch/targs = ((@of ?ts:#ch/targ ...)) : ts
       ch/targs = () : List()
       ch/arglist = ((?arglist ...)) : arglist
       ch/arglist = () : List()
+      ch/parent = (<: ?p:#type) : p
+      ch/parent = () : `chipper/Data
 
    ;Bundle Definition
    defrule :
-      ch/field = (flip ?name:#id! : ?t:#ch/type) : Field(true, name, t)
-      ch/field = (?name:#id! : ?t:#ch/type) : Field(false, name, t)
-      prefix-op = (defbundle ?name:#id! ?ts:#ch/targs ?arglist:#ch/arglist :
+      ch/field = (?i:#ch/inherit flip ?name:#ch/name! : ?t:#ch/type) : Field(i, true, name, t)
+      ch/field = (?i:#ch/inherit ?name:#id! : ?t:#ch/type) : Field(i, false, name, t)
+      prefix-op = (defbundle ?name:#id! ?ts:#ch/targs ?p:#ch/parent ?arglist:#ch/arglist :
                       ?body ...) :
          let-var TYPE-PARAMETERS = add-params(ts) :              
             match-syntax(body) :
                (?fs:#ch/field ...) :
-                  compile(DefBundle(name, ts, arglist, fs))
+                  compile(DefBundle(name, p, ts, arglist, fs))
 
    ;Module Definition
    defrule :
-      ch/port = (input ?name:#id! : ?t:#ch/type) : Port(true, name, t)
-      ch/port = (output ?name:#id! : ?t:#ch/type) : Port(false, name, t)
-      prefix-op = (defmodule ?name:#id! ?ts:#ch/targs ?arglist:#ch/arglist :
+      ch/port = (?i:#ch/inherit input ?name:#id! : ?t:#ch/type) : Port(i, true, name, t)
+      ch/port = (?i:#ch/inherit output ?name:#id! : ?t:#ch/type) : Port(i, false, name, t)
+      prefix-op = (defmodule ?name:#id! ?ts:#ch/targs ?p:#ch/parent ?arglist:#ch/arglist :
                       ?body ...) :
          let-var TYPE-PARAMETERS = add-params(ts) :
             match-syntax(body) :
                (?ports:#ch/port ... ?stmts:#exps!) :
-                  compile(DefModule(name, ts, arglist, ports, stmts))
+                  compile(DefModule(name, p, ts, arglist, ports, stmts))
 
    ;Register statement
    defrule :
@@ -275,6 +303,11 @@ defsyntax chipper :
             val yname = to-symbol("field#~" << [y])
             qquote($do ~ yname ~ x)
 
+   ;Syntax for Escaping to Type World
+   defrule :
+      prefix-op = (~ #{?t:#ch/type}) :
+         expande $ compile-to-type-exp(t)
+
    ;Literal Syntax
    defrule :
       prefix-op = (UInt(?v:#exp$)) :
@@ -318,6 +351,8 @@ defn compile-to-type-exp (t:Type) :
             qquote(chipper/erase-width(chipper/type(~ (exp(t)))))
          else :
             qquote(chipper/type(~ (exp(t))))
+      (t:EscapeT) :
+         exp(t)
 
 defn compile-to-type (t:Type) :
    match(t) :
@@ -336,16 +371,21 @@ defn compile-to-type (t:Type) :
          name(t)
       (t:ExpT) :
          error("Cannot calculate type from ExpT")
+      (t:EscapeT) :
+         error("Cannot calculate type from EscapeT")
 ;============================================================
 
 ;================= BUNDLE COMPILATION =======================
 defn compile (b:DefBundle) :
    val template = `((
-      defclass A<targs{T}> <: chipper/Data
-      fields{
-         defmulti field#name<targs{?T}> (a:A<targs{?T}>) -> type
+      definterface A<targs{T}> <: parent
+      targs{
+         inherit{}{defmulti field#T (a:A) -> bound}
       }
-      defn #A<targs{T}> (fields{ft:type&chipper/Data}, e:firrtl/ir/Expression|core/False) :
+      fields{
+         inherit{}{defmulti field#name<targs{?T}> (a:A<targs{?T}>) -> type}
+      }
+      defn #A<targs{T}> (targs{T:bound}, fields{ft:type&chipper/Data}, e:firrtl/ir/Expression|core/False) :
          defn ensure-type () :
             if e not-typeof core/False :
                error("Cannot use expression handle as type.")
@@ -364,20 +404,23 @@ defn compile (b:DefBundle) :
                      chipper/firrtl-type(ft))
                }]
             defmethod chipper/erase-width (this) :
-              ensure-type()
-              #A<targs{T}>(fields{chipper/erase-width(ft)}, false)
+               ensure-type()
+               #A<targs{T}>(targs{T}, fields{chipper/erase-width(ft)}, false)
+            targs{
+               defmethod field#T (this) : T
+            }
             fields{
                defmethod field#name (this) :
                   chipper/handle(ft, firrtl/ir/Subfield(ensure-exp(), `name, firrtl/ir/UnknownType()))
             }
             defmethod chipper/handle (this, e2:firrtl/ir/Expression) :
                ensure-type()
-               #A<targs{T}>(fields{ft}, e2)
+               #A<targs{T}>(targs{T}, fields{ft}, e2)
             defmethod chipper/type (this) :
                ensure-exp()
-               #A<targs{T}>(fields{ft}, false)
-      defn A<targs{?T}> (targs{T:?T&chipper/Data}, args) :
-         #A<targs{T}>(fields{type-exp}, false)))
+               #A<targs{T}>(targs{T}, fields{ft}, false)
+      defn A<targs{?T}> (targs{T:?T&bound}, args) :
+         #A<targs{T}>(targs{T}, fields{type-exp}, false)))
    val r = fill-template(template, [
       `A => name(b)
       `#A => gensym(name(b))
@@ -385,13 +428,18 @@ defn compile (b:DefBundle) :
       `e => gensym(`e)
       `ensure-type => gensym(`ensure-type)
       `ensure-exp => gensym(`ensure-exp)
+      `parent => parent(b)
       `args => splice(arglist(b))
-      `targs => collect $ [
-         `T => targs(b)]
+      `targs => nested $ for v in targs(b) stream : [
+         `field#T => to-symbol("field#~" << [name(v)])
+         `T => name(v)
+         `inherit => choice(inherit(v))
+         `bound => bound(v)]
       `fields => nested $ for f in fields(b) stream : [
          `ft => gensym(`T)
          `name => name(f)
          `flip => choice(flip(f))
+         `inherit => choice(inherit(f))
          `field#name => to-symbol("field#~" << [name(f)])
          `type => compile-to-type(type(f))
          `type-exp => compile-to-type-exp(type(f))]])
@@ -403,11 +451,14 @@ defn compile (b:DefBundle) :
 ;================ DEFMODULE COMPILATION =====================
 defn compile (b:DefModule) :
    val template = `((
-      defclass A<targs{T}> <: chipper/CHModule
-      ports{
-         defmulti field#name<targs{?T}> (a:A<targs{?T}>) -> type
+      defclass A<targs{T}> <: parent&CHModule
+      targs{
+         inherit{}{defmulti field#T (a:A) -> bound}
       }
-      defn #A<targs{T}> (ports{pt:type&chipper/Data}, eval-body: () -> ?, e:firrtl/ir/Expression|core/False) :
+      ports{
+         inherit{}{defmulti field#name<targs{?T}> (a:A<targs{?T}>) -> type}
+      }
+      defn #A<targs{T}> (targs{T:bound}, ports{pt:type&chipper/Data}, eval-body: () -> ?, e:firrtl/ir/Expression|core/False) :
          defn ensure-type () :
             if e not-typeof core/False :
                error("Cannot use expression handle as type.")
@@ -428,29 +479,32 @@ defn compile (b:DefModule) :
                ensure-exp()
             defmethod chipper/erase-width (this) :
               ensure-type()
-              #A<targs{T}>(ports{chipper/erase-width(pt)}, eval-body, false)
+              #A<targs{T}>(targs{T}, ports{chipper/erase-width(pt)}, eval-body, false)
             defmethod chipper/firrtl-type (this) :
                firrtl/ir/BundleType $ to-list $ [ports{
                   firrtl/ir/Field(`name,
                      flip{firrtl/ir/REVERSE}{firrtl/ir/DEFAULT},
                      chipper/firrtl-type(pt))
                }]
+            targs{
+               defmethod field#T (this) : T
+            }
             ports{
                defmethod field#name (this) :
                   chipper/handle(pt, firrtl/ir/Subfield(ensure-exp(), `name, firrtl/ir/UnknownType()))
             }
             defmethod chipper/handle (this, e2:firrtl/ir/Expression) :
                ensure-type()
-               #A<targs{T}>(ports{pt}, eval-body, e2)
+               #A<targs{T}>(targs{T}, ports{pt}, eval-body, e2)
             defmethod chipper/type (this) :
                ensure-exp()
-               #A<targs{T}>(ports{pt}, eval-body, false)
-      defn A<targs{?T}> (targs{T:?T&chipper/Data}, args) :
+               #A<targs{T}>(targs{T}, ports{pt}, eval-body, false)
+      defn A<targs{?T}> (targs{T:?T&bound}, args) :
          ports{val pt = type-exp}
          defn eval-body () : 
             ports{val name = chipper/handle(pt, firrtl/ir/Ref(`name, firrtl/ir/UnknownType()))}
             body                     
-         #A<targs{T}>(ports{pt}, eval-body, false)))
+         #A<targs{T}>(targs{T}, ports{pt}, eval-body, false)))
    val r = fill-template(template, [
       `A => name(b)
       `#A => gensym(name(b))
@@ -460,14 +514,19 @@ defn compile (b:DefModule) :
       `ensure-type => gensym(`ensure-type)
       `ensure-exp => gensym(`ensure-exp)
       `eval-body => gensym(`eval-body)
+      `parent => parent(b)
       `args => splice(arglist(b))
-      `body => body(b)      
-      `targs => collect $ [
-         `T => targs(b)]
+      `body => body(b)
+      `targs => nested $ for v in targs(b) stream : [
+         `field#T => to-symbol("field#~" << [name(v)])
+         `T => name(v)
+         `inherit => choice(inherit(v))
+         `bound => bound(v)]
       `ports => nested $ for p in ports(b) stream : [
          `pt => gensym(`T)
          `name => name(p)
          `flip => choice(input?(p))
+         `inherit => choice(inherit(p))
          `field#name => to-symbol("field#~" <<  [name(p)])
          `type => compile-to-type(type(p))
          `type-exp => compile-to-type-exp(type(p))]])
