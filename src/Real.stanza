@@ -1,0 +1,98 @@
+#include("src/firrtl-ir.stanza")
+#include("src/ir-utils.stanza")
+#include("src/chipper.stanza")
+
+#use-syntax(core, chipper)
+
+defpackage Real :
+   import core
+   import verse
+   import firrtl/ir with :
+      prefix => f
+   import chipper
+
+public definterface Real <: Scalar
+public defmulti lit-of<?T> (type:?T & Real, x:Float) -> T
+public defmulti zero<?T> (x:?T & Real) -> T
+
+defn unaryop-as<?T> (op:fPrimOp, t:?T&Bits, x:Real, width:Int) -> T :
+   handle{type(t, fIntWidth(width)), _} $ Node $ fDoPrim(op, list(ex), List(), fUnknownType()) where :
+      val ex = firrtl-exp(x)
+defn unaryop<?T> (op:fPrimOp, x:?T & Real) -> T :
+   handle{type(x), _} $ Node $ fDoPrim(op, list(ex), List(), fUnknownType()) where :
+      val ex = firrtl-exp(x)
+defn binop<?T> (op:fPrimOp, x:?T & Real, y:T & Real) -> T :
+   handle{type(x), _} $ Node $ fDoPrim(op, list(ex, ey), List(), fUnknownType()) where :
+      val ex = firrtl-exp(x)
+      val ey = firrtl-exp(y)   
+defn cmpop (op:fPrimOp, x:Real, y:Real) -> Bool :
+   #Bool $ Node $ fDoPrim(op, list(ex, ey), List(), fUnknownType()) where :
+      val ex = firrtl-exp(x)
+      val ey = firrtl-exp(y)
+
+public defn neg<?T> (x:?T & Real) -> T  :                            zero(x) - x
+public defn plus<?T> (x:?T & Real, y:?T & Real) -> T :               binop(fADD-OP, x, y)
+public defn minus<?T> (x:?T & Real, y:?T & Real) -> T  :             binop(fSUB-OP, x, y)
+public defn times<?T> (x:?T & Real, y:?T & Real) -> T  :             binop(fMUL-OP, x, y)
+public defn divide<?T> (x:?T & Real, y:?T & Real) -> T  :            binop(fDIV-OP, x, y)
+public defn modulo<?T> (x:?T & Real, y:?T & Real) -> T  :            binop(fMOD-OP, x, y)
+public defn bit-equal?<?T> (x:?T & Real, y:?T & Real) -> Bool  :     cmpop(fEQUAL-OP, x, y)
+public defn bit-not-equal?<?T> (x:?T & Real, y:?T & Real) -> Bool  : invert(bit-equal?(x, y))
+public defn less-eq?<?T> (x:?T & Real, y:?T & Real) -> Bool  :       cmpop(fLESS-EQ-OP, x, y)
+public defn less?<?T> (x:?T & Real, y:?T & Real) -> Bool :           cmpop(fLESS-OP, x, y)
+public defn greater-eq?<?T> (x:?T & Real, y:?T & Real) -> Bool :     cmpop(fGREATER-EQ-OP, x, y)
+public defn greater?<?T> (x:?T & Real, y:?T & Real) -> Bool :        cmpop(fGREATER-OP, x, y)
+public defn pow<?T> (x:?T & Real, y:?T & Real) -> T :                binop(fPOW-OP, x, y)
+public defn sin<?T> (x:?T & Real) -> T :                             unaryop(fSIN-OP, x)
+public defn cos<?T> (x:?T & Real) -> T :                             unaryop(fCOS-OP, x)
+public defn tan<?T> (x:?T & Real) -> T :                             unaryop(fTAN-OP, x)
+public defn asin<?T> (x:?T & Real) -> T :                            unaryop(fASIN-OP, x)
+public defn acos<?T> (x:?T & Real) -> T :                            unaryop(fACOS-OP, x)
+public defn atan<?T> (x:?T & Real) -> T :                            unaryop(fATAN-OP, x)
+public defn sqrt<?T> (x:?T & Real) -> T :                            unaryop(fSQRT-OP, x)
+public defn floor<?T> (x:?T & Real) -> T :                           unaryop(fFLOOR-OP, x)
+public defn ceil<?T> (x:?T & Real) -> T :                            unaryop(fCEIL-OP, x)
+public defn round<?T> (x:?T & Real) -> T :                           unaryop(fROUND-OP, x)
+public defn log<?T> (x:?T & Real) -> T :                             unaryop(fLOG-OP, x)
+
+public defclass Flo <: Real
+
+public defmethod print (o:OutputStream, x:Flo) : print-all(["Flo()"])
+
+public defn Flo (e:fExpression|False) :
+   new Flo :      
+      defmethod firrtl-exp (this) :
+         ensure-exp(e)
+      defmethod firrtl-type (this) :
+         fFloType()
+      defmethod handle (this, e2:fExpression) :
+         ensure-type(e)
+         Flo(e2)
+      defmethod type (this) :
+         ensure-exp(e)
+         Flo(false)   
+      defmethod erase-width (this) : this
+      defmethod width (this) : 32
+      defmethod zero (this) : FloLit(0.0)
+      defmethod lit-of (this, x:Float) : FloLit(x)
+      defmethod to-uint (this) -> UInt : unaryop-as(fTO-UINT-OP, #UInt(), this, width(this))
+      defmethod to-sint (this) -> SInt: unaryop-as(fTO-SINT-OP, #SInt(), this, width(this))
+      defmethod as-uint (this) -> UInt : unaryop-as(fAS-UINT-OP, #UInt(), this, width(this))
+
+public defn Flo () : Flo(false)
+
+public defn FloLit (v:Float) : Flo(fFloValue(v))
+
+defmodule FloAdder :
+  input in :   Flo()
+  output out : Flo()
+  println("FLO 2.1 = ~" << [2.1])
+  out := pow(neg(in + in), FloLit(2.1))
+
+defn main () :
+   circuit c of FloAdder
+   println(c)
+   
+main()
+
+

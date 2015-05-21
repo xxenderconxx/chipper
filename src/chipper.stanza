@@ -170,17 +170,17 @@ public defn Vec<?T> (t:?T&Data, len:Int) :
 defn width-of (w:Int) -> fWidth : if w == -1: fUnknownWidth() else: fIntWidth(w)
 
 public defn unaryop-as<?T> (op:fPrimOp, t:?T&Bits, x:Bits, w:Int) -> T :
-   handle{type(t), width-of(w), _} $ Node $ fDoPrim(op, list(ex), List(), fUnknownType()) where :
+   handle{type(t, width-of(w)), _} $ Node $ fDoPrim(op, list(ex), List(), fUnknownType()) where :
       val ex = firrtl-exp(x)
 public defn unaryop<?T> (op:fPrimOp, x:?T & Bits, w:Int) -> T :
-   handle{type(x), width-of(w), _} $ Node $ fDoPrim(op, list(ex), List(), fUnknownType()) where :
+   handle{type(x, width-of(w)), _} $ Node $ fDoPrim(op, list(ex), List(), fUnknownType()) where :
       val ex = firrtl-exp(x)
 public defn binop<?T> (op:fPrimOp, x:?T & Bits, y:T & Bits, w:Int) -> T :
-   handle{type(x), width-of(w), _} $ Node $ fDoPrim(op, list(ex, ey), List(), fUnknownType()) where :
+   handle{type(x, width-of(w)), _} $ Node $ fDoPrim(op, list(ex, ey), List(), fUnknownType()) where :
       val ex = firrtl-exp(x)
       val ey = firrtl-exp(y)   
 public defn binop<?T> (op:fPrimOp, x:?T & Bits, y:Int, w:Int) -> T :
-   handle{type(x), width-of(w), _} $ Node $ fDoPrim(op, list(ex), list(y), fUnknownType()) where :
+   handle{type(x, width-of(w)), _} $ Node $ fDoPrim(op, list(ex), list(y), fUnknownType()) where :
       val ex = firrtl-exp(x)
 public defn cmpop (op:fPrimOp, x:Bits, y:Bits) -> Bool :
    #Bool $ Node $ fDoPrim(op, list(ex, ey), List(), fUnknownType()) where :
@@ -191,9 +191,11 @@ public defn cmpop (op:fPrimOp, x:Bits, y:Bits) -> Bool :
 public definterface Bits <: Data
 public defmulti toUInt (x:Bits) -> UInt
 public defmulti toSInt (x:Bits) -> SInt
+public defmulti asUInt (x:Bits) -> UInt
+public defmulti asSInt (x:Bits) -> SInt
 public defmulti lit-of<?T> (type:?T & Bits, x:Int, w:Int) -> T
 public defmulti zero<?T> (x:?T & Bits) -> T
-public defmulti handle<?T> (x:?T & Bits, nw:fWidth, e:fExpression) -> T
+public defmulti type<?T> (x:?T & Bits, nw:fWidth) -> T
 public defn Bits () : Bits(fUnknownWidth())
 public defn Bits (w:fWidth) : Bits(w, fNone())
 public defn Bits (w:fWidth, e:fExpression) : #UInt(w, e)
@@ -254,12 +256,11 @@ defn #UInt (w:fWidth, e:fExpression|False) :
       defmethod handle (this, e2:fExpression) :
          ensure-type(e)
          #UInt(w, e2)
-      defmethod handle (this, nw:fWidth, e2:fExpression) :
-         ensure-type(e)
-         #UInt(nw, e2)
-      defmethod type (this) :
+      defmethod type (this, nw:fWidth) :
          ensure-exp(e)
-         #UInt(w, false)   
+         #UInt(nw, false)   
+      defmethod type (this) :
+         type(this, w)
       defmethod erase-width (this) :
          ensure-type(e)
          #UInt(fUnknownWidth(), false)   
@@ -267,8 +268,9 @@ defn #UInt (w:fWidth, e:fExpression|False) :
       defmethod zero (this) : UIntLit(0)
       defmethod lit-of (this, x:Int, w:Int) : UIntLit(x, w)
       defmethod toUInt (this) -> UInt : this
-      defmethod toSInt (this) -> SInt:
-         unaryop-as(fAS-SINT-OP, #SInt(), this, sum-width(this, 0))
+      defmethod toSInt (this) -> SInt: unaryop-as(fCONVERT-OP, #SInt(), this, sum-width(this, 1))
+      defmethod asUInt (this) -> UInt : this
+      defmethod asSInt (this) -> SInt: unaryop-as(fAS-SINT-OP, #SInt(), this, sum-width(this, 0))
 
 public defn bit-or-reduce (x:UInt) : invert(bit-equal?(x, UIntLit(0)))
 public defn bit-and-reduce (x:UInt) : bit-equal?(x, UIntLit(-1))
@@ -307,7 +309,6 @@ public defn Mux<?T> (t:Bool, c:?T & Data, a:?T & Data) -> T :
 public defclass Bool <: UInt
 defn #Bool (e:fExpression|False) :
    new Bool :
-      defmethod lit-of (this, x:Int, w:Int) : Bool(x == 1)
       defmethod firrtl-exp (this) :
          ensure-exp(e)
       defmethod firrtl-type (this) :
@@ -315,21 +316,21 @@ defn #Bool (e:fExpression|False) :
       defmethod handle (this, e2:fExpression) :
          ensure-type(e)
          #Bool(e2)
-      defmethod handle (this, nw:fWidth, e2:fExpression) :
-         ensure-type(e)
-         #Bool(e2)
       defmethod type (this) :
          ensure-exp(e)
          #Bool(false)
+      defmethod type (this, nw:fWidth) :
+         type(this)
       defmethod erase-width (this) :
          ensure-type(e)
          this
+      defmethod lit-of (this, x:Int, w:Int) : Bool(x == 1)
       defmethod width (this) : 1
       defmethod zero (this) : Bool(false)
-      defmethod lit-of (this, x:Int, w:Int) : Bool(x == 1)
       defmethod toUInt (this) -> UInt: this
-      defmethod toSInt (this) -> SInt: 
-         unaryop-as(fAS-SINT-OP, #SInt(), this, sum-width(this, 0))
+      defmethod toSInt (this) -> SInt: unaryop-as(fCONVERT-OP, #SInt(), this, sum-width(this, 1))
+      defmethod asUInt (this) -> UInt : this
+      defmethod asSInt (this) -> SInt: unaryop-as(fAS-SINT-OP, #SInt(), this, sum-width(this, 0))
 
 public defmethod print (o:OutputStream, x:Bool) : print-all(["Bool()"])
 
@@ -350,12 +351,11 @@ defn #SInt (w:fWidth, e:fExpression|False) :
       defmethod handle (this, e2:fExpression) :
          ensure-type(e)
          #SInt(w, e2)
-      defmethod handle (this, nw:fWidth, e2:fExpression) :
-         ensure-type(e)
-         #SInt(nw, e2)
-      defmethod type (this) :
+      defmethod type (this, nw:fWidth) :
          ensure-exp(e)
-         #SInt(w, false)   
+         #SInt(nw, false)   
+      defmethod type (this) :
+         type(this, w)
       defmethod erase-width (this) :
          ensure-type(e)
          #SInt(fUnknownWidth(), false)   
@@ -363,8 +363,9 @@ defn #SInt (w:fWidth, e:fExpression|False) :
       defmethod zero (this) : SIntLit(0)
       defmethod lit-of (this, x:Int, w:Int) : SIntLit(x, w)
       defmethod toSInt (this) -> SInt : this
-      defmethod toUInt (this) -> UInt:
-         unaryop-as(fAS-UINT-OP, #UInt(), this, sum-width(this, 0))
+      defmethod toUInt (this) -> UInt: unaryop-as(fCONVERT-OP, #UInt(), this, sum-width(this, 0))
+      defmethod asSInt (this) -> SInt : this
+      defmethod asUInt (this) -> UInt: unaryop-as(fAS-UINT-OP, #UInt(), this, sum-width(this, 0))
 
 public defmethod print (o:OutputStream, x:SInt) : print-all(["SInt()"])
 
