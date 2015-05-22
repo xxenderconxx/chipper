@@ -18,9 +18,11 @@ defmulti to-raw<?T,?B> (f:?T&Fix<?B>, a:Bits) -> B&Bits
 defmulti exp<?T,?B> (f:?T&Fix<?B>) -> Int
 defmulti to-uint<?T,?B> (f:?T&Fix<?B>) -> UInt
 
+defn to-raw<?T,?B> (f:?T&Fix<?B>) -> B&Bits : to-raw(f, to-uint(f))
+
 defclass UFix <: Fix<UInt>
 
-defn UFix (exp:Int, w:fWidth, e:fExpression|False) :
+defn UFix (_exp:Int, w:fWidth, e:fExpression|False) :
    new UFix :      
       defmethod firrtl-exp (this) :
          ensure-exp(e)
@@ -28,12 +30,13 @@ defn UFix (exp:Int, w:fWidth, e:fExpression|False) :
          fUIntType(w)
       defmethod handle (this, e2:fExpression) :
          ensure-type(e)
-         UFix(exp, w, e2)
+         UFix(_exp, w, e2)
       defmethod type (this, nexp:Int, nw:fWidth) :
          ensure-exp(e)
          UFix(nexp, nw, false)   
       defmethod type (this) :
-         type(this, exp, w)
+         type(this, _exp, w)
+      defmethod exp (this) -> Int : _exp
       defmethod erase-width (this) : ;; TODO: ???
          type(this)
       defmethod to-raw (this, a:Bits) -> UInt :
@@ -68,14 +71,20 @@ defn do-lessthan<?T,?B> (a:?T&Fix<?B>, b:?T&Fix<?B>) -> Bool :
   val [t_adj, b_adj, _] = aligned-with(a, b)
   t_adj < b_adj
 
+defn do-mul<?T,?B> (a: ?T&Fix<?B>, b: ?T&Fix<?B>) -> T :
+  handle(type(a, exp(a) + exp(b), fIntWidth(width(ra) + width(rb))), firrtl-exp(ra * rb)) where:
+    val ra = to-raw(a)
+    val rb = to-raw(a)
+
 defn plus<?T,?B> (a:?T&Fix<?B>, b:?T&Fix<?B>) -> T : do-addsub(a, b, false)
 defn minus<?T,?B> (a:?T&Fix<?B>, b:?T&Fix<?B>) -> T : do-addsub(a, b, true)
+defn times<?T,?B> (a:?T&Fix<?B>, b:?T&Fix<?B>) -> T : do-mul(a, b)
 defn less<?T,?B> (a:?T&Fix<?B>, b:?T&Fix<?B>) -> Bool : do-lessthan(a, b)
 
 defmodule FixAdder :
   input in :  UFix(8,32)
   output out : UFix(8,32)
-  out := in + in
+  out := in * in
 
 defn main () :
    circuit c of FixAdder

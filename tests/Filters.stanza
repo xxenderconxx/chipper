@@ -1,0 +1,69 @@
+#include("src/firrtl-ir.stanza")
+#include("src/ir-utils.stanza")
+#include("src/chipper.stanza")
+
+#use-syntax(core, chipper)
+
+defpackage Filters :
+   import core
+   import verse
+   import chipper
+
+defbundle Valid<T> () :
+  data : T
+  valid : Bool
+
+defbundle FilterIO<T> () :
+  flip in : Valid<T>
+  out : Valid<T>
+
+;; ;; definterface Filter <: Data
+;; ;; defmulti field#data (f:Filter) -> UInt
+;; ;; defmulti field#valid (f:Filter) -> Bool
+;; 
+;; ;; defmodule FunctionFilter<T>  (f: T -> T) : 
+;; ;;   output io : FilterIO<T>
+;; ;;   io.out.valid := io.in.valid
+;; ;;   io.out.data  := f(io.in.data)
+;; 
+;; ;; defmethod field#data (f:FunctionFilter) :
+;; ;;   f.io.data
+;; ;; defmethod field#valid (f:FunctionFilter) :
+;; ;;   f.io.valid
+
+defmodule FunctionFilter<T <: Bits> (f: T&Bits -> T&Bits) :
+  output io : FilterIO<T>
+  io.out.valid := io.in.valid
+  io.out.data  := f(io.in.data)
+
+defn min<?T> (x:?T&Bits, y:?T&Bits) -> T :
+  Mux(x < y, x, y)
+
+defn max<?T> (x:?T&Bits, y:?T&Bits) -> T :
+  Mux(x < y, y, x)
+
+defn ClippingFilter<?T> (type-obj:?T&Bits, limit: T&Bits) :
+  instof FunctionFilter<#{type-obj}>(min{limit, max(neg(limit), _)})
+
+defn ShiftingFilter<?T> (type-obj:?T&Bits, shift: Int) :
+  instof FunctionFilter<#{type-obj}>({_ >> shift})
+
+defmodule ShiftingClippingFilter<T <: Bits> (limit: T&Bits, shift: Int) :
+  output io : FilterIO<T>
+  val sf = ShiftingFilter(T, shift)
+  val cf = ClippingFilter(T, limit)
+  sf.io.in := io.in
+  cf.io.in := sf.io.out
+  io.out   := cf.io.out
+
+defn main () :
+   ;; max(UInt(0), UInt(1))
+   ;; circuit c of ShiftingFilter<UInt<32>>(2))
+   ;; circuit c of ShiftingFilter(#{UInt<32>}, 2)
+   ;; circuit c of ClippingFilter(#{UInt<32>}, UInt(2))
+   circuit c of ShiftingClippingFilter<UInt<32>>(UInt(2), 2)
+   println(c)
+   
+main()
+
+

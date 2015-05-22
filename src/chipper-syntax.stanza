@@ -386,17 +386,9 @@ defn compile (b:DefBundle) :
          inherit{}{defmulti field#name<targs{?T}> (a:A<targs{?T}>) -> type}
       }
       defn #A<targs{T}> (targs{T:bound}, fields{ft:type&chipper/Data}, e:firrtl/ir/Expression|core/False) :
-         defn ensure-type () :
-            if e not-typeof core/False :
-               error("Cannot use expression handle as type.")
-         defn ensure-exp () :
-            if e typeof core/False :
-               error("Cannot use type handle as expression.")
-            e as firrtl/ir/Expression   
-
          new A<targs{T}> :
             defmethod chipper/firrtl-exp (this) :
-               ensure-exp()
+               chipper/ensure-exp(e)
             defmethod chipper/firrtl-type (this) :
                firrtl/ir/BundleType $ to-list $ [fields{
                   firrtl/ir/Field(`name,
@@ -404,20 +396,20 @@ defn compile (b:DefBundle) :
                      chipper/firrtl-type(ft))
                }]
             defmethod chipper/erase-width (this) :
-               ensure-type()
+               chipper/ensure-type(e)
                #A<targs{T}>(targs{T}, fields{chipper/erase-width(ft)}, false)
             targs{
                defmethod field#T (this) : T
             }
             fields{
                defmethod field#name (this) :
-                  chipper/handle(ft, firrtl/ir/Subfield(ensure-exp(), `name, firrtl/ir/UnknownType()))
+                  chipper/handle(ft, firrtl/ir/Subfield(chipper/ensure-exp(e), `name, firrtl/ir/UnknownType()))
             }
             defmethod chipper/handle (this, e2:firrtl/ir/Expression) :
-               ensure-type()
+               chipper/ensure-type(e)
                #A<targs{T}>(targs{T}, fields{ft}, e2)
             defmethod chipper/type (this) :
-               ensure-exp()
+               chipper/ensure-exp(e)
                #A<targs{T}>(targs{T}, fields{ft}, false)
       defn A<targs{?T}> (targs{T:?T&bound}, args) :
          #A<targs{T}>(targs{T}, fields{type-exp}, false)))
@@ -426,8 +418,6 @@ defn compile (b:DefBundle) :
       `#A => gensym(name(b))
       `a => gensym(`a)
       `e => gensym(`e)
-      `ensure-type => gensym(`ensure-type)
-      `ensure-exp => gensym(`ensure-exp)
       `parent => parent(b)
       `args => splice(arglist(b))
       `targs => nested $ for v in targs(b) stream : [
@@ -459,14 +449,6 @@ defn compile (b:DefModule) :
          inherit{}{defmulti field#name<targs{?T}> (a:A<targs{?T}>) -> type}
       }
       defn #A<targs{T}> (targs{T:bound}, ports{pt:type&chipper/Data}, eval-body: () -> ?, e:firrtl/ir/Expression|core/False) :
-         defn ensure-type () :
-            if e not-typeof core/False :
-               error("Cannot use expression handle as type.")
-         defn ensure-exp () :
-            if e typeof core/False :
-               error("Cannot use type handle as expression.")
-            e as firrtl/ir/Expression   
-
          new A<targs{T}> :
             defmethod chipper/firrtl-module (this) :
                val fs = to-list $ [ports{
@@ -476,9 +458,9 @@ defn compile (b:DefModule) :
                }]
                chipper/ModuleExp(`A, fs, eval-body)
             defmethod chipper/firrtl-exp (this) :
-               ensure-exp()
+               chipper/ensure-exp(e)
             defmethod chipper/erase-width (this) :
-              ensure-type()
+              chipper/ensure-type(e)
               #A<targs{T}>(targs{T}, ports{chipper/erase-width(pt)}, eval-body, false)
             defmethod chipper/firrtl-type (this) :
                firrtl/ir/BundleType $ to-list $ [ports{
@@ -491,13 +473,13 @@ defn compile (b:DefModule) :
             }
             ports{
                defmethod field#name (this) :
-                  chipper/handle(pt, firrtl/ir/Subfield(ensure-exp(), `name, firrtl/ir/UnknownType()))
+                  chipper/handle(pt, firrtl/ir/Subfield(chipper/ensure-exp(e), `name, firrtl/ir/UnknownType()))
             }
             defmethod chipper/handle (this, e2:firrtl/ir/Expression) :
-               ensure-type()
+               chipper/ensure-type(e)
                #A<targs{T}>(targs{T}, ports{pt}, eval-body, e2)
             defmethod chipper/type (this) :
-               ensure-exp()
+               chipper/ensure-exp(e)
                #A<targs{T}>(targs{T}, ports{pt}, eval-body, false)
       defn A<targs{?T}> (targs{T:?T&bound}, args) :
          ports{val pt = type-exp}
@@ -511,8 +493,6 @@ defn compile (b:DefModule) :
       `a => gensym(`a)
       `e => gensym(`e)
       `fs => gensym(`fs)      
-      `ensure-type => gensym(`ensure-type)
-      `ensure-exp => gensym(`ensure-exp)
       `eval-body => gensym(`eval-body)
       `parent => parent(b)
       `args => splice(arglist(b))
