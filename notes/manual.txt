@@ -391,3 +391,62 @@ runtime.
    x := w[i]
 
 
+=== Using an expression within a Type Context ===
+
+When declaring a chipper type, use #{...} to refer to a Stanza expression. 
+
+   defn f (mytype:Data) :
+      wire w : Dual<UInt<16>, #{mytype}>
+
+=== Using a type within an expression context ===
+
+Similarly when within Stanza, use #{...} to create a chipper type.
+
+   f(#{Dual<UInt<16>>[10]})
+
+=== Referring to a Parametric Type ===
+
+Given the user defined bundle:
+
+   defbundle Valid<T> :
+      data: T
+      valid: Bool
+
+We can access the parameteric type T within a Valid<T> by typing ".T".
+
+   defn f<?T> (x:Valid<?T&Data>, y:T&Data) :
+      wire w: #{x.T}
+      w := y
+
+=== Parents of Bundles === 
+
+Suppose we declare a bundle representing a pair of numbers:
+
+   defbundle Pair :
+      a: UInt
+      b: UInt
+
+And then we declare a bundle representing a triplet of numbers:
+
+   defbundle Triplet :
+      a: UInt
+      b: UInt
+      c: UInt
+
+Currently, you cannot pass a Triplet to functions that expect a Pair,
+even though the fields "a" and "b" are defined for Triplet. To do
+that, we can explicitly say that a Triplet is also a Pair.
+
+   defbundle Triplet <: Pair :
+      inherit a: UInt
+      inherit b: UInt
+      c: UInt
+
+=== Parents of Modules ===
+
+Inheritance works for modules as well.
+
+   defmodule PairImplementation <: Pair :
+      inherit output a: UInt
+      inherit output b: UInt
+      ... body ...
