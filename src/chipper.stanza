@@ -401,7 +401,6 @@ defn to-lower (c: Char) -> Char :
     c
 
 defn to-lit-val (x: String) -> Int :
-  println-all(["TO-LIT-VAL " x])
   if x[0] == '0' and x[1] == 'x' :
     to-lit-val(substring(x, 2), 16)
   else : if x[0] == 'x' :
@@ -412,7 +411,6 @@ defn to-lit-val (x: String) -> Int :
     error(string-join(["Unknown lit base " x]))
 
 defn to-lit-val (x: String, shamt: Int) -> Int :
-  println-all(["TO-LIT-VAL " x " POW " shamt])
   var res = 0
   for c in x do :
     if c != '_' :

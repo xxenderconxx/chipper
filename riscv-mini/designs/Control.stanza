@@ -123,7 +123,7 @@ public defmodule Control :
     ORI    => [PC_4  , A_RS1,  B_IMM, IMM_I, ALU_OR     , BR_XXX, N, ST_XXX, LD_XXX, WB_ALU,  Y, CSR-N],
     ANDI   => [PC_4  , A_RS1,  B_IMM, IMM_I, ALU_AND    , BR_XXX, N, ST_XXX, LD_XXX, WB_ALU,  Y, CSR-N],
     SLLI   => [PC_4  , A_RS1,  B_IMM, IMM_I, ALU_SLL    , BR_XXX, N, ST_XXX, LD_XXX, WB_ALU,  Y, CSR-N],
-;;    SRLI   => [PC_4  , A_RS1,  B_IMM, IMM_I, ALU_SRL    , BR_XXX, N, ST_XXX, LD_XXX, WB_ALU,  Y, CSR-N],
+    SRLI   => [PC_4  , A_RS1,  B_IMM, IMM_I, ALU_SRL    , BR_XXX, N, ST_XXX, LD_XXX, WB_ALU,  Y, CSR-N],
 ;;    SRAI   => [PC_4  , A_RS1,  B_IMM, IMM_I, ALU_SRA    , BR_XXX, N, ST_XXX, LD_XXX, WB_ALU,  Y, CSR-N],
 ;;    ADD    => [PC_4  , A_RS1,  B_RS2, IMM_X, ALU_ADD    , BR_XXX, N, ST_XXX, LD_XXX, WB_ALU,  Y, CSR-N],
 ;;    SUB    => [PC_4  , A_RS1,  B_RS2, IMM_X, ALU_SUB    , BR_XXX, N, ST_XXX, LD_XXX, WB_ALU,  Y, CSR-N],
