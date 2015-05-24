@@ -1,0 +1,72 @@
+#use-syntax(core, chipper)
+
+defpackage Opcodes :
+   import core
+   import verse
+   import chipper
+   import Params
+
+;; Special immediate instructions
+public val Opcode-LUI       = Bits("b0110111")
+public val Opcode-AUIPC     = Bits("b0010111")
+
+;; Jump instructions
+public val Opcode-JAL       = Bits("b1101111")
+public val Opcode-JALR      = Bits("b1100111")
+
+;; Branch instructions
+public val Opcode-BRANCH    = Bits("b1100011")
+
+;; Load and store instrucdtions
+public val Opcode-STORE     = Bits("b0100011")
+public val Opcode-LOAD      = Bits("b0000011")
+
+;; Arithmetic instructions
+public val Opcode-ARI_RTYPE = Bits("b0110011")
+public val Opcode-ARI_ITYPE = Bits("b0010011")
+
+public val Opcode-SYSTEM    = Bits("b1110011")
+
+;; Branch function codes
+public val Funct3-BEQ  = Bits("b000")
+public val Funct3-BNE  = Bits("b001")
+public val Funct3-BLT  = Bits("b100")
+public val Funct3-BGE  = Bits("b101")
+public val Funct3-BLTU = Bits("b110")
+public val Funct3-BGEU = Bits("b111")
+
+;; Load and store function codes
+public val Funct3-LB   = Bits("b000")
+public val Funct3-LH   = Bits("b001")
+public val Funct3-LW   = Bits("b010")
+public val Funct3-LBU  = Bits("b100")
+public val Funct3-LHU  = Bits("b101")
+public val Funct3-SB   = Bits("b000")
+public val Funct3-SH   = Bits("b001")
+public val Funct3-SW   = Bits("b010")
+
+;; Arithemetic R-type and I-type functions codes
+public val Funct3-ADD_SUB = Bits("b000")
+public val Funct3-SLL     = Bits("b001")
+public val Funct3-SLT     = Bits("b010")
+public val Funct3-SLTU    = Bits("b011")
+public val Funct3-XOR     = Bits("b100")
+public val Funct3-OR      = Bits("b110")
+public val Funct3-AND     = Bits("b111")
+public val Funct3-SRL_SRA = Bits("b101")
+
+public val Funct3-CSRRW   = Bits("b001")
+public val Funct3-CSRRS   = Bits("b010")
+public val Funct3-CSRRC   = Bits("b011")
+public val Funct3-CSRRWI  = Bits("b101")
+public val Funct3-CSRRSI  = Bits("b110")
+public val Funct3-CSRRCI  = Bits("b111")
+
+
+public val Funct7-U = Bits("b0000000")
+public val Funct7-S = Bits("b0100000")
+
+public val AddRshiftType-ADD = Bits("b0")
+public val AddRshiftType-SUB = Bits("b1")
+public val AddRshiftType-SRL = Bits("b0")
+public val AddRshiftType-SRA = Bits("b1")

@@ -1,0 +1,30 @@
+#use-syntax(core, chipper)
+
+defpackage Tile :
+   import core
+   import verse
+   import chipper
+   import Params
+   import Core
+   import Memory
+   import CSR
+
+public defbundle HTIFIO :
+  host : HostIO
+
+public defbundle TileIO :
+  htif   : HTIFIO
+  memory : MemIO 
+
+public defmodule Tile :
+  output io : TileIO
+ 
+  inst core  of Core
+  inst memmod of Memory
+  
+  io.htif.host := core.io.host
+  io.memory := memmod.io.memory
+  core.io.stall := memmod.io.stall
+  memmod.io.icache := core.io.icache
+  memmod.io.dcache := core.io.dcache
+

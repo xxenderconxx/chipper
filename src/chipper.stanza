@@ -226,6 +226,7 @@ defn sum-log2-width (x:Bits, y:Bits) -> Int :
   if width(x) >= 0 and width(y) >= 0: width(x) + (1 << width(y)) else: -1
 
 public defn invert<?T> (x:?T & Bits) -> T  : unaryop(fBIT-NOT-OP, x, width(x))
+public defn pad<?T> (x:?T & Bits, w:Int) -> T : unaryop(fPAD-OP, x, w)
 public defn neg<?T> (x:?T & Bits) -> T  : zero(x) - x
 public defn plus<?T> (x:?T & Bits, y:?T & Bits) -> T : binop(fADD-WRAP-OP, x, y, max-width(x, y, 0))
 public defn minus<?T> (x:?T & Bits, y:?T & Bits) -> T  : binop(fSUB-WRAP-OP, x, y, max-width(x, y, 0))
@@ -238,7 +239,7 @@ public defn bit-xor<?T> (x:?T & Bits, y:?T & Bits) -> T  : binop(fBIT-XOR-OP, x,
 public defn cat<?T> (x:?T & Bits, y:?T & Bits) -> T  : binop(fCONCAT-OP, x, y, sum-width(x, y, 0))
 public defn cat<?T> (elts:Streamable<?T & Bits>) -> T  : reduce(cat, to-list(elts))
 public defn bit-equal?<?T> (x:?T & Bits, y:?T & Bits) -> Bool  : cmpop(fEQUAL-OP, x, y)
-public defn bit-not-equal?<?T> (x:?T & Bits, y:?T & Bits) -> Bool  : invert(bit-equal?(x, y))
+public defn bit-not-equal?<?T> (x:?T & Bits, y:?T & Bits) -> Bool  : cmpop(fNEQUAL-OP, x, y)
 public defn less-eq?<?T> (x:?T & Bits, y:?T & Bits) -> Bool  : cmpop(fLESS-EQ-OP, x, y)
 public defn less?<?T> (x:?T & Bits, y:?T & Bits) -> Bool : cmpop(fLESS-OP, x, y)
 public defn greater-eq?<?T> (x:?T & Bits, y:?T & Bits) -> Bool : cmpop(fGREATER-EQ-OP, x, y)
@@ -289,11 +290,15 @@ public defn UIntType (w:Int) : #UInt(fIntWidth(w), false)
 public defn UIntType () : #UInt(fUnknownWidth(), false)
 public defn UIntLit (v:Int) : UIntLit(v, sizeof(v))
 public defn UIntLit (v:Int, w:Int) : #UInt(fIntWidth(w), fUIntValue(v, fIntWidth(w)))
+public defn UIntLit (v:String) : UIntLit(to-lit-val(v))
+public defn UIntLit (v:String, w:Int) : UIntLit(to-lit-val(v), w)
 
-defn toBool (x: UInt) -> Bool:
-   val w = WireExp(`tmp, #Bool(fNone()))
+public defn to-bool (x: UInt) -> Bool:
+   val w = WireExp(`tmp, #Bool(false))
    ConnectExp(w, x)
    w as Bool
+
+public defn invert (x:Bool, y:Bool) -> Bool : invert(x, y)
 
 public defn bool-and (x:Bool, y:Bool) -> Bool : bit-and(x, y)
 
@@ -305,7 +310,7 @@ public defn muxop<?T> (t:Bool, c:?T & Data, a:?T & Data) -> T :
       val ec = firrtl-exp(c)   
       val ea = firrtl-exp(a)   
 
-public defn Mux<?T> (t:Bool, c:?T & Data, a:?T & Data) -> T :
+public defn mux<?T> (t:Bool, c:?T & Data, a:?T & Data) -> T :
    muxop(t, c, a)
 
 ;=== Type Class for Bools ===
@@ -380,6 +385,8 @@ public defn SIntType (w:Int) : #SInt(fIntWidth(w), false)
 public defn SIntType () : #SInt(fUnknownWidth(), false)
 public defn SIntLit (v:Int) : SIntLit(v, sizeof(v) + 1)
 public defn SIntLit (v:Int, w:Int) : #SInt(fIntWidth(w), fSIntValue(v, fIntWidth(w)))
+public defn SIntLit (v:String) : SIntLit(to-lit-val(v))
+public defn SIntLit (v:String, w:Int) : SIntLit(to-lit-val(v), w)
 
 ;; MInt
 val hex-nibbles = "0123456789abcdef"
@@ -388,18 +395,29 @@ defn as-digit (c: Char) -> Int :
   index-of(hex-nibbles, c) as Int
 
 defn to-lower (c: Char) -> Char :
-  if to-int(c) >= to-int('a') and to-int(c) <= to-int('z') :
-    to-char(to-int(c) + to-int('A') - to-int('a'))
+  if to-int(c) >= to-int('A') and to-int(c) <= to-int('Z') :
+    to-char(to-int(c) - to-int('A') + to-int('a'))
   else :
     c
 
+defn to-lit-val (x: String) -> Int :
+  println-all(["TO-LIT-VAL " x])
+  if x[0] == '0' and x[1] == 'x' :
+    to-lit-val(substring(x, 2), 16)
+  else : if x[0] == 'x' :
+    to-lit-val(substring(x, 1), 16)
+  else : if x[0] == 'b' :
+    to-lit-val(substring(x, 1), 2)
+  else : 
+    error(string-join(["Unknown lit base " x]))
+
 defn to-lit-val (x: String, shamt: Int) -> Int :
+  println-all(["TO-LIT-VAL " x " POW " shamt])
   var res = 0
   for c in x do :
     if c != '_' :
       if not contains?(hex-nibbles, to-lower(c)) :
-        ;; error("Literal: " + to-string(x) + " contains illegal character: " + to-string(c))
-        error("Bad Literal")
+        error(string-join(["Bad Literal " x " CONTAINS ILLEGAL CHARACTER " c " TO-LOWER " to-lower(c)]))
       res = res * shamt + as-digit(c)
   res
 
@@ -429,8 +447,8 @@ public defmethod to-string (m: MInt) -> String :
   string-join(["MInt(" mask(m) "," bits(m) ")"])
 
 ;; TODO: BOTH SIDES
-public defn bit-equal? (x:MInt, y:UInt) : 
+public defn bit-equal? (x:MInt, y:UInt) -> Bool: 
   bit-equal?((UIntLit(to-lit-val(mask(x), 2)) & y), UIntLit(to-lit-val(bits(x), 2)))
-public defn bit-not-equal? (x:MInt, y:UInt) : 
+public defn bit-not-equal? (x:MInt, y:UInt) -> Bool : 
   invert(bit-equal?(x, y))
 

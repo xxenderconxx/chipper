@@ -1,0 +1,131 @@
+#use-syntax(core, chipper)
+
+defpackage Datapath :
+   import core
+   import verse
+   import chipper
+   import Params
+   import ALU
+   import BrCond
+   import RegFile
+   import ImmGen
+   import Memory
+   import CSR
+   import Control
+   import Instructions
+
+public val PC_START = UInt("0x2000")
+
+public defbundle DatapathIO :
+  flip stall : Bool
+  host : HostIO
+  icache : CacheIO
+  dcache : CacheIO
+  flip ctrl : ControlSignals
+
+public defmodule Datapath :
+  output io : DatapathIO
+  inst alu of ALU
+  inst brCond  of BrCond
+  inst regFile of RegFile
+  inst immGen  of ImmGenWire
+
+  ;; ***** Fetch / Execute Registers *****
+  reg fe_inst : UInt<instLen> fe_inst <- UInt(0)
+  reg fe_pc   : UInt
+
+  ;; ***** Execute / Write Back Registers *****
+  reg ew_inst : UInt<instLen> ew_inst <- UInt(0)
+  reg ew_pc  : UInt
+  reg ew_alu : UInt
+ 
+  ;; ****** Fetch *****
+  reg pc : UInt<instLen> pc <- PC_START - UInt<instLen>(4)
+  val iaddr = mux((io.ctrl.pc_sel === PC_ALU) || brCond.io.taken, alu.io.sum, pc + UInt(4))
+  val inst  = mux((io.ctrl.inst_type === I_KILL) || brCond.io.taken, NOP, io.icache.dout)
+ 
+  io.icache.we   := Bool(false)
+  io.icache.din  := UInt(0)
+  io.icache.addr := iaddr 
+  io.icache.re   := io.ctrl.inst_re
+  pc             := mux(io.icache.re && ! bit-or-reduce(io.dcache.we), iaddr, pc)
+ 
+  ;; Pipelining
+  when ! io.stall :
+    fe_pc   := pc
+    fe_inst := inst
+
+  ;; ****** Execute *****
+  ;; Decode
+  io.ctrl.ins   := fe_inst
+  io.ctrl.stall := io.stall
+
+  ;; regFile read
+  node rd_addr  = fe_inst[11, 7]
+  node rs1_addr = fe_inst[19, 15]
+  node rs2_addr = fe_inst[24, 20]
+  regFile.io.raddr1 := rs1_addr
+  regFile.io.raddr2 := rs2_addr
+
+  ;; gen immdeates
+  immGen.io.inst := fe_inst
+  immGen.io.sel  := io.ctrl.imm_sel
+
+  ;; bypass
+  node rs1NotZero = bit-or-reduce(rs1_addr)
+  node rs2NotZero = bit-or-reduce(rs2_addr)
+  node alutype = io.ctrl.wb_en && io.ctrl.wb_sel === WB_ALU
+  node ex_rd_addr = ew_inst[11, 7]
+  node rs1 = mux(alutype && rs1NotZero && (rs1_addr === ex_rd_addr), ew_alu, regFile.io.rdata1)
+  node rs2 = mux(alutype && rs2NotZero && (rs2_addr === ex_rd_addr), ew_alu, regFile.io.rdata2) 
+  
+  ;; ALU operations
+  alu.io.A := mux(io.ctrl.A_sel === A_RS1, rs1, fe_pc)
+  alu.io.B := mux(io.ctrl.B_sel === B_RS2, rs2, immGen.io.out)
+  alu.io.alu_op := io.ctrl.alu_op
+
+  ;; Branch condition calc
+  brCond.io.rs1 := rs1 
+  brCond.io.rs2 := rs2
+  brCond.io.br_type := io.ctrl.br_type
+
+  ;; D$ access
+  node woffset = (alu.io.sum[1] << 4) | (alu.io.sum[0] << 3)
+  io.dcache.re   := io.ctrl.data_re 
+  io.dcache.addr := mux(io.stall, ew_alu, alu.io.sum)
+  io.dcache.we   := mux(io.stall, UInt("b0000"), mux-lookup(io.ctrl.st_type, UInt("b0000"), [
+    ST_SW => UInt("b1111"),
+    ST_SH => (UInt("b11") << alu.io.sum[1,0])[3,0],
+    ST_SB => (UInt("b1")  << alu.io.sum[1,0])[3,0] ]))
+  io.dcache.din  := (rs2 << woffset)[instLen - 1, 0]
+  
+  ;; Pipelining
+  when ! io.stall :
+    ew_pc   := fe_pc
+    ew_inst := fe_inst
+    ew_alu  := alu.io.out
+
+  ;; Load
+  node loffset = (ew_alu[1] << 4) | (ew_alu[0] << 3)
+  node lshift = io.dcache.dout >> loffset
+  node load =  mux-lookup(io.ctrl.ld_type, io.dcache.dout, [
+    LD_LH  => to-uint(pad(to-sint(lshift[15, 0]), instLen)),
+    LD_LB  => to-uint(pad(to-sint(lshift[7, 0]), instLen)),
+    LD_LHU => to-uint(lshift[15, 0]),
+    LD_LBU => to-uint(lshift[7, 0])] )
+    
+  inst csr of CSR
+  io.host := csr.io.host
+  csr.io.src  := ew_alu 
+  csr.io.addr := ew_inst[31, 20]
+  csr.io.cmd  := io.ctrl.csr_cmd
+
+  ;; Regfile Write
+  node regWrite = mux-lookup(io.ctrl.wb_sel, ew_alu, [
+    WB_MEM  => load,
+    WB_PC_4 => (ew_pc + UInt(4)),
+    WB_CSR  => csr.io.data] )
+
+  regFile.io.wen   := io.ctrl.wb_en
+  regFile.io.waddr := ex_rd_addr
+  regFile.io.wdata := regWrite

@@ -1,0 +1,8 @@
+defpackage Params :
+   import core
+   import verse
+
+public val instLen = 32
+public val addrLen = instLen
+public val memLen  = 32
+public val tagLen  = 5

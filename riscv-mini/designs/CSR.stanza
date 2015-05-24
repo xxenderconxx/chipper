@@ -1,0 +1,52 @@
+#use-syntax(core, chipper)
+
+defpackage CSR :
+   import core
+   import verse
+   import chipper
+   import Params
+   import stdlib
+
+public val CSR-N = UInt<2>(0)
+public val CSR-W = UInt<2>(1)
+public val CSR-S = UInt<2>(2)
+public val CSR-C = UInt<2>(3)
+
+public val CSR-STATUS = UInt<12>("0x50a")
+public val CSR-HARTID = UInt<12>("0x50b")
+public val CSR-TOHOST = UInt<12>("0x51e")
+
+public defbundle HostIO :
+  flip hid : UInt<1>
+  tohost : UInt<instLen>
+  status : UInt<instLen>
+
+public defbundle CSRIO :
+  host : HostIO
+  flip cmd : Bits<2>
+  flip addr : Bits<12>
+  flip src  : Bits<instLen>
+  data : Bits<instLen>
+
+public defmodule CSR :
+  output io : CSRIO
+  reg reg_tohost : UInt<32> reg_tohost <- UInt(0)
+  reg reg_status : UInt<32> reg_status <- UInt(0)
+
+  io.host.tohost := reg_tohost
+  io.host.status := reg_status
+
+  io.data := to-uint(mux-lookup(io.addr, UInt(0), [
+    CSR-TOHOST => reg_tohost,
+    CSR-STATUS => reg_status,
+    CSR-HARTID => io.host.hid]))
+
+  when io.cmd === CSR-W :
+    when io.addr === CSR-TOHOST : reg_tohost := io.src 
+    when io.addr === CSR-STATUS : reg_status := io.src 
+  when (io.cmd === CSR-S) && (io.src !== UInt(0)) :
+    when io.addr === CSR-TOHOST : reg_tohost := io.data | (UInt(1) << io.src)
+    when io.addr === CSR-STATUS : reg_status := io.data | (UInt(1) << io.src)
+  when (io.cmd === CSR-C) && (io.src !== UInt(0)) :
+    when io.addr === CSR-TOHOST : reg_tohost := io.data & (UInt(0) << io.src)
+    when io.addr === CSR-STATUS : reg_status := io.data & (UInt(0) << io.src)

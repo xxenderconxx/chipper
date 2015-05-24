@@ -1,0 +1,181 @@
+#use-syntax(core, chipper)
+
+defpackage Control :
+   import core
+   import verse
+   import chipper
+   import Params
+   import stdlib
+   import ALU
+   import CSR
+   import Instructions
+
+public val Y = Bool(true)
+public val N = Bool(false)
+
+;; pc_sel
+public val PC_4   = UInt<1>(0)
+public val PC_ALU = UInt<1>(1)
+
+;; A_sel
+public val A_RS1  = UInt<1>(0)
+public val A_PC   = UInt<1>(1)
+public val A_XXX  = UInt<1>(1)
+
+;; B_sel
+public val B_RS2  = UInt<1>(0)
+public val B_IMM  = UInt<1>(1)
+public val B_XXX  = UInt<1>(1)
+
+;; imm_sel
+public val IMM_I  = UInt<3>(0)
+public val IMM_S  = UInt<3>(1)
+public val IMM_U  = UInt<3>(2)
+public val IMM_J  = UInt<3>(3)
+public val IMM_B  = UInt<3>(4)
+public val IMM_Z  = UInt<3>(5)
+public val IMM_X  = UInt<3>(7)
+
+;; br_type
+public val BR_LTU = UInt<3>(0)
+public val BR_LT  = UInt<3>(1)
+public val BR_EQ  = UInt<3>(2)
+public val BR_GEU = UInt<3>(4)
+public val BR_GE  = UInt<3>(5)
+public val BR_NE  = UInt<3>(6)
+public val BR_XXX = UInt<3>(7)
+
+;; inst_type
+public val I_NEXT = UInt<1>(0)
+public val I_KILL = UInt<1>(1)
+
+;; st_type
+public val ST_SW  = UInt<2>(0)
+public val ST_SH  = UInt<2>(1)
+public val ST_SB  = UInt<2>(2)
+public val ST_XXX = UInt<2>(3)
+
+;; ld_type
+public val LD_LW  = UInt<3>(0)
+public val LD_LH  = UInt<3>(1)
+public val LD_LB  = UInt<3>(2)
+public val LD_LHU = UInt<3>(3)
+public val LD_LBU = UInt<3>(4)
+public val LD_XXX = UInt<3>(7)
+
+;; wb_sel
+public val WB_ALU  = UInt<2>(0)
+public val WB_MEM  = UInt<2>(1)
+public val WB_PC_4 = UInt<2>(2)
+public val WB_CSR  = UInt<2>(3)
+
+public defbundle ControlSignals :
+  pc_sel    : UInt<1>
+  inst_re   : Bool
+  inst_type : UInt<1>
+  A_sel     : UInt<1>
+  B_sel     : UInt<1>
+  imm_sel   : UInt<3>
+  alu_op    : UInt<4>
+  br_type   : UInt<3>
+  data_re   : Bool
+  st_type   : UInt<2>
+  ld_type   : UInt<3>
+  wb_sel    : UInt<2>
+  wb_en     : Bool
+  csr_cmd   : UInt<2>
+ 
+  flip ins        : UInt<instLen>
+  flip stall      : Bool
+
+public defbundle ControlIO :
+  ctrl : ControlSignals
+
+public defmodule Control :
+  output io : ControlIO
+  val ctrlSignals = list-lookup(io.ctrl.ins,
+    ;;                                                           kill                       wb_en
+    ;;          pc_sel  A_sel   B_sel imm_sel   alu_op    br_type |  st_type ld_type  wb_sel  | csr_cmd
+    ;;            |       |       |     |          |         |    |     |       |       |     |  |
+              [PC_4,   A_PC,   B_RS2, IMM_X, ALU_XXX    , BR_XXX, N, ST_XXX, LD_XXX, WB_ALU,  N, CSR-N], [
+    LUI    => [PC_4  , A_PC,   B_IMM, IMM_U, ALU_COPY_B , BR_XXX, N, ST_XXX, LD_XXX, WB_ALU,  Y, CSR-N],
+    AUIPC  => [PC_4  , A_PC,   B_IMM, IMM_U, ALU_ADD    , BR_XXX, N, ST_XXX, LD_XXX, WB_ALU,  Y, CSR-N],
+    JAL    => [PC_ALU, A_PC,   B_IMM, IMM_J, ALU_ADD    , BR_XXX, Y, ST_XXX, LD_XXX, WB_PC_4, Y, CSR-N],
+    JALR   => [PC_ALU, A_RS1,  B_IMM, IMM_I, ALU_ADD    , BR_XXX, Y, ST_XXX, LD_XXX, WB_PC_4, Y, CSR-N],
+    BEQ    => [PC_4  , A_PC,   B_IMM, IMM_B, ALU_ADD    , BR_EQ , N, ST_XXX, LD_XXX, WB_ALU,  N, CSR-N],
+    BNE    => [PC_4  , A_PC,   B_IMM, IMM_B, ALU_ADD    , BR_NE , N, ST_XXX, LD_XXX, WB_ALU,  N, CSR-N],
+    BLT    => [PC_4  , A_PC,   B_IMM, IMM_B, ALU_ADD    , BR_LT , N, ST_XXX, LD_XXX, WB_ALU,  N, CSR-N],
+    BGE    => [PC_4  , A_PC,   B_IMM, IMM_B, ALU_ADD    , BR_GE , N, ST_XXX, LD_XXX, WB_ALU,  N, CSR-N],
+    BLTU   => [PC_4  , A_PC,   B_IMM, IMM_B, ALU_ADD    , BR_LTU, N, ST_XXX, LD_XXX, WB_ALU,  N, CSR-N],
+    BGEU   => [PC_4  , A_PC,   B_IMM, IMM_B, ALU_ADD    , BR_GEU, N, ST_XXX, LD_XXX, WB_ALU,  N, CSR-N],
+    LB     => [PC_4  , A_RS1,  B_IMM, IMM_I, ALU_ADD    , BR_XXX, N, ST_XXX, LD_LB , WB_MEM,  Y, CSR-N],
+    LH     => [PC_4  , A_RS1,  B_IMM, IMM_I, ALU_ADD    , BR_XXX, N, ST_XXX, LD_LH , WB_MEM,  Y, CSR-N],
+    LW     => [PC_4  , A_RS1,  B_IMM, IMM_I, ALU_ADD    , BR_XXX, N, ST_XXX, LD_LW , WB_MEM,  Y, CSR-N],
+    LBU    => [PC_4  , A_RS1,  B_IMM, IMM_I, ALU_ADD    , BR_XXX, N, ST_XXX, LD_LBU, WB_MEM,  Y, CSR-N],
+    LHU    => [PC_4  , A_RS1,  B_IMM, IMM_I, ALU_ADD    , BR_XXX, N, ST_XXX, LD_LHU, WB_MEM,  Y, CSR-N],
+    SB     => [PC_4  , A_RS1,  B_IMM, IMM_S, ALU_ADD    , BR_XXX, N, ST_SB , LD_XXX, WB_ALU,  N, CSR-N],
+    SH     => [PC_4  , A_RS1,  B_IMM, IMM_S, ALU_ADD    , BR_XXX, N, ST_SH , LD_XXX, WB_ALU,  N, CSR-N],
+    SW     => [PC_4  , A_RS1,  B_IMM, IMM_S, ALU_ADD    , BR_XXX, N, ST_SW , LD_XXX, WB_ALU,  N, CSR-N],
+    ADDI   => [PC_4  , A_RS1,  B_IMM, IMM_I, ALU_ADD    , BR_XXX, N, ST_XXX, LD_XXX, WB_ALU,  Y, CSR-N],
+    SLTI   => [PC_4  , A_RS1,  B_IMM, IMM_I, ALU_SLT    , BR_XXX, N, ST_XXX, LD_XXX, WB_ALU,  Y, CSR-N],
+    SLTIU  => [PC_4  , A_RS1,  B_IMM, IMM_I, ALU_SLTU   , BR_XXX, N, ST_XXX, LD_XXX, WB_ALU,  Y, CSR-N],
+    XORI   => [PC_4  , A_RS1,  B_IMM, IMM_I, ALU_XOR    , BR_XXX, N, ST_XXX, LD_XXX, WB_ALU,  Y, CSR-N],
+    ORI    => [PC_4  , A_RS1,  B_IMM, IMM_I, ALU_OR     , BR_XXX, N, ST_XXX, LD_XXX, WB_ALU,  Y, CSR-N],
+    ANDI   => [PC_4  , A_RS1,  B_IMM, IMM_I, ALU_AND    , BR_XXX, N, ST_XXX, LD_XXX, WB_ALU,  Y, CSR-N],
+    SLLI   => [PC_4  , A_RS1,  B_IMM, IMM_I, ALU_SLL    , BR_XXX, N, ST_XXX, LD_XXX, WB_ALU,  Y, CSR-N],
+;;    SRLI   => [PC_4  , A_RS1,  B_IMM, IMM_I, ALU_SRL    , BR_XXX, N, ST_XXX, LD_XXX, WB_ALU,  Y, CSR-N],
+;;    SRAI   => [PC_4  , A_RS1,  B_IMM, IMM_I, ALU_SRA    , BR_XXX, N, ST_XXX, LD_XXX, WB_ALU,  Y, CSR-N],
+;;    ADD    => [PC_4  , A_RS1,  B_RS2, IMM_X, ALU_ADD    , BR_XXX, N, ST_XXX, LD_XXX, WB_ALU,  Y, CSR-N],
+;;    SUB    => [PC_4  , A_RS1,  B_RS2, IMM_X, ALU_SUB    , BR_XXX, N, ST_XXX, LD_XXX, WB_ALU,  Y, CSR-N],
+;;    SLL    => [PC_4  , A_RS1,  B_RS2, IMM_X, ALU_SLL    , BR_XXX, N, ST_XXX, LD_XXX, WB_ALU,  Y, CSR-N],
+;;    SLT    => [PC_4  , A_RS1,  B_RS2, IMM_X, ALU_SLT    , BR_XXX, N, ST_XXX, LD_XXX, WB_ALU,  Y, CSR-N],
+;;    SLTU   => [PC_4  , A_RS1,  B_RS2, IMM_X, ALU_SLTU   , BR_XXX, N, ST_XXX, LD_XXX, WB_ALU,  Y, CSR-N],
+;;    XOR    => [PC_4  , A_RS1,  B_RS2, IMM_X, ALU_XOR    , BR_XXX, N, ST_XXX, LD_XXX, WB_ALU,  Y, CSR-N],
+;;    SRL    => [PC_4  , A_RS1,  B_RS2, IMM_X, ALU_SRL    , BR_XXX, N, ST_XXX, LD_XXX, WB_ALU,  Y, CSR-N],
+;;    SRA    => [PC_4  , A_RS1,  B_RS2, IMM_X, ALU_SRA    , BR_XXX, N, ST_XXX, LD_XXX, WB_ALU,  Y, CSR-N],
+;;    OR     => [PC_4  , A_RS1,  B_RS2, IMM_X, ALU_OR     , BR_XXX, N, ST_XXX, LD_XXX, WB_ALU,  Y, CSR-N],
+;;    AND    => [PC_4  , A_RS1,  B_RS2, IMM_X, ALU_AND    , BR_XXX, N, ST_XXX, LD_XXX, WB_ALU,  Y, CSR-N],
+;;    CSRRW  => [PC_4  , A_RS1,  B_RS2, IMM_Z, ALU_COPY_A , BR_XXX, N, ST_XXX, LD_XXX, WB_CSR,  N, CSR-W],
+;;    CSRRS  => [PC_4  , A_RS1,  B_RS2, IMM_Z, ALU_COPY_A , BR_XXX, N, ST_XXX, LD_XXX, WB_CSR,  N, CSR-S],
+;;    CSRRC  => [PC_4  , A_RS1,  B_RS2, IMM_Z, ALU_COPY_A , BR_XXX, N, ST_XXX, LD_XXX, WB_CSR,  N, CSR-C],
+;;    CSRRWI => [PC_4  , A_XXX,  B_IMM, IMM_Z, ALU_COPY_B , BR_XXX, N, ST_XXX, LD_XXX, WB_CSR,  N, CSR-W],
+;;    CSRRSI => [PC_4  , A_XXX,  B_IMM, IMM_Z, ALU_COPY_B , BR_XXX, N, ST_XXX, LD_XXX, WB_CSR,  N, CSR-S],
+;;    CSRRCI => [PC_4  , A_XXX,  B_IMM, IMM_Z, ALU_COPY_B , BR_XXX, N, ST_XXX, LD_XXX, WB_CSR,  N, CSR-C]
+   ])
+  node rs1_addr = io.ctrl.ins[19, 15]
+  node rs2_addr = io.ctrl.ins[24, 20]
+  reg st_type  : Bool st_type := io.ctrl.st_type
+  reg ld_type  : Bool ld_type := ctrlSignals[8]
+  reg wb_sel   : Bool wb_sel := ctrlSignals[9]
+  reg wb_en    : Bool wb_en := ctrlSignals[10]
+  reg csr_cmd  : Bool csr_cmd := ctrlSignals[11]
+
+  ;; Control signals for Fetch
+  io.ctrl.pc_sel    := ctrlSignals[0]
+  io.ctrl.inst_re   := ! io.ctrl.stall && ! io.ctrl.data_re
+  io.ctrl.inst_type := mux((ctrlSignals[8] !== LD_XXX) || to-bool(ctrlSignals[6]), I_KILL, I_NEXT)
+
+  ;; Control signals for Execute
+  io.ctrl.A_sel   := ctrlSignals[1]
+  io.ctrl.B_sel   := ctrlSignals[2]
+  io.ctrl.imm_sel := ctrlSignals[3]
+  io.ctrl.alu_op  := ctrlSignals[4]
+  io.ctrl.br_type := ctrlSignals[5]
+  io.ctrl.st_type := ctrlSignals[7]
+
+  when ! io.ctrl.stall :
+    st_type := io.ctrl.st_type
+    ld_type := ctrlSignals[8]
+    wb_sel  := ctrlSignals[9]
+    wb_en   := ctrlSignals[10]
+    csr_cmd := ctrlSignals[11]
+
+  ;; D$ signals
+  io.ctrl.data_re := mux(io.ctrl.stall, io.ctrl.ld_type !== LD_XXX, ctrlSignals[8] !== LD_XXX)
+
+  ;; Control signals for Write Back
+  io.ctrl.ld_type := ld_type
+  io.ctrl.wb_en   := wb_en 
+  io.ctrl.wb_sel  := wb_sel
+  io.ctrl.csr_cmd := csr_cmd
+

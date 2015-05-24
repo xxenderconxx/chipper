@@ -1,0 +1,85 @@
+#use-syntax(core, chipper)
+
+defpackage Memory :
+   import core
+   ;; import verse
+   import chipper
+   import Params
+   import stdlib
+   import decoupled
+   import CSR
+   import Control
+
+public defbundle CacheIO :
+  addr : UInt<addrLen>
+  din  : UInt<instLen>
+  flip dout : UInt<instLen>
+  re   : Bool
+  we   : UInt<4>
+
+public defbundle MemReqCmd :
+  rw   : Bool
+  addr : UInt<addrLen>
+  tag  : UInt<tagLen>
+  mask : UInt<4>
+
+public defbundle MemReqData :
+  data : UInt<memLen>
+
+public defbundle MemResp :
+  data : UInt<memLen>
+  tag  : UInt<tagLen>
+
+public defbundle MemIO :
+  req_cmd   : DecoupledIO<MemReqCmd>
+  req_data  : DecoupledIO<MemReqData>
+  flip resp : DecoupledIO<MemResp>
+
+public defbundle MemoryIO :
+  stall  : Bool
+  memory : MemIO
+  flip icache : CacheIO
+  flip dcache : CacheIO
+
+public defmodule Memory :
+  output io : MemoryIO
+  inst memReqCmdQueue  of Fifo<MemReqCmd>(4, false, false)
+  inst memReqDataQueue of Fifo<MemReqData>(4, false, false)
+  val [s_READY, s_WAIT] = [UInt(0), UInt(1)]
+  reg state  : UInt state <- s_READY
+  reg tag    : UInt<tagLen> tag <- UInt(0)
+  node cpuReq = (state === s_READY) && (io.icache.re || io.dcache.re || bit-or-reduce(io.dcache.we))
+  node iaddr  = cat(io.icache.addr[addrLen - 1, 2], UInt<2>(0))
+  node daddr  = cat(io.dcache.addr[addrLen - 1, 2], UInt<2>(0))
+  reg idata : UInt
+  reg ddata  : UInt
+  reg ire    : Bool
+  reg dre    : Bool
+  ;; TODO: PERHAPS DO THIS WITH REG WRAPPER
+  io.icache.dout := idata ;; io.memory.resp.bits.data
+  io.dcache.dout := ddata ;; io.memory.resp.bits.data
+  io.memory.req_cmd := memReqCmdQueue.deq
+  io.memory.req_data := memReqDataQueue.deq
+  io.memory.resp.ready := Bool(false)
+  io.stall := (state === s_WAIT) || ! memReqCmdQueue.enq.ready || ! memReqDataQueue.enq.ready
+  memReqCmdQueue.enq.bits.rw    := bit-or-reduce(io.dcache.we)
+  memReqCmdQueue.enq.bits.tag   := tag
+  memReqCmdQueue.enq.bits.addr  := mux(bit-or-reduce(io.dcache.we) || ! io.icache.re, daddr, iaddr)
+  memReqCmdQueue.enq.bits.mask  := io.dcache.we
+  memReqCmdQueue.enq.valid      := memReqDataQueue.enq.ready && cpuReq
+  memReqDataQueue.enq.bits.data := io.dcache.din
+  memReqDataQueue.enq.valid     := memReqCmdQueue.enq.ready && cpuReq && bit-or-reduce(io.dcache.we)
+
+  when state === s_READY :
+    when (io.icache.re || io.dcache.re) && ! bit-or-reduce(io.dcache.we) && memReqCmdQueue.enq.ready :
+      ire := io.icache.re 
+      dre := io.dcache.re 
+      state := s_WAIT
+  when state === s_WAIT :
+    io.memory.resp.ready := Bool(true)
+    when io.memory.resp.valid && io.memory.resp.bits.tag === tag:
+      state := s_READY
+      tag   := tag + UInt(1)
+      io.memory.resp.ready := Bool(false)
+      when ire : idata := io.memory.resp.bits.data
+      when dre : ddata := io.memory.resp.bits.data

@@ -164,6 +164,8 @@ defsyntax chipper :
       ch/term = (~ #{?e:#exp}) : EscapeT(e)
       ch/term = (UInt<?e:#exp>) : UIntWT(e)
       ch/term = (UInt) : UIntT()
+      ch/term = (Bits<?e:#exp>) : UIntWT(e)
+      ch/term = (Bits) : UIntT()
       ch/term = (SInt<?e:#exp>) : SIntWT(e)
       ch/term = (SInt) : SIntT()
       ch/term = (?x:#symbol ?ts:#ch/ts ?es:#ch/es) : NamedT(x, ts, es)
@@ -208,6 +210,10 @@ defsyntax chipper :
 
    ;Register statement
    defrule :
+      prefix-op = (reg ?name:#id! : ?type:#ch/type <- ?e:#exp!) :
+         expande $ list(
+            compile(RegisterStmt(name, type))
+            compile(OnResetStmt(name, e)))
       prefix-op = (reg ?name:#id! : ?type:#ch/type := ?e:#exp!) :
          expande $ list(
             compile(RegisterStmt(name, type))
@@ -313,6 +319,14 @@ defsyntax chipper :
       prefix-op = (UInt(?v:#exp$)) :
          expande $ qquote(chipper/UIntLit(~ v))
       prefix-op = (UInt<?w:#exp$>(?v:#exp$)) :
+         expande $ qquote(chipper/UIntLit(~ v, ~ w))
+      prefix-op = (SInt(?v:#exp$)) :
+         expande $ qquote(chipper/UIntLit(~ v))
+      prefix-op = (SInt<?w:#exp$>(?v:#exp$)) :
+         expande $ qquote(chipper/UIntLit(~ v, ~ w))
+      prefix-op = (Bits(?v:#exp$)) :
+         expande $ qquote(chipper/UIntLit(~ v))
+      prefix-op = (Bits<?w:#exp$>(?v:#exp$)) :
          expande $ qquote(chipper/UIntLit(~ v, ~ w))
             
 ;============================================================
@@ -433,8 +447,8 @@ defn compile (b:DefBundle) :
          `field#name => to-symbol("field#~" << [name(f)])
          `type => compile-to-type(type(f))
          `type-exp => compile-to-type-exp(type(f))]])
-   println("=== Expanding Bundle ===")      
-   println(r)
+   ;; println("=== Expanding Bundle ===")      
+   ;; println(r)
    expande(r)
 ;============================================================
 
@@ -510,8 +524,8 @@ defn compile (b:DefModule) :
          `field#name => to-symbol("field#~" <<  [name(p)])
          `type => compile-to-type(type(p))
          `type-exp => compile-to-type-exp(type(p))]])
-   println("=== Expanding Module ===")
-   println(r)
+   ;; println("=== Expanding Module ===")
+   ;; println(r)
    expande(r)
 ;============================================================
 

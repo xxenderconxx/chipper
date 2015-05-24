@@ -8,8 +8,12 @@ defpackage stdlib :
 
 ;;; MATH
 
+;; public defn log2Up (in: Int) -> Int :
+;;   println-all(["LOG2UP " in])
+;;   if in == 1: 1 else: ceil(log(to-float(in)) / log(2.0))
+
 public defn log2Up (in: Int) -> Int :
-  if in == 1: 1 else: ceil(log(to-float(in)) / log(2.0))
+  max(1, ceil-log2(in))
 
 public defn log2Ceil (in: Int) -> Int :
   ceil(log(to-float(in)) / log(2.0))
@@ -35,7 +39,7 @@ public defn fill-interleaved (n: Int, elts: Streamable<Bool> & Lengthable) -> UI
   for (e in elts, i in 0 to false) do : r[i] := e
   to-bits(r)
 
-defn slice<?T> (x:Streamable<?T>, start:Int, end:Int) -> Streamable<T> :
+public defn slice<?T> (x:Streamable<?T>, start:Int, end:Int) -> Streamable<T> :
   select(x, stream(fn (i:Int): i >= start and i < end, (0 to false)))
 
 ;; Returns the number of bits set (i.e value is 1) in the input signal.
@@ -53,52 +57,52 @@ public defmethod pop-count (in: Bits) -> UInt : pop-count(to-bools(in))
 
 ;; Builds a Mux tree out of the input signal vector using a one hot encoded
 ;; select signal. Returns the output of the Mux tree.
-defn Mux1H<?T> (sel: Streamable<Bool>, in: Streamable<?T&Data> & Lengthable) -> T :
+public defn Mux1H<?T> (sel: Streamable<Bool>, in: Streamable<?T&Data> & Lengthable) -> T :
   val sin = to-stream(in)
   if length(in) == 1 :
     next(sin)
   else :
-    val masked = map(fn (s, i): Mux(s, to-bits(i), UInt(0)), sel, in)
+    val masked = map(fn (s, i): mux(s, to-bits(i), UInt(0)), sel, in)
     from-bits(next(sin), reduce(bit-or, masked))
 
-defn Mux1H<?T> (in: Streamable<KeyValue<Bool,?T&Data>>) -> T :
+public defn Mux1H<?T> (in: Streamable<KeyValue<Bool,?T&Data>>) -> T :
   val [sel, data] = unzip(in)
   Mux1H(sel, data)
 
-defn Mux1H<?T> (sel: UInt, in: Streamable<?T & Data> & Lengthable) -> T :
+public defn Mux1H<?T> (sel: UInt, in: Streamable<?T & Data> & Lengthable) -> T :
   Mux1H(to-bools(sel), in)
 
-defn Mux1H (sel: UInt, in: UInt) -> Bool :
+public defn Mux1H (sel: UInt, in: UInt) -> Bool :
   bit-or-reduce(sel & in)
 
 ;; Builds a Mux tree under the assumption that multiple select signals
 ;; can be enabled. Priority is given to the first select signal.
 ;; 
 ;; Returns the output of the Mux tree.
-defn priority-mux<?T> (in: List<KeyValue<Bool,?T&Bits>>) -> T :
+public defn priority-mux<?T> (in: List<KeyValue<Bool,?T&Bits>>) -> T :
   if length(in) == 1 :
     value(head(in))
   else :
-    Mux(key(head(in)), value(head(in)), priority-mux(tail(in)))
+    mux(key(head(in)), value(head(in)), priority-mux(tail(in)))
 
-defn priority-mux<?T> (sel: Streamable<Bool>, in: Streamable<?T & Bits>) -> T :
+public defn priority-mux<?T> (sel: Streamable<Bool>, in: Streamable<?T & Bits>) -> T :
   priority-mux(to-list(map(KeyValue, sel, in)))
 
-defn priority-mux<?T> (sel: Bits, in: Streamable<?T & Bits>) -> T :
+public defn priority-mux<?T> (sel: Bits, in: Streamable<?T & Bits>) -> T :
   priority-mux(to-bools(sel), in)
 
-defn mux-lookup<?S,?T> (k: ?S & Bits, default: ?T & Data, mapping: Streamable<KeyValue<?S & Bits, ?T&Data>>) -> T :
+public defn mux-lookup<?S,?T> (k: ?S & Bits, default: ?T & Data, mapping: Streamable<KeyValue<?S & Bits, ?T&Data>>) -> T :
    var res = default
    val kvs = reverse(to-list(mapping))
    for kv in kvs do :
-     res = Mux(key(kv) === k, value(kv), res)
+     res = mux(key(kv) === k, value(kv), res)
    res
 
 public defmulti fill (n:Int, x:UInt) -> UInt
 public defmethod fill (n: Int, x: Bool) -> UInt :
   if n == 0 : UInt<0>(0)
   else : if n == 1 : x
-  else : if n > 1 : UInt<n>(0) - toUInt(x)
+  else : if n > 1 : UInt<n>(0) - to-uint(x)
   else : error("Fill requires nonnegative integer")
 
 public defmethod fill (n: Int, y: UInt) -> UInt :
@@ -119,11 +123,14 @@ public defn mux-case<?T> (default: ?T & Data, mapping: Streamable<KeyValue<Bool,
   var res = default
   val kvs = reverse(to-list(mapping))
   for kv in kvs do :
-    res = Mux(key(kv), value(kv), res)
+    res = mux(key(kv), value(kv), res)
   res
 
-public defn list-lookup<?T> (addr: UInt, default: List<?T&Data>, mapping: Streamable<KeyValue<MInt, List<?T&Data>>>) -> List<T> :
-  val [keys, values] = unzip(mapping)
+public defn list-lookup<?T> (addr: UInt, _default: Streamable<?T&Data>, _mapping: Streamable<KeyValue<MInt, Streamable<?T&Data>>>) -> List<T> :
+  val default = to-list(_default)
+  val mapping = to-list(_mapping)
+  val [keys, _values] = unzip(mapping)
+  val values = map(to-list, _values)
   val matches = map(fn (key:MInt) : key === addr, keys)
   to-list(stream(fn (i:Int): mux-case(default[i], stream(KeyValue{_,_[i]}, matches, values)), 0 to length(default)))
 
@@ -158,8 +165,8 @@ public defn reg-enable<?T> (in: ?T & Data, en: Bool) -> T :
   r
 
 ;; Returns the n-cycle delayed version of the input signal.
-defn shift-register<?T> (in: ?T & Data, n: Int) -> T : shift-register(in, n, Bool(true))
-defn shift-register<?T> (in: ?T & Data, n: Int, en: Bool) -> T :
+public defn shift-register<?T> (in: ?T & Data, n: Int) -> T : shift-register(in, n, Bool(true))
+public defn shift-register<?T> (in: ?T & Data, n: Int, en: Bool) -> T :
   ;; The order of tests reflects the expected use cases.
   if n == 1 :
     reg-enable(in, en)
@@ -187,7 +194,7 @@ public defn Counter (n: Int) :
       if n == 1 : Bool(true)
       else :
         node wrap = count === UInt(n - 1)
-        count := Mux(Bool(not is-pow2(n)) && wrap, UInt(0), count + UInt(1))
+        count := mux(Bool(not is-pow2(n)) && wrap, UInt(0), count + UInt(1))
         wrap
 
 public defn Counter (cond: Bool, n: Int) -> [UInt, Bool] :

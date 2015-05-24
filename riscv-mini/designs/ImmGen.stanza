@@ -1,0 +1,44 @@
+#use-syntax(core, chipper)
+
+defpackage ImmGen :
+   import core
+   import verse
+   import chipper
+   import stdlib
+   import Params
+   import Control
+
+public defbundle ImmGenIO :
+  flip inst : UInt<instLen>
+  flip sel  : UInt<3>
+  out : UInt<instLen>
+
+public defmodule ImmGenWire :
+  output io : ImmGenIO
+  node Iimm = to-sint(io.inst[31, 20])
+  node Simm = to-sint(cat(io.inst[31, 25], io.inst[11,7]))
+  node Bimm = to-sint(cat([io.inst[31], io.inst[7], io.inst[30, 25], io.inst[11, 8], UInt<1>(0)]))
+  node Uimm = to-sint(cat(io.inst[31, 12], UInt<12>(0)))
+  node Jimm = to-sint(cat([io.inst[31], io.inst[19, 12], io.inst[20], io.inst[30, 25], io.inst[24, 21], UInt<1>(0)]))
+  node Zimm = to-sint(pad(to-uint(io.inst[19, 15]), instLen))
+
+  io.out := as-uint(mux-lookup(io.sel, Zimm, [IMM_I => Iimm, IMM_S => Simm, IMM_B => Bimm, IMM_U => Uimm, IMM_J => Jimm]))
+
+public defmodule ImmGenMux :
+  output io : ImmGenIO
+  node sign = to-sint(io.inst[31])
+  node b30_20 = mux(io.sel === IMM_U, to-sint(io.inst[30,20]), sign)
+  node b19_12 = mux((io.sel !== IMM_U) && (io.sel !== IMM_J), sign, to-sint(io.inst[19,12]))
+  node b11 = mux((io.sel === IMM_U) || (io.sel === IMM_Z), SInt(0),
+             mux(io.sel === IMM_J, to-sint(io.inst[20]),
+             mux(io.sel === IMM_B, to-sint(io.inst[7]), sign)))
+  node b10_5 = mux((io.sel === IMM_U) || (io.sel === IMM_Z), Bits(0), io.inst[30,25])
+  node b4_1 = mux(io.sel === IMM_U, Bits(0),
+              mux((io.sel === IMM_S) || (io.sel === IMM_B), io.inst[11,8],
+              mux(io.sel === IMM_Z, io.inst[19,16], io.inst[24,21])))
+  node b0 = mux(io.sel === IMM_S, io.inst[7],
+            mux(io.sel === IMM_I, io.inst[20],
+            mux(io.sel === IMM_Z, io.inst[15], Bits(0))))
+
+  io.out := to-sint(cat([sign, b30_20, b19_12, b11, b10_5, b4_1, b0]))
+

@@ -1,0 +1,56 @@
+#use-syntax(core, chipper)
+
+defpackage ALU :
+   import core
+   import verse
+   import chipper
+   import Params
+
+public val ALU_ADD    = UInt<4>(0)
+public val ALU_SUB    = UInt<4>(1)
+public val ALU_AND    = UInt<4>(2)
+public val ALU_OR     = UInt<4>(3)
+public val ALU_XOR    = UInt<4>(4)
+public val ALU_SLT    = UInt<4>(5)
+public val ALU_SLL    = UInt<4>(6)
+public val ALU_SLTU   = UInt<4>(7)
+public val ALU_SRL    = UInt<4>(8)
+public val ALU_SRA    = UInt<4>(9)
+public val ALU_COPY_A = UInt<4>(10)
+public val ALU_COPY_B = UInt<4>(11)
+public val ALU_XXX    = UInt<4>(15)
+
+public defbundle ALUIo :
+  flip A : UInt<instLen>
+  flip B : UInt<instLen>
+  flip alu_op : UInt<4>
+  out : UInt<instLen>
+  sum : UInt<instLen>
+
+public defn mux-lookup<?S,?T> (k: ?S & Bits, default: ?T & Data, mapping: Streamable<KeyValue<?S & Bits, ?T&Data>>) -> T :
+   var res = default
+   val kvs = reverse(to-list(mapping))
+   for kv in kvs do :
+     res = mux(key(kv) === k, value(kv), res)
+   res
+
+public defmodule ALU :
+  output io : ALUIo
+  node shamt = to-uint(io.B[4,0])
+
+  val oot = mux-lookup(io.alu_op, io.B, [
+      ALU_ADD  => (io.A + io.B),
+      ALU_SUB  => (io.A - io.B),
+      ALU_SRA  => to-uint(to-sint(io.A) >> shamt)
+      ALU_SRL  => (io.A >> shamt),
+      ALU_SLL  => (io.A << shamt)[instLen - 1, 0],
+      ALU_SLT  => to-uint(to-sint(io.A) < to-sint(io.B))
+      ALU_SLTU => to-uint(io.A < io.B)
+      ALU_AND  => (io.A & io.B),
+      ALU_OR   => (io.A | io.B),
+      ALU_XOR  => (io.A ^ io.B),
+      ALU_COPY_A => io.A])
+
+  io.out := oot[instLen - 1, 0]
+  io.sum := io.A + mux(io.alu_op[0], neg(io.B), io.B)
+

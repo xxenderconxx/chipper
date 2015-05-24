@@ -1,0 +1,31 @@
+#use-syntax(core, chipper)
+
+defpackage BrCond :
+   import core
+   import verse
+   import chipper
+   import Params
+   import Control
+
+public defbundle BrCondIO :
+  flip rs1 : UInt<instLen>
+  flip rs2 : UInt<instLen>
+  flip br_type : UInt<3>
+  taken : Bool
+
+public defmodule BrCond :
+  output io : BrCondIO
+  node eq   = io.rs1 === io.rs2
+  node neq  = ! eq
+  node lt   = to-sint(io.rs1) < to-sint(io.rs2)
+  node ge   = ! lt
+  node ltu  = io.rs1 < io.rs2
+  node geu  = ! ltu
+  io.taken :=     
+    ((io.br_type === BR_EQ) && eq) ||
+    ((io.br_type === BR_NE) && neq) ||
+    ((io.br_type === BR_LT) && lt) ||
+    ((io.br_type === BR_GE) && ge) ||
+    ((io.br_type === BR_LTU) && ltu) ||
+    ((io.br_type === BR_GEU) && geu)
+

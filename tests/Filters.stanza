@@ -9,14 +9,24 @@ defpackage Filters :
    import verse
    import chipper
 
-defbundle Valid<T> () :
+defbundle Valid<T <: Data> () :
   data : T
   valid : Bool
 
-defbundle FilterIO<T> () :
+defbundle FilterIO<T <: Data> () :
   flip in : Valid<T>
   out : Valid<T>
 
+;; defn filter<?T> (io: FilterIO, f: T&Bits -> T&Bits) :
+;;   out.valid(io) := in.valid(io)
+;;   out.data(io)  := f(in.data(io))
+
+;; defn filter<?T> (f: Valid<T&Bits> -> Valid<T&Bits>, in: Valid<?T&Bits>) -> Valid<T&Bits> :
+;;   wire out : Valid<#{ in.T }>
+;;   out.valid := in.valid
+;;   out.data  := f(in.data)
+;;   out
+  
 ;; ;; definterface Filter <: Data
 ;; ;; defmulti field#data (f:Filter) -> UInt
 ;; ;; defmulti field#valid (f:Filter) -> Bool
@@ -42,11 +52,11 @@ defn min<?T> (x:?T&Bits, y:?T&Bits) -> T :
 defn max<?T> (x:?T&Bits, y:?T&Bits) -> T :
   Mux(x < y, y, x)
 
-defn ClippingFilter<?T> (type-obj:?T&Bits, limit: T&Bits) :
-  instof FunctionFilter<#{type-obj}>(min{limit, max(neg(limit), _)})
+defn ClippingFilter<?T> (dtype:?T&Bits, limit: T&Bits) :
+  instof FunctionFilter<#{dtype}>(min{limit, max(neg(limit), _)})
 
-defn ShiftingFilter<?T> (type-obj:?T&Bits, shift: Int) :
-  instof FunctionFilter<#{type-obj}>({_ >> shift})
+defn ShiftingFilter<?T> (dtype:?T&Bits, shift: Int) :
+  instof FunctionFilter<#{dtype}>({_ >> shift})
 
 defmodule ShiftingClippingFilter<T <: Bits> (limit: T&Bits, shift: Int) :
   output io : FilterIO<T>
