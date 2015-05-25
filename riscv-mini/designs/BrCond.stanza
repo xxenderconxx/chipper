@@ -7,25 +7,23 @@ defpackage BrCond :
    import Params
    import Control
 
-public defbundle BrCondIO :
-  flip rs1 : UInt<instLen>
-  flip rs2 : UInt<instLen>
-  flip br_type : UInt<3>
-  taken : Bool
-
 public defmodule BrCond :
-  output io : BrCondIO
-  node eq   = io.rs1 === io.rs2
+  input rs1 : UInt<instLen>
+  input rs2 : UInt<instLen>
+  input br_type : UInt<3>
+  output taken : Bool
+
+  node eq   = rs1 === rs2
   node neq  = ! eq
-  node lt   = to-sint(io.rs1) < to-sint(io.rs2)
+  node lt   = to-sint(rs1) < to-sint(rs2)
   node ge   = ! lt
-  node ltu  = io.rs1 < io.rs2
+  node ltu  = rs1 < rs2
   node geu  = ! ltu
-  io.taken :=     
-    ((io.br_type === BR_EQ) && eq) ||
-    ((io.br_type === BR_NE) && neq) ||
-    ((io.br_type === BR_LT) && lt) ||
-    ((io.br_type === BR_GE) && ge) ||
-    ((io.br_type === BR_LTU) && ltu) ||
-    ((io.br_type === BR_GEU) && geu)
+  taken :=     
+    ((br_type === BR_EQ) && eq) ||
+    ((br_type === BR_NE) && neq) ||
+    ((br_type === BR_LT) && lt) ||
+    ((br_type === BR_GE) && ge) ||
+    ((br_type === BR_LTU) && ltu) ||
+    ((br_type === BR_GEU) && geu)
 

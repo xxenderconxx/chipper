@@ -21,32 +21,30 @@ public defbundle HostIO :
   tohost : UInt<instLen>
   status : UInt<instLen>
 
-public defbundle CSRIO :
-  host : HostIO
-  flip cmd : Bits<2>
-  flip addr : Bits<12>
-  flip src  : Bits<instLen>
-  data : Bits<instLen>
-
 public defmodule CSR :
-  output io : CSRIO
+  output host : HostIO
+  input cmd : Bits<2>
+  input addr : Bits<12>
+  input src  : Bits<instLen>
+  output data : Bits<instLen>
+
   reg reg_tohost : UInt<32> reg_tohost <- UInt(0)
   reg reg_status : UInt<32> reg_status <- UInt(0)
 
-  io.host.tohost := reg_tohost
-  io.host.status := reg_status
+  host.tohost := reg_tohost
+  host.status := reg_status
 
-  io.data := to-uint(mux-lookup(io.addr, UInt(0), [
+  data := to-uint(mux-lookup(addr, UInt(0), [
     CSR-TOHOST => reg_tohost,
     CSR-STATUS => reg_status,
-    CSR-HARTID => io.host.hid]))
+    CSR-HARTID => host.hid]))
 
-  when io.cmd === CSR-W :
-    when io.addr === CSR-TOHOST : reg_tohost := io.src 
-    when io.addr === CSR-STATUS : reg_status := io.src 
-  when (io.cmd === CSR-S) && (io.src !== UInt(0)) :
-    when io.addr === CSR-TOHOST : reg_tohost := io.data | (UInt(1) << io.src)
-    when io.addr === CSR-STATUS : reg_status := io.data | (UInt(1) << io.src)
-  when (io.cmd === CSR-C) && (io.src !== UInt(0)) :
-    when io.addr === CSR-TOHOST : reg_tohost := io.data & (UInt(0) << io.src)
-    when io.addr === CSR-STATUS : reg_status := io.data & (UInt(0) << io.src)
+  when cmd === CSR-W :
+    when addr === CSR-TOHOST : reg_tohost := src 
+    when addr === CSR-STATUS : reg_status := src 
+  when (cmd === CSR-S) && (src !== UInt(0)) :
+    when addr === CSR-TOHOST : reg_tohost := data | (UInt(1) << src)
+    when addr === CSR-STATUS : reg_status := data | (UInt(1) << src)
+  when (cmd === CSR-C) && (src !== UInt(0)) :
+    when addr === CSR-TOHOST : reg_tohost := data & (UInt(0) << src)
+    when addr === CSR-STATUS : reg_status := data & (UInt(0) << src)

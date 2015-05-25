@@ -88,12 +88,10 @@ public defbundle ControlSignals :
   flip ins        : UInt<instLen>
   flip stall      : Bool
 
-public defbundle ControlIO :
-  ctrl : ControlSignals
-
 public defmodule Control :
-  output io : ControlIO
-  val ctrlSignals = list-lookup(io.ctrl.ins,
+  output ctrl : ControlSignals
+
+  val ctrlSignals = list-lookup(ctrl.ins,
     ;;                                                           kill                       wb_en
     ;;          pc_sel  A_sel   B_sel imm_sel   alu_op    br_type |  st_type ld_type  wb_sel  | csr_cmd
     ;;            |       |       |     |          |         |    |     |       |       |     |  |
@@ -142,40 +140,40 @@ public defmodule Control :
     CSRRSI => [PC_4  , A_XXX,  B_IMM, IMM_Z, ALU_COPY_B , BR_XXX, N, ST_XXX, LD_XXX, WB_CSR,  N, CSR-S],
     CSRRCI => [PC_4  , A_XXX,  B_IMM, IMM_Z, ALU_COPY_B , BR_XXX, N, ST_XXX, LD_XXX, WB_CSR,  N, CSR-C]
    ])
-  node rs1_addr = io.ctrl.ins[19, 15]
-  node rs2_addr = io.ctrl.ins[24, 20]
-  reg st_type  : Bool st_type := io.ctrl.st_type
+  node rs1_addr = ctrl.ins[19, 15]
+  node rs2_addr = ctrl.ins[24, 20]
+  reg st_type  : Bool st_type := ctrl.st_type
   reg ld_type  : Bool ld_type := ctrlSignals[8]
   reg wb_sel   : Bool wb_sel := ctrlSignals[9]
   reg wb_en    : Bool wb_en := ctrlSignals[10]
   reg csr_cmd  : Bool csr_cmd := ctrlSignals[11]
 
   ;; Control signals for Fetch
-  io.ctrl.pc_sel    := ctrlSignals[0]
-  io.ctrl.inst_re   := ! io.ctrl.stall && ! io.ctrl.data_re
-  io.ctrl.inst_type := mux((ctrlSignals[8] !== LD_XXX) || to-bool(ctrlSignals[6]), I_KILL, I_NEXT)
+  ctrl.pc_sel    := ctrlSignals[0]
+  ctrl.inst_re   := ! ctrl.stall && ! ctrl.data_re
+  ctrl.inst_type := mux((ctrlSignals[8] !== LD_XXX) || to-bool(ctrlSignals[6]), I_KILL, I_NEXT)
 
   ;; Control signals for Execute
-  io.ctrl.A_sel   := ctrlSignals[1]
-  io.ctrl.B_sel   := ctrlSignals[2]
-  io.ctrl.imm_sel := ctrlSignals[3]
-  io.ctrl.alu_op  := ctrlSignals[4]
-  io.ctrl.br_type := ctrlSignals[5]
-  io.ctrl.st_type := ctrlSignals[7]
+  ctrl.A_sel   := ctrlSignals[1]
+  ctrl.B_sel   := ctrlSignals[2]
+  ctrl.imm_sel := ctrlSignals[3]
+  ctrl.alu_op  := ctrlSignals[4]
+  ctrl.br_type := ctrlSignals[5]
+  ctrl.st_type := ctrlSignals[7]
 
-  when ! io.ctrl.stall :
-    st_type := io.ctrl.st_type
+  when ! ctrl.stall :
+    st_type := ctrl.st_type
     ld_type := ctrlSignals[8]
     wb_sel  := ctrlSignals[9]
     wb_en   := ctrlSignals[10]
     csr_cmd := ctrlSignals[11]
 
   ;; D$ signals
-  io.ctrl.data_re := mux(io.ctrl.stall, io.ctrl.ld_type !== LD_XXX, ctrlSignals[8] !== LD_XXX)
+  ctrl.data_re := mux(ctrl.stall, ctrl.ld_type !== LD_XXX, ctrlSignals[8] !== LD_XXX)
 
   ;; Control signals for Write Back
-  io.ctrl.ld_type := ld_type
-  io.ctrl.wb_en   := wb_en 
-  io.ctrl.wb_sel  := wb_sel
-  io.ctrl.csr_cmd := csr_cmd
+  ctrl.ld_type := ld_type
+  ctrl.wb_en   := wb_en 
+  ctrl.wb_sel  := wb_sel
+  ctrl.csr_cmd := csr_cmd
 

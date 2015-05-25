@@ -12,19 +12,16 @@ defpackage Tile :
 public defbundle HTIFIO :
   host : HostIO
 
-public defbundle TileIO :
-  htif   : HTIFIO
-  memory : MemIO 
-
 public defmodule Tile :
-  output io : TileIO
+  output htif   : HTIFIO
+  output memory : MemIO 
  
   inst core  of Core
   inst memmod of Memory
   
-  io.htif.host := core.io.host
-  io.memory := memmod.io.memory
-  core.io.stall := memmod.io.stall
-  memmod.io.icache := core.io.icache
-  memmod.io.dcache := core.io.dcache
+  htif.host := core.host
+  memory := memmod.memory
+  core.stall := memmod.stall
+  memmod.icache := core.icache
+  memmod.dcache := core.dcache
 

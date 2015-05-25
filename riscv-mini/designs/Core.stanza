@@ -10,20 +10,18 @@ defpackage Core :
    import CSR
    import Memory
 
-public defbundle CoreIO :
-  flip stall : Bool
-  host : HostIO
-  icache : CacheIO
-  dcache : CacheIO
-
 public defmodule Core :
-  output io : CoreIO
+  input stall : Bool
+  output host : HostIO
+  output icache : CacheIO
+  output dcache : CacheIO
+
   inst dpath of Datapath
   inst ctrl  of Control
 
-  io.host := dpath.io.host
-  io.icache := dpath.io.icache
-  io.dcache := dpath.io.dcache
-  dpath.io.ctrl := ctrl.io.ctrl
-  dpath.io.stall := io.stall
+  host := dpath.host
+  icache := dpath.icache
+  dcache := dpath.dcache
+  dpath.ctrl := ctrl.ctrl
+  dpath.stall := stall
 

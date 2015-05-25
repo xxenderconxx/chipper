@@ -8,26 +8,23 @@ defpackage ALUTop :
    import Opcodes
    import ALU
 
-public defbundle ALUdecIo :
-  flip opcode : UInt<7>
-  flip funct  : UInt<3>
-  flip add_rshift_type : Bool
-  alu_op : UInt<4>
-
 public defmodule ALUdec :
-  output io : ALUdecIo
+  input opcode : UInt<7>
+  input funct  : UInt<3>
+  input add_rshift_type : Bool
+  output alu_op : UInt<4>
 
-  node alu_op1 = mux-lookup(io.funct, ALU_XXX, [
-    Funct3-ADD_SUB => mux(io.add_rshift_type, ALU_SUB, ALU_ADD),
+  node alu_op1 = mux-lookup(funct, ALU_XXX, [
+    Funct3-ADD_SUB => mux(add_rshift_type, ALU_SUB, ALU_ADD),
     Funct3-SLL     => ALU_SLL,
     Funct3-SLT     => ALU_SLT,
     Funct3-SLTU    => ALU_SLTU,
     Funct3-XOR     => ALU_XOR,
     Funct3-OR      => ALU_OR,
     Funct3-AND     => ALU_AND,
-    Funct3-SRL_SRA => mux(io.add_rshift_type, ALU_SRA, ALU_SRL)] )
+    Funct3-SRL_SRA => mux(add_rshift_type, ALU_SRA, ALU_SRL)] )
 
-  node alu_op2 = mux-lookup(io.opcode, ALU_XXX, [
+  node alu_op2 = mux-lookup(opcode, ALU_XXX, [
     Opcode-LUI       => ALU_COPY_B,
     Opcode-AUIPC     => ALU_ADD,
     Opcode-JAL       => ALU_ADD,
@@ -38,28 +35,25 @@ public defmodule ALUdec :
     Opcode-ARI_RTYPE => alu_op1,
     Opcode-ARI_ITYPE => alu_op1] )
 
-  io.alu_op := alu_op2  
-
-public defbundle ALUTopIO :
-  flip opcode : UInt<7>
-  flip funct : UInt<3>
-  flip add_rshift_type : Bool
-
-  flip A : UInt<instLen>
-  flip B : UInt<instLen>
-  out : UInt<instLen>
+  alu_op := alu_op2  
 
 public defmodule ALUTop :
-  output io : ALUTopIO
+  input opcode : UInt<7>
+  input funct : UInt<3>
+  input add_rshift_type : Bool
+  input A : UInt<instLen>
+  input B : UInt<instLen>
+  output out : UInt<instLen>
+
   inst alu     of ALU
   inst alu_dec of ALUdec
 
-  alu_dec.io.opcode := io.opcode
-  alu_dec.io.funct := io.funct
-  alu_dec.io.add_rshift_type := io.add_rshift_type
+  alu_dec.opcode := opcode
+  alu_dec.funct := funct
+  alu_dec.add_rshift_type := add_rshift_type
 
-  alu.io.A := io.A
-  alu.io.B := io.B
-  io.out := alu.io.out
+  alu.A := A
+  alu.B := B
+  out := alu.out
 
-  alu.io.alu_op := alu_dec.io.alu_op
+  alu.alu_op := alu_dec.alu_op

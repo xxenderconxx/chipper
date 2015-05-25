@@ -6,20 +6,18 @@ defpackage RegFile :
    import chipper
    import Params
 
-public defbundle RegFileIO :
-  flip raddr1 : UInt<5>
-  flip raddr2 : UInt<5>
-  rdata1 : UInt<instLen>
-  rdata2 : UInt<instLen>
-  flip wen    : Bool
-  flip waddr  : UInt<5>
-  flip wdata  : UInt<instLen>
-
 public defmodule RegFile:
-  output io : RegFileIO
+  input  raddr1 : UInt<5>
+  input  raddr2 : UInt<5>
+  output rdata1 : UInt<instLen>
+  output rdata2 : UInt<instLen>
+  input  wen    : Bool
+  input  waddr  : UInt<5>
+  input  wdata  : UInt<instLen>
+
   mem regs : UInt<instLen>[32]
-  io.rdata1 := mux(bit-or-reduce(io.raddr1), regs[io.raddr1], UInt(0))
-  io.rdata2 := mux(bit-or-reduce(io.raddr2), regs[io.raddr2], UInt(0))
-  when io.wen && bit-or-reduce(io.waddr) :
-    regs[io.waddr] := io.wdata
+  rdata1 := mux(bit-or-reduce(raddr1), regs[raddr1], UInt(0))
+  rdata2 := mux(bit-or-reduce(raddr2), regs[raddr2], UInt(0))
+  when wen && bit-or-reduce(waddr) :
+    regs[waddr] := wdata
 

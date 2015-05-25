@@ -20,13 +20,6 @@ public val ALU_COPY_A = UInt<4>(10)
 public val ALU_COPY_B = UInt<4>(11)
 public val ALU_XXX    = UInt<4>(15)
 
-public defbundle ALUIo :
-  flip A : UInt<instLen>
-  flip B : UInt<instLen>
-  flip alu_op : UInt<4>
-  out : UInt<instLen>
-  sum : UInt<instLen>
-
 public defn mux-lookup<?S,?T> (k: ?S & Bits, default: ?T & Data, mapping: Streamable<KeyValue<?S & Bits, ?T&Data>>) -> T :
    var res = default
    val kvs = reverse(to-list(mapping))
@@ -35,22 +28,27 @@ public defn mux-lookup<?S,?T> (k: ?S & Bits, default: ?T & Data, mapping: Stream
    res
 
 public defmodule ALU :
-  output io : ALUIo
-  node shamt = to-uint(io.B[4,0])
+  input A : UInt<instLen>
+  input B : UInt<instLen>
+  input alu_op : UInt<4>
+  output out : UInt<instLen>
+  output sum : UInt<instLen>
 
-  val oot = mux-lookup(io.alu_op, io.B, [
-      ALU_ADD  => (io.A + io.B),
-      ALU_SUB  => (io.A - io.B),
-      ALU_SRA  => to-uint(to-sint(io.A) >> shamt)
-      ALU_SRL  => (io.A >> shamt),
-      ALU_SLL  => (io.A << shamt)[instLen - 1, 0],
-      ALU_SLT  => to-uint(to-sint(io.A) < to-sint(io.B))
-      ALU_SLTU => to-uint(io.A < io.B)
-      ALU_AND  => (io.A & io.B),
-      ALU_OR   => (io.A | io.B),
-      ALU_XOR  => (io.A ^ io.B),
-      ALU_COPY_A => io.A])
+  node shamt = to-uint(B[4,0])
 
-  io.out := oot[instLen - 1, 0]
-  io.sum := io.A + mux(io.alu_op[0], neg(io.B), io.B)
+  val oot = mux-lookup(alu_op, B, [
+      ALU_ADD  => (A + B),
+      ALU_SUB  => (A - B),
+      ALU_SRA  => to-uint(to-sint(A) >> shamt)
+      ALU_SRL  => (A >> shamt),
+      ALU_SLL  => (A << shamt)[instLen - 1, 0],
+      ALU_SLT  => to-uint(to-sint(A) < to-sint(B))
+      ALU_SLTU => to-uint(A < B)
+      ALU_AND  => (A & B),
+      ALU_OR   => (A | B),
+      ALU_XOR  => (A ^ B),
+      ALU_COPY_A => A])
+
+  out := oot[instLen - 1, 0]
+  sum := A + mux(alu_op[0], neg(B), B)
 
