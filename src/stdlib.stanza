@@ -8,21 +8,17 @@ defpackage stdlib :
 
 ;;; MATH
 
-;; public defn log2Up (in: Int) -> Int :
-;;   println-all(["LOG2UP " in])
-;;   if in == 1: 1 else: ceil(log(to-float(in)) / log(2.0))
-
 public defn log2Up (in: Int) -> Int :
-  max(1, ceil-log2(in))
+  if in == 1: 1 else: to-int(ceil(log(to-float(in)) / log(2.0)))
 
 public defn log2Ceil (in: Int) -> Int :
-  ceil(log(to-float(in)) / log(2.0))
+  to-int(ceil(log(to-float(in)) / log(2.0)))
 
 public defn log2Down (in: Int) -> Int :
-  if in == 1: 1 else: floor(log(to-float(in)) / log(2.0))
+  if in == 1: 1 else: to-int(floor(log(to-float(in)) / log(2.0)))
 
 public defn log2Floor (in: Int) -> Int :
-  floor(log(to-float(in)) / log(2.0))
+  to-int(floor(log(to-float(in)) / log(2.0)))
 
 public defn is-pow2 (in: Int) -> True|False :
   in > 0 and ((in & (in - 1)) == 0)

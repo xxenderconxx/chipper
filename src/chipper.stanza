@@ -446,7 +446,8 @@ public defmethod to-string (m: MInt) -> String :
 
 ;; TODO: BOTH SIDES
 public defn bit-equal? (x:MInt, y:UInt) -> Bool: 
-  bit-equal?((UIntLit(to-lit-val(mask(x), 2)) & y), UIntLit(to-lit-val(bits(x), 2)))
+  bit-equal?((UIntLit(to-lit-val(mask(x), 2), width(x)) & y),
+              UIntLit(to-lit-val(bits(x), 2), width(x)))
 public defn bit-not-equal? (x:MInt, y:UInt) -> Bool : 
   invert(bit-equal?(x, y))
 
