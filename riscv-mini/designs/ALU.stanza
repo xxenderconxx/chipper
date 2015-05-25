@@ -28,22 +28,22 @@ public defn mux-lookup<?S,?T> (k: ?S & Bits, default: ?T & Data, mapping: Stream
    res
 
 public defmodule ALU :
-  input A : UInt<instLen>
-  input B : UInt<instLen>
-  input alu_op : UInt<4>
-  output out : UInt<instLen>
-  output sum : UInt<instLen>
+  input  A      : UInt<instLen>
+  input  B      : UInt<instLen>
+  input  alu_op : UInt<4>
+  output out    : UInt<instLen>
+  output sum    : UInt<instLen>
 
-  node shamt = to-uint(B[4,0])
+  node shamt = B[4,0]
 
   val oot = mux-lookup(alu_op, B, [
       ALU_ADD  => (A + B),
       ALU_SUB  => (A - B),
-      ALU_SRA  => to-uint(to-sint(A) >> shamt)
+      ALU_SRA  => as-uint(to-sint(A) >> shamt)
       ALU_SRL  => (A >> shamt),
       ALU_SLL  => (A << shamt)[instLen - 1, 0],
-      ALU_SLT  => to-uint(to-sint(A) < to-sint(B))
-      ALU_SLTU => to-uint(A < B)
+      ALU_SLT  => to-sint(A) < to-sint(B),
+      ALU_SLTU => (A < B),
       ALU_AND  => (A & B),
       ALU_OR   => (A | B),
       ALU_XOR  => (A ^ B),

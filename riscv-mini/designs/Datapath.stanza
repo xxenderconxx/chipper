@@ -17,11 +17,11 @@ defpackage Datapath :
 public val PC_START = UInt("0x2000")
 
 public defmodule Datapath :
-  input  stall : Bool
-  output host : HostIO
+  input  stall  : Bool
+  input  ctrl   : ControlSignals
+  output host   : HostIO
   output icache : CacheIO
   output dcache : CacheIO
-  input  ctrl : ControlSignals
 
   inst alu of ALU
   inst brCond  of BrCond

@@ -182,15 +182,15 @@ public defmulti inc (c: Counter) -> Bool
 public defmulti num (c: Counter) -> Int
 public defmulti value (c: Counter) -> UInt
 public defn Counter (n: Int) :
-  reg count : UInt<log2Up(n)> count <- UInt(0)
+  reg cnt : UInt<log2Up(n)> cnt <- UInt(0)
   new Counter :
-    defmethod value (this) -> UInt : count
+    defmethod value (this) -> UInt : cnt
     defmethod num (this) -> Int : n
     defmethod inc (this) -> Bool :
       if n == 1 : Bool(true)
       else :
-        node wrap = count === UInt(n - 1)
-        count := mux(Bool(not is-pow2(n)) && wrap, UInt(0), count + UInt(1))
+        node wrap = cnt === UInt(n - 1)
+        cnt := mux(Bool(not is-pow2(n)) && wrap, UInt(0), cnt + UInt(1))
         wrap
 
 public defn Counter (cond: Bool, n: Int) -> [UInt, Bool] :

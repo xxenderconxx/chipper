@@ -38,11 +38,11 @@ public defmodule ALUdec :
   alu_op := alu_op2  
 
 public defmodule ALUTop :
-  input opcode : UInt<7>
-  input funct : UInt<3>
-  input add_rshift_type : Bool
-  input A : UInt<instLen>
-  input B : UInt<instLen>
+  input  opcode : UInt<7>
+  input  funct : UInt<3>
+  input  add_rshift_type : Bool
+  input  A : UInt<instLen>
+  input  B : UInt<instLen>
   output out : UInt<instLen>
 
   inst alu     of ALU

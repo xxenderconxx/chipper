@@ -49,8 +49,8 @@ defmethod print (o:OutputStream, op:PrimOp) :
       DYN-SHIFT-RIGHT-OP : "dshr"
       SHIFT-LEFT-OP : "shl"
       SHIFT-RIGHT-OP : "shr"
-      TO-UINT-OP : "to-uint"
-      TO-SINT-OP : "to-sint"
+      TO-UINT-OP : "as-UInt"
+      TO-SINT-OP : "convert"
       BIT-NOT-OP : "bit-not"
       BIT-AND-OP : "bit-and"
       BIT-OR-OP : "bit-or"
@@ -113,7 +113,7 @@ defmethod print (o:OutputStream, c:Stmt) :
       (c:Connect) :
          print(o, "~ := ~" << [loc(c), exp(c)])
       (c:OnReset) :
-         print(o, "onreset ~ := ~" << [loc(c), exp(c)])
+         print(o, "on-reset ~ := ~" << [loc(c), exp(c)])
       (c:EmptyStmt) :
          print(o, "skip")
 

@@ -65,19 +65,19 @@ public defn Node (e:fExpression) :
 
 ;=== Component Creation ===
 public defn RegisterExp<?T> (name:Symbol, type:?T&Data) :
-   val name* = name ;; gensym(name)
+   val name* = gensym(name) ;; name
    add(STATEMENT-VECTOR, fDefRegister(name*, firrtl-type(type)))
    handle(type, fRef(name*, fUnknownType()))
 
 public defn Reg<?T> (x:?T & Data) -> T : RegisterExp(`reg, x)
 
 public defn WireExp<?T> (name:Symbol, type:?T&Data) :
-   val name* = name ;; gensym(name)
+   val name* = gensym(name) ;; name
    add(STATEMENT-VECTOR, fDefWire(name*, firrtl-type(type)))
    handle(type, fRef(name*, fUnknownType()))
 
 public defn NodeExp<?T> (name:Symbol, x:?T & Data) -> T :
-   val name* = name ;; gensym?
+   val name* = gensym(name) ;; name
    add(STATEMENT-VECTOR, fDefNode(name*, firrtl-exp(x)))
    handle(type(x), fRef(name*, fUnknownType()))
 
@@ -229,7 +229,7 @@ defn sum-log2-width (x:Bits, y:Bits) -> Int :
   if width(x) >= 0 and width(y) >= 0: width(x) + (1 << width(y)) else: -1
 
 public defn invert<?T> (x:?T & Bits) -> T  : unaryop(fBIT-NOT-OP, x, width(x))
-public defn pad<?T> (x:?T & Bits, w:Int) -> T : unaryop(fPAD-OP, x, w)
+public defn pad<?T> (x:?T & Bits, w:Int) -> T : binop(fPAD-OP, x, w, w)
 public defn neg<?T> (x:?T & Bits) -> T  : zero(x) - x
 public defn plus<?T> (x:?T & Bits, y:?T & Bits) -> T : binop(fADD-WRAP-OP, x, y, max-width(x, y, 0))
 public defn minus<?T> (x:?T & Bits, y:?T & Bits) -> T  : binop(fSUB-WRAP-OP, x, y, max-width(x, y, 0))

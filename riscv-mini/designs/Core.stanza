@@ -11,8 +11,8 @@ defpackage Core :
    import Memory
 
 public defmodule Core :
-  input stall : Bool
-  output host : HostIO
+  input  stall  : Bool
+  output host   : HostIO
   output icache : CacheIO
   output dcache : CacheIO
 

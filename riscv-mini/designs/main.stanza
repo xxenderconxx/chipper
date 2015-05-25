@@ -27,12 +27,14 @@ defpackage mini :
    import chipper
    import ALUTop
    import Tile
+   import Core
    import Control
    import Datapath
    import Memory
 
 defn main () :
-   circuit c of Tile
+   val args = commandline-arguments()
+   circuit c of ALUTop
    println(c)
    
 main()

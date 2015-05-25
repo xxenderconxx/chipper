@@ -70,23 +70,23 @@ public val WB_PC_4 = UInt<2>(2)
 public val WB_CSR  = UInt<2>(3)
 
 public defbundle ControlSignals :
-  pc_sel    : UInt<1>
-  inst_re   : Bool
-  inst_type : UInt<1>
-  A_sel     : UInt<1>
-  B_sel     : UInt<1>
-  imm_sel   : UInt<3>
-  alu_op    : UInt<4>
-  br_type   : UInt<3>
-  data_re   : Bool
-  st_type   : UInt<2>
-  ld_type   : UInt<3>
-  wb_sel    : UInt<2>
-  wb_en     : Bool
-  csr_cmd   : UInt<2>
+  pc_sel     : UInt<1>
+  inst_re    : Bool
+  inst_type  : UInt<1>
+  A_sel      : UInt<1>
+  B_sel      : UInt<1>
+  imm_sel    : UInt<3>
+  alu_op     : UInt<4>
+  br_type    : UInt<3>
+  data_re    : Bool
+  st_type    : UInt<2>
+  ld_type    : UInt<3>
+  wb_sel     : UInt<2>
+  wb_en      : Bool
+  csr_cmd    : UInt<2>
  
-  flip ins        : UInt<instLen>
-  flip stall      : Bool
+  flip ins   : UInt<instLen>
+  flip stall : Bool
 
 public defmodule Control :
   output ctrl : ControlSignals

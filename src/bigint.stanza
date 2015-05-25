@@ -1,6 +1,6 @@
 val val-n-bytes = 1
-val val-all-ones = -1 ;; TODO
 val val-n-bits = val-n-bytes * 8
+val val-all-ones = (1 << val-n-bits) - 1 ;; TODO
 val val-n-half-bits = val-n-bits / 2
 defn val-n-words (nbits: Int) -> Int : 1 + (nbits - 1) / val-n-bits
 defn val-n-half-words (nbits: Int) -> Int : (1 + (nbits - 1)) / val-n-half-bits
@@ -17,7 +17,7 @@ defn BigInt (len: Int) :
   val d = Array<Int>(val-n-words(len))
   new BigInt :
      defmethod get (this, i: Int) -> Int : d[i]
-     defmethod set (this, i: Int, x: Int) : d[i] = x
+     defmethod set (this, i: Int, x: Int) : d[i] = x & val-all-ones
      defmethod dat (this) -> Array<Int> : d
      defmethod length (this) -> Int : len
      defmethod num-words (this) -> Int : length(d)
@@ -65,13 +65,14 @@ defn trim! (d:BigInt) -> BigInt :
   val n-full-words = val-n-full-words(length(d))
   val n-word-bits  = val-n-word-bits(length(d))
   if n-word-bits > 0 :
-    d[n-full-words] = mask-val(n-word-bits)
+    d[n-full-words] = d[n-full-words] & mask-val(n-word-bits)
   d
 
-defn extract! (d:BigInt, s0:BigInt, e:Int, s:Int) -> BigInt :
-  trim!(rsh!(d, s0, s))
+defn extract! (d:BigInt, s0:BigInt, e:Int, s:Int) -> BigInt : trim!(rsh!(d, s0, s))
 
-defn extract-one (s0:BigInt, s:Int) -> Int :
+public defn bits (s0:BigInt, e:Int, s:Int) -> BigInt : extract!(BigInt(e - s + 1), s0, e, s)
+
+public defn bit (s0:BigInt, s:Int) -> Int :
   val wi = s / val-n-bits
   val bi = s % val-n-bits
   s0[wi] >> bi
@@ -96,10 +97,15 @@ defn fill! (f: (Int) -> Int, b: BigInt) :
   b
 
 defmethod equal? (x:BigInt, y:BigInt) -> True|False :
-  var eq? = true
-  for i in 0 to num-words(x) do :
-    eq? = eq? and (x[i] == y[i])
-  eq?
+  if num-words(x) != num-words(y) :
+    false
+  else :
+    var eq? = true
+    for i in 0 to num-words(x) do :
+      val e = (x[i] == y[i])
+      if not e : println-all(["NOT-EQUAL " x " AND " y " i=" i " X[i] " x[i] " Y[i] " y[i]])
+      eq? = eq? and e
+    eq?
 
 defn less?! (diff:BigInt, x:BigInt, y:BigInt) -> True|False :
   sub!(diff, x, y)
@@ -129,21 +135,23 @@ val hex-nibbles = "0123456789abcdef"
 defn as-digit (c: Char) -> Int :
   index-of(hex-nibbles, c) as Int
 
-defn BigIntLit (s: String) :
+defn BigIntLit (s: String) : BigIntLit(s, -1)
+
+defn BigIntLit (s: String, w:Int) :
   val base    = s[0]
   val shamt   = if base == 'b': 1 else if base == 'x': 4 else: 2
   val digits  = substring(s, 1)
-  val lit     = BigInt(length(digits) * shamt)
+  val len     = if w == -1: length(digits) * shamt else: w
+  val lit     = BigInt(len)
   ;; println-all(["BASE " base " SHAMT " shamt " DIGITS " digits])
-  var word    = 0
+  for i in 0 to num-words(lit) do :
+    lit[i] = 0
   for i in 0 to length(digits) do :
-    val off   = i * shamt
+    val off   = (length(digits) - 1 - i) * shamt
     val wi    = off / val-n-bits
     val bi    = off % val-n-bits
-    val pword = if bi == 0: 0 else: word
-    word      = (pword << shamt) | as-digit(digits[i]) 
-    lit[wi]   = word
-    ;; println-all(["OFF " off " wi " wi " bi " bi " PWORD " pword " WORD " word " LIT " lit])
+    lit[wi]   = lit[wi] | (as-digit(digits[i]) << bi)
+    ;; println-all(["OFF " off " wi " wi " bi " bi " lit[wi] " lit[wi] " => " lit])
   ;; println-all(["RES = " lit])
   lit
 
@@ -174,6 +182,22 @@ defn plus! (d: BigInt, s0: BigInt, s1: BigInt) -> BigInt :
   d
 
 defn plus (x:BigInt, y:BigInt) -> BigInt : op(plus!, x, y)
+
+defn cat! (d: BigInt, s0: BigInt, s1: BigInt) -> BigInt :
+  lsh!(d, s0, length(s1))
+  ;; println-all(["  LSH! " s0 " " length(s1) " => " d])
+  for i in 0 to num-words(s1) do :
+    d[i] = d[i] | s1[i]
+  d
+
+defn cat (x:BigInt, y:BigInt) -> BigInt :
+  ;; println-all(["> CAT " x " " y])
+  val res = cat!(BigInt(length(x) + length(y)), x, y)
+  ;; println-all(["< CAT " x " " y " => " res])
+  res
+
+defn cat (args:Streamable<BigInt>) -> BigInt :
+  reduce(cat, args)
 
 defn sub! (d: BigInt, s0: BigInt, s1: BigInt) -> BigInt :
   var borrow = false
@@ -243,8 +267,8 @@ defn rsh! (d:BigInt, s0:BigInt, amount:Int) -> BigInt :
     d[nw - i - 1] = 0
   defn* loop (i:Int) :
     if i >= n-shift-words :
-      val x = s0[i];
-      d[i - n-shift-words] = x >> n-shift-bits | carry
+      val x = s0[i]
+      d[i - n-shift-words] = (x >> n-shift-bits) | carry
       carry                = if is-zero-carry: 0 else: x << n-rev-shift-bits
       loop(i - 1)
   loop(nw - 1)
@@ -253,6 +277,7 @@ defn rsh! (d:BigInt, s0:BigInt, amount:Int) -> BigInt :
 defn shift-right (b:BigInt, n:Int) -> BigInt : rsh!(BigInt(length(b)), b, n)
 
 defn lsh! (d:BigInt, s0:BigInt, amount:Int) :
+  ;; println-all(["LSH " s0 " AMOUNT " amount " INTO BIGINT<" length(d) ">"])
   val n-shift-bits     = amount % val-n-bits
   val n-shift-words    = amount / val-n-bits
   val n-rev-shift-bits = val-n-bits - n-shift-bits
@@ -262,7 +287,7 @@ defn lsh! (d:BigInt, s0:BigInt, amount:Int) :
   var carry = 0;
   ;; println-all(["LSH AMOUNT " amount " VNB " val-n-bits " NSB " n-shift-bits " NSW " n-shift-words " NRSB " n-rev-shift-bits])
   for i in 0 to (num-words(d) - n-shift-words) do :
-    val x = s0[i]
+    val x = if i >= num-words(s0) : 0 else: s0[i]
     ;; println-all(["  SHIFTING " (i + n-shift-words) " VAL " (x << n-shift-bits)])
     d[i + n-shift-words] = (x << n-shift-bits) | carry
     carry                = if is-zero-carry: 0 else: x >> n-rev-shift-bits
@@ -332,6 +357,15 @@ defn check (msg:String, x:BigInt) :
 ;; check("B< ", BigIntLit(5, 3) << 10, BigIntLit(5 << 1, 13))
 ;; check("B< ", BigIntLit(5, 3) << 32, BigIntLit(5 << 1, 38))
 ;; check("B< ", BigIntLit("b1010") << 1, BigIntLit(10 << 1, 5))
-check("B< ", BigIntLit("xfafa") << 16, BigIntLit(10 << 1, 5))
+check("S1 ", BigIntLit("xfafa") << 16, BigIntLit("xfafa0000", 32))
 ;; check("B< ", BigIntLit(5, 3) << 64, BigIntLit(5 << 1, 67))
 ;; check("BN ", neg(BigIntLit(2, 8)), BigIntLit(-2, 8))
+check("S2 ", BigIntLit("b11111010") << 8, BigIntLit("b1111101000000000", 16))
+check("C1 ", cat(BigIntLit("b11111010", 8), BigIntLit("b10111100", 8)), BigIntLit("b1111101010111100", 16))
+check("C3 ", cat(cat(BigIntLit("b1111"), BigIntLit("b1010")), cat(BigIntLit("b1011"), BigIntLit("b1100"))), BigIntLit("b1111101010111100", 16))
+check("C4 ", cat([BigIntLit("b1111"), BigIntLit("b1010"), BigIntLit("b1011"), BigIntLit("b1100")]), BigIntLit("b1111101010111100", 16))
+check("C5 ", BigIntLit("b101111001"), BigIntLit("b101111001"))
+check("C6 ", cat(BigIntLit("b1"), BigIntLit("b01111001")), BigIntLit("b101111001"))
+check("C7 ", cat(BigIntLit("b11101"), BigIntLit("b101111001")), BigIntLit("b11101101111001"))
+check("C8 ", cat([BigIntLit("b11"), BigIntLit("b101"), BigIntLit("b1011"), BigIntLit("b11001")]), BigIntLit("b11101101111001"))
+check("C0 ", bits(BigIntLit("b11101101111001"), 10, 1), BigIntLit("b0110111100"))

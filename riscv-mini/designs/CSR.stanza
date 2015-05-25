@@ -22,10 +22,10 @@ public defbundle HostIO :
   status : UInt<instLen>
 
 public defmodule CSR :
+  input  cmd  : Bits<2>
+  input  addr : Bits<12>
+  input  src  : Bits<instLen>
   output host : HostIO
-  input cmd : Bits<2>
-  input addr : Bits<12>
-  input src  : Bits<instLen>
   output data : Bits<instLen>
 
   reg reg_tohost : UInt<32> reg_tohost <- UInt(0)

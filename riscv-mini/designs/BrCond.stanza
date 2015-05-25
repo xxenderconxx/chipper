@@ -8,10 +8,10 @@ defpackage BrCond :
    import Control
 
 public defmodule BrCond :
-  input rs1 : UInt<instLen>
-  input rs2 : UInt<instLen>
-  input br_type : UInt<3>
-  output taken : Bool
+  input  rs1     : UInt<instLen>
+  input  rs2     : UInt<instLen>
+  input  br_type : UInt<3>
+  output taken   : Bool
 
   node eq   = rs1 === rs2
   node neq  = ! eq
