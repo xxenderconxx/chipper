@@ -1,0 +1,107 @@
+% "define" Stanza
+\usepackage[T1]{fontenc}  
+\usepackage[scaled=0.82]{beramono}  
+\usepackage{microtype} 
+
+\sbox0{\small\ttfamily A}
+\edef\mybasewidth{\the\wd0 }
+
+\lstdefinelanguage{stanza}{
+  morekeywords={circuit, defclass,defmodule,defbundle,definterface,defpackage,defn,%
+    do,else,public,false,finally,%
+    for,if,import,inherit,inst,match,%
+    map,new,node,object,override,package,%
+    super,this,throw,true,try,%
+    type,val,var,when,while%,
+    % yield,UInt,Bool,Bits,SInt
+    },
+  sensitive=true,
+  morecomment=[l]{;;},
+  morestring=[b]",
+  morestring=[b]',
+  morestring=[b]"""
+}
+
+\usepackage{color}
+\definecolor{dkgreen}{rgb}{0,0.6,0}
+\definecolor{gray}{rgb}{0.5,0.5,0.5}
+\definecolor{mauve}{rgb}{0.58,0,0.82}
+
+% Default settings for code listings
+\lstset{frame=tb,
+  language=stanza,
+  aboveskip=3mm,
+  belowskip=3mm,
+  showstringspaces=false,
+  columns=fixed, % basewidth=\mybasewidth,
+  basicstyle={\small\ttfamily},
+  numbers=none,
+  numberstyle=\footnotesize\color{gray},
+  % identifierstyle=\color{red},
+  keywordstyle=\color{blue},
+  commentstyle=\color{dkgreen},
+  stringstyle=\color{mauve},
+  frame=single,
+  breaklines=true,
+  breakatwhitespace=true,
+  procnamekeys={input,output,wire, mem, reg, node, defn, val, var, defclass, definterface, defbundle, defmodule, defpackage},
+  procnamestyle=\ttfamily\color{red},
+  tabsize=2
+}
+
+\lstnewenvironment{stanza}[1][]
+{\lstset{language=stanza,#1}}
+{}
+
+% "define" Stanza
+\usepackage[T1]{fontenc}  
+\usepackage[scaled=0.82]{beramono}  
+\usepackage{microtype} 
+
+\sbox0{\small\ttfamily A}
+\edef\mybasewidth{\the\wd0 }
+
+\lstdefinelanguage{stanza}{
+  morekeywords={circuit, defclass,defmodule,defbundle,definterface,defpackage,defn,%
+    do,else,public,false,finally,%
+    for,if,import,inherit,input,inst,match,%
+    map,mem,new,node,object,override,output,package,%
+    reg,super,this,throw,true,try,%
+    type,val,var,when,while,wire%,%
+    % yield,UInt,Bool,Bits,SInt
+    },
+  sensitive=true,
+  morecomment=[l]{;;},
+  morestring=[b]",
+  morestring=[b]',
+  morestring=[b]"""
+}
+
+\usepackage{color}
+\definecolor{dkgreen}{rgb}{0,0.6,0}
+\definecolor{gray}{rgb}{0.5,0.5,0.5}
+\definecolor{mauve}{rgb}{0.58,0,0.82}
+
+% Default settings for code listings
+\lstset{frame=tb,
+  language=stanza,
+  aboveskip=3mm,
+  belowskip=3mm,
+  showstringspaces=false,
+  columns=fixed, % basewidth=\mybasewidth,
+  basicstyle={\small\ttfamily},
+  numbers=none,
+  numberstyle=\footnotesize\color{gray},
+  % identifierstyle=\color{red},
+  keywordstyle=\color{blue},
+  commentstyle=\color{dkgreen},
+  stringstyle=\color{mauve},
+  frame=single,
+  breaklines=true,
+  breakatwhitespace=true,
+  procnamekeys={input,output,wire, mem, reg, node, defn, val, var, defclass, definterface, defbundle, defmodule, defpackage},
+  procnamestyle=\ttfamily\color{red},
+  tabsize=2
+}
+
+

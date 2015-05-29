@@ -20,13 +20,6 @@ public val ALU_COPY_A = UInt<4>(10)
 public val ALU_COPY_B = UInt<4>(11)
 public val ALU_XXX    = UInt<4>(15)
 
-public defn mux-lookup<?S,?T> (k: ?S & Bits, default: ?T & Data, mapping: Streamable<KeyValue<?S & Bits, ?T&Data>>) -> T :
-   var res = default
-   val kvs = reverse(to-list(mapping))
-   for kv in kvs do :
-     res = mux(key(kv) === k, value(kv), res)
-   res
-
 public defmodule ALU :
   input  A      : UInt<instLen>
   input  B      : UInt<instLen>
@@ -39,10 +32,10 @@ public defmodule ALU :
   val oot = mux-lookup(alu_op, B, [
       ALU_ADD  => (A + B),
       ALU_SUB  => (A - B),
-      ALU_SRA  => as-uint(to-sint(A) >> shamt)
+      ALU_SRA  => as-uint(as-sint(A) >> shamt)
       ALU_SRL  => (A >> shamt),
       ALU_SLL  => (A << shamt)[instLen - 1, 0],
-      ALU_SLT  => to-sint(A) < to-sint(B),
+      ALU_SLT  => as-sint(A) < as-sint(B),
       ALU_SLTU => (A < B),
       ALU_AND  => (A & B),
       ALU_OR   => (A | B),

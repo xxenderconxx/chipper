@@ -1,0 +1,374 @@
+\documentclass[xcolor=pdflatex,dvipsnames,table]{beamer}
+% \usepackage{pgfpages}
+% \setbeameroption{show notes on second screen=left}
+% \setbeamertemplate{note page}[plain]
+% \setbeameroption{show notes}
+\usepackage{epsfig,graphicx}
+\usepackage{palatino}
+\usepackage{fancybox}
+\usepackage{relsize}
+\usepackage[procnames]{listings}
+
+\input{../../style/stanza.tex}
+\input{../../style/scala.tex}
+\input{../../style/talk.tex}
+
+\title{Chipper}
+\author{Patrick Li + {\Large Jonathan Bachrach}}
+\date{\today}
+\institute[UC Berkeley]{EECS UC Berkeley}
+
+\begin{document}
+
+\begin{frame}
+\titlepage
+\end{frame}
+\addtocounter{framenumber}{-1}
+
+\begin{frame}[fragile]{Downloading Chipper}
+For these steps, it will be assumed that Chipper is in the directory, \verb+mydir/chipper+, and that Stanza is installed in the directory, \verb+mydir/stanza+. \\[0.5cm]
+
+0. First install Stanza rev.375 into \verb+mydir/stanza+ from the \url{lbstanza.org} website. \\[0.5cm]
+
+1. Clone \url{https://github.com/ucb-bar/chipper.git} into \verb+mydir/chipper+ using:
+
+\begin{bash}
+git clone https://github.com/ucb-bar/chipper.git
+\end{bash}  
+
+\end{frame}
+
+\begin{frame}[fragile]{Configuring the Installation}
+2. Navigate to mydir/mychipper and type:
+
+\begin{bash}
+stanza -e src/chipper-syntax.stanza -o chipperc -flags OPTIMIZE
+\end{bash}
+
+\noindent
+This will extend stanza with chipper macros and produce an extended compiler called chipperc. \\[0.5cm]
+   
+3. To create the run script for chipperc, type the following:
+
+\begin{bash}
+./chipperc -platform os-x -path /mydir/stanza -install chipper
+\end{bash}
+
+\noindent
+This will create a small script for running chipperc with the above options. The path options tells chipperc where to find the system source files.
+\end{frame}
+
+\begin{frame}[fragile]{Testing the Installation}
+4. Now to compile an example, type:
+
+\begin{bash}
+./chipper -i tests/gcd.stanza -o gcd
+\end{bash}
+
+\noindent
+This compiles the chipper design gcd.stanza with the extended compiler and produces the binary gcd. \\[0.5cm]
+
+5. Run the design by typing:
+
+\begin{bash}
+./gcd
+\end{bash}
+\end{frame}
+
+\begin{frame}[fragile]{Chipper Examples}
+\begin{itemize}
+\item \verb+adder.stanza+ -- An implementation of an n-bit Adder. Demonstrates defining modules, and instances, wires, as well as generating hardware using a for loop.
+\item \verb+alu.stanza+ -- An implementation of a simple ALU that performs addition and subtraction between two operands.
+\item \verb+basicalu.stanza+ --  An implementation of a more involved ALU that performs, addition and some comparison operations.
+\item \verb+gcd.stanza+ -- An implementation of a GCD circuit.
+\item \verb+dualgcd.stanza+ -- An alternate implementation of the same GCD circuit above. It demonstrates using a user-defined parametric bundle type.
+\item \verb+byteselector.stanza+ -- An implementation of a byte selector circuit. Demonstrates retrieving a subset of bits from a UInt.
+\item \verb+life.stanza+ -- An implementation of Conway's Game of Life. 
+\end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]{Defining a Module}
+The following defines a module that adds two numbers together. There are two inputs, called \verb+a+ and \verb+b+, each declared to be unsigned integers, and a single output, called \verb+z+, declared to be an 4-bit unsigned integers. Each port in the module is defined with the keywords \verb+input+, or \verb+output+. After the port listing comes the body of the module where all the connections are made. The \verb+MyAdder+ module's body has a single statement that connects the output \verb+z+ to the result of adding \verb+a+ to \verb+b+:
+
+\begin{stanza}
+defmodule MyAdder :
+   input a: UInt<4>
+   input b: UInt<4>
+   output z: UInt<4>
+   z := a + b
+\end{stanza}
+\end{frame}
+
+\begin{frame}[fragile]{Parameterized Modules}
+To parameterize a module, we can follow the module name with a list of arguments. The following example shows how to parameterize the width of the inputs and outputs of the \verb+MyAdder+ module:
+
+\begin{stanza}
+defmodule MyAdder (w:Int) :
+   input a: UInt<w>
+   input b: UInt<w>
+   output z: UInt<w>
+   z := a + b
+\end{stanza}
+\end{frame}
+
+\begin{frame}[fragile]{Type Parameterized Modules}
+To parameterize a module by type, we can declare the type parameters following the module name surrounded with angle brackets. The following example shows a one-cycle delay module parameterized by type:
+\begin{stanza}
+defmodule MyDelay<T> :
+   input a: T
+   output z: T
+
+   reg r: T
+   r := a
+   z := r
+\end{stanza}
+\end{frame}
+
+\begin{frame}[fragile]{Instantiating a Module}
+To create an instance of a module we use the following syntax:
+\begin{stanza}
+inst i : MyAdder(10)
+inst i : MyDelay<UInt<4>>
+\end{stanza}
+
+Notice that argument parameters and type parameters are differently. As a further example, the following module delays the inputs by a cycle before adding the result:
+\begin{stanza}
+defmodule DelayedAdder (w:Int) :
+   input a: UInt<w>
+   input b: UInt<w>
+   output z: UInt<w>
+
+   inst da : MyDelay<UInt<w>>
+   inst db : MyDelay<UInt<w>>
+   da.a := a
+   db.a := b
+
+   z := da.z + db.z
+\end{stanza}
+\end{frame}
+
+\begin{frame}[fragile]{Chipper Types}
+At the top-most level, we create a circuit using the following syntax:
+\begin{stanza}
+circuit c : MyAdder(10)
+\end{stanza}
+\noindent
+This will create a circuit with the top-level module declared to \verb+MyAdder+. The value \verb+c+ will now contain the FIRRTL datastructure corresponding to the \verb+MyAdder+ circuit.
+\end{frame}
+
+\begin{frame}[fragile]{Chipper Types}
+Types in chipper are used in the declaration of ports, instances, registers, and wires. Chipper provides a small number of built-in types, and supports user-defined bundle types:
+\begin{stanza}
+UInt               ;; unsigned integer type
+UInt<4>            ;; unsigned integer type with a given bitwidth
+UInt[10]           ;; vector of 10 unsigned integers
+UInt<4>[10]        ;; vector of 10 unsigned integers, each of bitwidth 4
+Bool               ;; one bit unsigned boolean
+SInt               ;; signed integer type
+T                  ;; type parameter declared in module/bundle param list
+MyBundle           ;; user defined bundle type
+MyBundle(10)       ;; user defined bundle type with value parameter argument
+MyBundle<UInt>(10) ;; user defined bundle type with type and value parameter
+\end{stanza}
+\end{frame}
+
+\begin{frame}[fragile]{User Defined Bundle Types}
+Users may define their own bundle types using the following syntax:
+\begin{stanza}
+defbundle Cplx :
+   real: UInt
+   imag: UInt
+\end{stanza}
+The above is an example of a bundle type called \verb+Cplx+ with two fields, \verb+real+ and \verb+imag+, that are both declared to be unsigned integers of unknown bit-width.
+\end{frame}
+
+\begin{frame}[fragile]{User Defined Parameterized Bundle Types}
+User-defined bundle type can be parameterized in the same way as modules, with both argument parameters and type parameters. The following code shows how to define a parameterized \verb+Decoupled+ type:
+\begin{stanza}
+defbundle Decoupled<T> :
+   data: T
+   valid: Bool
+   flip ready: Bool
+\end{stanza}
+\noindent
+Notice the keyword \verb+flip+ in the declaration of the \verb+ready+ field. This tells Chipper that the ready field allows connects in the opposite direction of the \verb+data+ and \verb+valid+ fields.
+\end{frame}
+
+\begin{frame}[fragile]{User Defined Functions on Bundle Types}
+Users may define their own functions on bundle types by creating a standard Stanza function. The following Stanza function defines a \verb+plus+ function that allows adding two \verb+Cplx+ values:
+\begin{stanza}
+defn plus (a:Cplx, b:Cplx) -> Cplx :
+   wire z: Cplx
+   z.real := a.real + b.real
+   z.imag := a.imag + b.imag
+   z
+\end{stanza}
+
+\noindent
+Using the above two definitions of the \verb+Cplx+ bundle type and the plus function, we may write an adder module that is able to add two complex numbers together.   
+
+\begin{stanza}
+defmodule CplxAdder :
+   input a: Cplx
+   input b: Cplx
+   output z: Cplx
+   z := plus(a, b)
+\end{stanza}
+\end{frame}
+
+\begin{frame}[fragile]{User Defined Functions on Bundle Types}
+In Stanza however, the syntax \verb+a + b+ is equivalent to a call to the \verb+plus+ function \verb+plus(a, b)+. So the above module can be written more legibly like this:
+
+\begin{stanza}
+defmodule CplxAdder :
+   input a: Cplx
+   input b: Cplx
+   output z: Cplx
+   z := a + b
+\end{stanza}
+\end{frame}
+
+\begin{frame}[fragile]{Defining Wires and Registers}
+Wires and Registers are defined using the keywords \verb+wire+, and \verb+reg+, respectively. Users must provide a name and a Chipper type and an optional value:
+\begin{stanza}
+wire w: UInt<1>     ;; wire with type
+wire w = UInt(0)    ;; holding value
+wire w := UInt(0)   ;; reassignable wire
+\end{stanza}
+\begin{stanza}
+reg r: Cplx         ;; reg with type
+reg r = Cplx(0, 1)  ;; reg + onreset value
+reg r := Cplx(0, 1) ;; reg + next value
+\end{stanza}
+
+\end{frame}
+
+\begin{frame}[fragile]{Connections}
+The connect operator, :=, is used for connecting two circuit components:
+\begin{stanza}
+x := y
+\end{stanza}
+Here is an example of connecting two single wires:
+\begin{stanza}
+wire x: UInt<1>
+wire y: UInt<1>
+x := y
+\end{stanza}
+\end{frame}
+
+\begin{frame}[fragile]{Bulk Connections}
+Note that the same operator is used both for connecting single wires as well as bundle and vector types.  Here is an example of connecting two vector types:
+\begin{stanza}  
+wire x: UInt<1>[10]
+wire y: UInt<1>[10]
+x := y
+\end{stanza}
+Here is an example of connecting two user-defined bundle types:
+\begin{stanza}  
+wire x: Cplx
+wire y: Cplx
+x := y
+\end{stanza}
+Notice that the actual connect statement is the same for all three above examples. The only difference is the type declaration of the wires.
+\end{frame}
+
+\begin{frame}[fragile]{Literals}
+Literals representing unsigned integers are specified like so. The following creates an unsigned integer with value 42, with its bitwidth left unspecified:
+\begin{stanza}
+UInt(42)
+\end{stanza}  
+To explicitly give the literal a bitwidth, we may put it in angle brackets:
+\begin{stanza}
+UInt<16>(42)  
+\end{stanza}  
+Signed integer and boolean literals are similarly specified:
+\begin{stanza}
+SInt(-30)
+SInt<16>(-30)  
+Bool(true)
+Bool(false)
+\end{stanza}
+\end{frame}
+
+\begin{frame}[fragile]{When Statements}
+The when statement is used to conditionally connect components. The following code connects x to 0 when enable is asserted otherwise connects x to 10:
+\begin{stanza}
+wire x: UInt
+when enable :
+   x := UInt(0)
+else :
+   x := UInt(10)
+\end{stanza}
+The else branch may be left off if there are no statements:
+\begin{stanza}
+wire x: UInt
+when enable :
+   x := UInt(0)
+\end{stanza}
+\end{frame}
+
+\begin{frame}[fragile]{Nested When Statements}
+If the else branch in a when statement is another single when statement, Chipper allows the colon after the else to be elided for convenience.
+  
+Thus the following code:
+\begin{stanza}
+when e :
+   x := a
+else :
+   when f :
+      x := b
+\end{stanza}
+\noindent
+is equivalent to:
+\begin{stanza}
+when e :
+   x := a
+else when f :
+   x := b
+\end{stanza}
+\end{frame}
+
+\begin{frame}[fragile]{Bits and BitRanges within an Integer}
+To extract a bit or a bitrange in an unsigned integer, we may use the following syntax:
+\begin{stanza}
+wire w: UInt<16>
+x := w[0]
+\end{stanza}
+\noindent
+The above example connects x to the least significant bit in w. To extract a bitrange, we give two arguments:
+\begin{stanza}
+wire w: UInt<16>
+x := w[3, 0]
+\end{stanza}
+As is tradition in hardware, the higher bit is specified first, and the lower bit specified second. The above example connects x to bits 3 (inclusive) through 0 (inclusive) in the wire w.
+\end{frame}
+
+\begin{frame}[fragile]{Accessing Vector Elements}
+To access a single component within a vector, we may use the following syntax:
+\begin{stanza}
+wire w: UInt<16>[10]
+x := w[4]
+\end{stanza}
+\noindent
+The above code connects x to the fifth component in w.
+
+If we index into a vector type with an expression instead of an integer then an accessor is created to dynamically lookup the value at runtime:
+\begin{stanza}
+input i: UInt
+wire w: UInt<16>[10]
+x := w[i]
+\end{stanza}
+\end{frame}
+
+\begin{frame}[fragile]{Remaining Topics}
+\begin{itemize}
+\item firrtl transformation passes
+\item stanza overview  
+\item vec of modules
+\item riscv-mini
+\item stdlib
+\item queues
+\end{itemize}
+\end{frame}
+
+\end{document}

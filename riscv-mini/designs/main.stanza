@@ -34,7 +34,7 @@ defpackage mini :
 
 defn main () :
    val args = commandline-arguments()
-   circuit c of ALUTop
+   circuit c of Datapath
    println(c)
    
 main()

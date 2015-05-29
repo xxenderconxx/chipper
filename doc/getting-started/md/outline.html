@@ -1,0 +1,408 @@
+<h1 id="installation">installation</h1>
+<ul>
+<li>development tool installation</li>
+<li>setting up the tutorial</li>
+</ul>
+<h1 id="basics">basics</h1>
+<ul>
+<li>the chisel directory structure</li>
+<li>running your first chisel build</li>
+<li>combinational logic</li>
+<li>registers</li>
+</ul>
+<h1 id="basic-types-and-operations">basic types and operations</h1>
+<ul>
+<li>chisel assignments and reassignments</li>
+<li>the chisel uint class</li>
+<li>the chisel bool class</li>
+<li>casting between types</li>
+</ul>
+<h1 id="modules">modules</h1>
+<ul>
+<li>module instantiation</li>
+<li>the vec class</li>
+<li>parameterization</li>
+<li>built in primitives</li>
+</ul>
+<h1 id="writing-scala-testbenches">writing scala testbenches</h1>
+<ul>
+<li>the scala testbench</li>
+<li>an example</li>
+<li>debug output</li>
+<li>general testbench</li>
+<li>limitations of the testbench</li>
+</ul>
+<h1 id="creating-your-own-project">creating your own project</h1>
+<ul>
+<li>directory structure</li>
+<li>chisel main</li>
+<li>build.sbt template</li>
+<li>compiling chisel source</li>
+<li>running the chisel tests</li>
+<li>compiling verilog</li>
+<li>putting it all together</li>
+</ul>
+<h1 id="conditional-assignments-and-memories">conditional assignments and memories</h1>
+<ul>
+<li>conditional register updates</li>
+<li>combinational conditional assignments</li>
+<li>read-only memories</li>
+<li>read-write memories</li>
+</ul>
+<h1 id="debugging">debugging</h1>
+<ul>
+<li>strings and printing
+<ul>
+<li>constructing strings</li>
+<li>sprintf, printf</li>
+</ul></li>
+<li>assert
+<ul>
+<li>simple form</li>
+<li>message</li>
+</ul></li>
+<li>vizualization
+<ul>
+<li>producing with dot backend</li>
+<li>viewing with vizgraph</li>
+</ul></li>
+<li>vcd dumps
+<ul>
+<li>producing with chisel tester</li>
+<li>viewing with waveform viewer</li>
+</ul></li>
+<li>debug api
+<ul>
+<li>peek, poke, step</li>
+<li>snapshot</li>
+</ul></li>
+</ul>
+<h1 id="scripting-hardware-generation">scripting hardware generation</h1>
+<ul>
+<li>using the for loop</li>
+<li>using if, else if, else</li>
+<li>using def</li>
+</ul>
+<h1 id="advanced-modules----from-tutorial">advanced modules -- from tutorial</h1>
+<ul>
+<li>bulk connections
+<ul>
+<li>basic connections</li>
+<li>partial interfaces</li>
+</ul></li>
+<li>blackboxes
+<ul>
+<li>changing names</li>
+<li>adding clocks</li>
+</ul></li>
+</ul>
+<h1 id="advanced-mems">advanced mems</h1>
+<ul>
+<li>mems vs vecs -- vecs can be used for wires
+<ul>
+<li>mem init -- implement this</li>
+<li>vec init -- arbitrary elt by elt init</li>
+</ul></li>
+<li>sequential mems -- from tutorial
+<ul>
+<li>reg</li>
+<li>isSeq</li>
+</ul></li>
+<li>structural mems -- figure this out from various options
+<ul>
+<li>num ports</li>
+<li>accessing ports</li>
+</ul></li>
+</ul>
+<h1 id="advanced-combinational">advanced combinational</h1>
+<ul>
+<li>math
+<ul>
+<li>log2up / log2down / isPow2</li>
+</ul></li>
+<li>bits
+<ul>
+<li>PopCount</li>
+<li>Reverse</li>
+<li>FillInterleaved</li>
+</ul></li>
+<li>random
+<ul>
+<li>LFSR16 -- parameterized</li>
+<li>big random</li>
+</ul></li>
+<li>arithmetic
+<ul>
+<li>multiplier / divider</li>
+<li>cordic ???</li>
+</ul></li>
+<li>selection
+<ul>
+<li>PriorityMux</li>
+<li>one hot encodings -- PriorityEncoderOH, Mux1H</li>
+<li>decode -- sparse lookup</li>
+</ul></li>
+</ul>
+<h1 id="advanced-sequential">advanced sequential</h1>
+<ul>
+<li>conditional update rules
+<ul>
+<li>order of updates</li>
+</ul></li>
+<li>state machines
+<ul>
+<li>state variables</li>
+</ul></li>
+<li>reg forms
+<ul>
+<li>RegEnable, RegNext</li>
+<li>RegReset</li>
+<li>partial resets</li>
+</ul></li>
+<li>counters
+<ul>
+<li>simple counter</li>
+<li>wide counter</li>
+</ul></li>
+<li>delaying
+<ul>
+<li>shift register --</li>
+<li>Latch -- RegEnable</li>
+<li>Delays -- add this</li>
+</ul></li>
+</ul>
+<h1 id="advanced-scripting">advanced scripting</h1>
+<ul>
+<li>getWidth or none
+<ul>
+<li>rules</li>
+</ul></li>
+<li>functional
+<ul>
+<li>map, zip</li>
+<li>foldLeft, foldRight</li>
+</ul></li>
+<li>data structures
+<ul>
+<li>arrayBuffers</li>
+<li>maps and sets</li>
+</ul></li>
+</ul>
+<h1 id="vec-uses">vec uses</h1>
+<ul>
+<li>creation
+<ul>
+<li>fill</li>
+<li>tabulate</li>
+</ul></li>
+<li>functional
+<ul>
+<li>map</li>
+<li>reduce</li>
+<li>forall, exists, contains, count, indexWhere, lastIndexWhere, onlyIndexWhere</li>
+</ul></li>
+<li>bitvec
+<ul>
+<li>andR, orR</li>
+<li>assignments</li>
+</ul></li>
+<li>examples
+<ul>
+<li>cams</li>
+</ul></li>
+</ul>
+<h1 id="advanced-types">advanced types</h1>
+<ul>
+<li>conversion
+<ul>
+<li>fill</li>
+<li>toBits, fromBits</li>
+</ul></li>
+<li>typed enums
+<ul>
+<li>defining</li>
+</ul></li>
+<li>tagged unions
+<ul>
+<li>defining</li>
+<li>debugging</li>
+</ul></li>
+<li>str
+<ul>
+<li>defining</li>
+</ul></li>
+<li>type parameterization
+<ul>
+<li>parameterized functions</li>
+<li>parameterized classes</li>
+</ul></li>
+<li>defining your own types
+<ul>
+<li>subclassing bits</li>
+<li>num trait</li>
+<li>subclassing bundle -- complex</li>
+</ul></li>
+</ul>
+<h1 id="backends">backends</h1>
+<h2 id="c-backend">c++ backend</h2>
+<ul>
+<li>c-run-time
+<ul>
+<li>clock_lo</li>
+<li>clock_hi</li>
+</ul></li>
+<li>chiselMain/Test options</li>
+</ul>
+<h2 id="verilog-backend">verilog backend</h2>
+<ul>
+<li>c-run-time
+<ul>
+<li>clock_lo</li>
+<li>clock_hi</li>
+</ul></li>
+<li>chiselMain/Test options</li>
+</ul>
+<h1 id="dsp-uses">dsp uses</h1>
+<ul>
+<li>sint
+<ul>
+<li>operations</li>
+<li>width inference</li>
+<li>conversion</li>
+</ul></li>
+<li>sfix/ufix
+<ul>
+<li>operations</li>
+<li>width inference</li>
+</ul></li>
+<li>flo/dbl
+<ul>
+<li>operations</li>
+<li>simulation -- backends</li>
+</ul></li>
+<li>complex
+<ul>
+<li>operations</li>
+</ul></li>
+<li>examples</li>
+</ul>
+<h1 id="decoupled">decoupled</h1>
+<ul>
+<li>pipe
+<ul>
+<li>pipeio</li>
+<li>pipe</li>
+</ul></li>
+<li>how to do rv signals
+<ul>
+<li>no combinational loops</li>
+<li>fire</li>
+</ul></li>
+<li>queue
+<ul>
+<li>simple</li>
+<li>advanced</li>
+</ul></li>
+<li>arbiters
+<ul>
+<li>simple</li>
+<li>locking</li>
+<li>rr</li>
+</ul></li>
+<li>split and join</li>
+<li>crossbar example</li>
+</ul>
+<h1 id="testing">testing</h1>
+<ul>
+<li>types
+<ul>
+<li>signed numbers</li>
+<li>vecs</li>
+<li>tagged unions</li>
+</ul></li>
+<li>decoupled
+<ul>
+<li>wait -- advanced tester</li>
+</ul></li>
+<li>advanced
+<ul>
+<li>fuzzer</li>
+<li>generative</li>
+</ul></li>
+<li>debug api
+<ul>
+<li>direct calls</li>
+</ul></li>
+</ul>
+<h1 id="parameters">parameters</h1>
+<ul>
+<li>declaring</li>
+<li>threading through modules</li>
+<li>constraints</li>
+<li>providing values</li>
+<li>producing design space</li>
+</ul>
+<h1 id="jackhammer">jackhammer</h1>
+<ul>
+<li>sampling</li>
+<li>results</li>
+<li>reports</li>
+<li>cluster version</li>
+</ul>
+<h1 id="rocc-accelerators">rocc accelerators</h1>
+<ul>
+<li>risc-v architecture</li>
+<li>accelerators</li>
+<li>spike</li>
+<li>testing</li>
+</ul>
+<h1 id="asic-flow">asic flow</h1>
+<ul>
+<li>srams with cacti etc</li>
+<li>how to connect to cad tools</li>
+<li>backannotation</li>
+</ul>
+<h1 id="fpga-flow">fpga flow</h1>
+<ul>
+<li>block rams</li>
+<li>how to connect to cad tools</li>
+<li>clocking</li>
+<li>zynq specifics such as axi</li>
+</ul>
+<h1 id="configuration">configuration</h1>
+<ul>
+<li>project file</li>
+<li>submodule</li>
+</ul>
+<h1 id="multiple-clock-domains">multiple clock domains</h1>
+<ul>
+<li>creating clock domains</li>
+<li>cross clock domains</li>
+<li>backend specifics</li>
+<li>realistic examples</li>
+</ul>
+<h1 id="intermediate-representation">intermediate representation</h1>
+<ul>
+<li>api</li>
+<li>file format</li>
+</ul>
+<h1 id="more-material">more material</h1>
+<ul>
+<li>have chisel generated c++ be spike compatible</li>
+</ul>
+<h1 id="scala">scala</h1>
+<ul>
+<li>what it is</li>
+<li>bindings</li>
+<li>collections</li>
+<li>maps and sets</li>
+<li>iteration</li>
+<li>functions</li>
+<li>functional</li>
+<li>object orientation</li>
+<li>singleton objects</li>
+</ul>
+<h1 id="what-is-chisel">what is chisel?</h1>
+<ul>
+<li>library to language</li>
+</ul>

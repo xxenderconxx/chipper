@@ -1,0 +1,94 @@
+\section{Creating Your Own Projects}
+
+In order to create your own projects from scratch, you will need to create a directory, a Chipper source file, and a build.sbt configuration file. In the first part of this tutorial we cover the basic calls to SBT in order generate appropriate files. At the end of the tutorial, we will explain how the Makefile infrastructure can make the process more streamlined.
+
+\subsection{Directory Structure}
+
+The simplest project file organization is using a single directory containing your Stanza project file and your Chipper source file.  The project directory structure would look like:
+
+\begin{bash}
+Hello/
+  Hello.stanza # your source file
+\end{bash}
+
+We will refer to the path to the \verb+Hello+ directory as \verb+$BASEDIR+ from here on.  More sophisticated directory structures can be useful in the future.  Consult the SBT documentation for more information.
+
+\subsection{The Source Directory and Chipper Main}
+
+The top directory \verb+$BASEDIR/+ contains Stanza source files containing all of the Chipper module definitions for your circuit and a main method.  In this simple example, we have one Stanza source file as shown below:
+
+\begin{stanza}
+#include("src/chipper.stanza")
+
+#use-syntax(core, chipper)
+
+defpackage hello :
+   import core
+   import verse
+   import chipper
+
+import Chipper._
+
+defmodule Hello :
+  output out = UInt<8>
+
+  out := UInt(42)
+
+deftester HelloModuleTests (c: HelloModule) :
+  step(this, 1)
+  expect(this, c.io.out, 42)
+
+defn main () :
+  val args = parse-commandline-arguments()
+  circuit c : Hello
+  if defined?(args, "--test") :
+    HelloModuleTests(c)
+  else :
+    println(c)     
+\end{stanza}
+
+In the above example, we have a module definition in package \verb+Hello+ for a \verb+Hello+ module. The main method constructs the circuit and then either calls \verb+HelloModuleTests+ or prints out the firrtl file for Hello module.
+
+\section{Compiling the Chipper Source}
+
+\subsection{Compiling the Emulation Files}
+
+The following call is then made to compile Hello module:
+
+\begin{bash}
+chipper -i Hello.stanza -o Hello
+\end{bash}
+
+\noindent
+and then to produce a runnable Hello app simulation dynamic library type:
+
+\begin{bash}
+chipper-to-dll Hello
+\end{bash}
+
+\subsection{Running the Chipper Tests}
+
+In order to run the tests defined in \verb+Hello+, we make the following call to Hello:
+
+\begin{bash}
+Hello --test
+\end{bash}
+
+\subsection{Compiling Verilog}
+
+Similarly to run the Hello code and generate the Verilog HDL, another script is invoked. The call looks like:
+
+\begin{bash}
+chipper-to-verilog Hello
+\end{bash}
+
+\section{Putting It All Together}
+
+In summary, the bare minimum project components that are necessary for your project to get off the ground are the following files:
+
+\begin{enumerate}
+\item \verb+$BASEDIR/<Chipper source files>.stanza+
+\end{enumerate}
+
+Together, these files compose a Chipper project and can be used to generate the Verilog and DLL files. It is strongly recommended that you supplement the file structure with appropriate Makefiles but is not strictly necessary (examples can be found in the Chipper tutorial project).
+

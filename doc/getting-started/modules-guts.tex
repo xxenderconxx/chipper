@@ -1,0 +1,308 @@
+\section{Module Instantiation}
+
+Like other hardware description languages, Chipper allows fairly straightforward module instantiation to enable modularity and hierarchy. In Chipper, instantiating a Module class is the equivalent to instantiating a module in Verilog. To do this, we simply use a call to \verb+Module+ with module created with the Stanza \verb+new+ keyword in order to indicate that we are instantiation a new module. We want to make sure we assign this to a value so that we can reference its input and outputs which we also need to connect.
+
+For example, suppose we would like to construct a 4-bit adder using multiple copies of the  \verb+FullAdder+ module. as shown in the Figure 1. The Chipper source code is shown below.
+
+\begin{figure}[ht!]
+\centering
+\includegraphics[width=80mm]{figs/4_Bit_Adder.jpg}
+\caption{Block Diagram of 4-Bit Adder}
+\label{overflow}
+\end{figure}
+
+\begin{stanza}
+;; A 4-bit adder with carry in and carry out
+defmodule Adder4 :
+  input A     : UInt<4>
+  input B     : UInt<4>
+  input Cin   : UInt<1>
+  output Sum  : UInt<4>
+  output Cout : UInt<1>
+  ;; Adder for bit 0
+  inst adder0 : FullAdder
+  adder0.a   := A[0]
+  adder0.b   := B[0]
+  adder0.cin := Cin
+  node s0 = adder0.sum
+  ;; Adder for bit 1
+  inst adder1 : FullAdder
+  adder1.a   := A[1]
+  adder1.b   := B[1]
+  adder1.cin := adder0.cout
+  node s1 = cat[adder1.sum, s0]
+  ;; adder for bit 2
+  inst adder2 : Fulladder
+  adder2.a   := A[2]
+  adder2.b   := B[2]
+  adder2.cin := adder1.cout
+  node s2 = Cat[adder2.sum, s1]
+  ;; adder for bit 3
+  inst adder3 : Fulladder
+  adder3.a   := A[3]
+  adder3.b   := B[3]
+  adder3.cin := adder2.cout
+  sum  := to-uint(cat(adder3.sum, s2))
+  cout := adder3.cout
+\end{stanza}
+
+In this example, notice how when referencing each module I/O we must first reference the \verb+io+ that contains the ports for the I/Os. Again, note how all assignments to the module I/Os use a reassignment operator \verb+:=+. When instantiating modules, it is important to make sure that you connect all the input and output ports. If a port is not connected, the Chipper compiler may optimize away portions of your design that it find unecessary due to the unconnected ports and throw errors or warnings.
+
+\section{The Vec Class}
+
+The \verb+Vec+ class allows you to create an indexable vector in Chipper which can be filled with any expression that returns a chipper data type. The general syntax for a \verb+Vec+ declaration is given by:
+\begin{stanza}
+wire myVec : <data type>[<number of elements]
+\end{stanza}
+Where \verb+<number of elements>+ corresponds to how long the vector is and \verb+<data type>+ corresponds to what type of class the vector contains.
+
+For instance, if we wanted to instantiate a 10 entry vector of 5 bit UInt values, we would use:
+
+\begin{stanza}
+wire ufix5_vec10 : UInt<5>[10]
+\end{stanza}
+
+If we want to define a vector of registers...
+
+\begin{stanza}
+reg reg_vec32 : UInt<16>[32]
+\end{stanza}
+
+In order to assign to a particular value of the \verb+Vec+, we simply assign the target value to the vector at a specified index. For instance, if we wanted to assign a UInt value of zero to the first register in the above example, the assignment would look like:
+
+\begin{stanza}
+reg_vec32[1] := UInt(0)
+\end{stanza}
+
+To access a particular element in the vector at some index, we specify the index of the vector. For example, to extract the 5th element of the register vector in the above example and assign it to some value \verb+reg5+, the assignment would look like:
+
+\begin{stanza}
+val reg5 = reg_vec[5]
+\end{stanza}
+
+The syntax for the \verb+Vec+ class is slightly different when instantiating a vector of modules. When instantiating a vector of modules the data type that is specified in the {} braces is slightly different than the usualy primitive types. To specify a vector of modules, we use the \verb+io+ bundle when specifying the type of the vector. For example, in order to specify a \verb+Vec+ with 16 modules , say \verb+FullAdder+s in this case, we would use the following declaration:
+
+\begin{stanza}
+wire fullAdders : FullAdder[10]
+for i in 0 to 10 do :
+  fullAdders := inst-of PlusOne
+\end{stanza}
+
+Notice we use the keyword \verb+new+ in the vector definition before the module name \verb+FullAdder+. For how to actually access the \verb+io+ on the vector modules, refer to the next section.
+
+\subsection{\problem{Vec Shift Reg}}
+
+The next assignment is to construct a simple bit shift register.
+The following is a the template from \verb+$TUT_DIR/problems/VecShiftRegisterSimple.stanza+:
+
+\begin{stanza}
+defmodule VecShiftRegisterSimple :
+  input in   : UInt<8>
+  output out : UInt<8>
+  reg delays = UInt<8>[4]
+  ...
+  out := UInt(0)
+\end{stanza}
+
+\noindent
+where \verb+out+ is a four cycle delayed copy of values on \verb+in+.
+
+\section{Parametrization}
+
+In the previous Adder example, we explicitly instantiated four different copies of a \verb+FullAdder+ and wired up the ports. But suppose we want to generalize this structure to an n-bit adder. Like Verilog, Chipper allows you to pass parameters to specify certain aspects of your design. In order to do this, we add a parameter in the Module declaration to our Chipper definition.
+For a carry ripple adder, we would like to parametrize the width to some integer value \verb+n+ as shown in the following example:
+
+\begin{stanza}
+;; A n-bit adder with carry in and carry out
+defmodule Adder(n:Int) :
+  input  A    : UInt<n>
+  input  B    : UInt<n>
+  input  Cin  : UInt<1>
+  output Sum  : UInt<n>
+  output Cout : UInt<1>
+  ;; create a vector of FullAdders
+  wire FAs : FullAdder[10]
+  for i in 0 to 10 do :
+    FAs := inst-of PlusOne
+
+  ;; define carry and sum wires
+  wire carry : UInt<1>[n + 1]
+  wire sum   : Bool[n]
+
+  ;; first carry is the top level carry in
+  carry[0] := Cin
+
+  ;; wire up the ports of the full adders
+  for i in 0 to n do :
+     FAs[i].a     := A[i]
+     FAs[i].b     := B[i]
+     FAs[i].cin   := carry[i]
+     carry[i + 1] := FAs[i].cout
+     sum[i]       := to-bool(FAs[i].sum)
+  Sum  := to-bits(sum)
+  Cout := carry[n]
+\end{stanza}
+
+Note that in this example, we keep track of the sum output in a \verb+Vec+ of \verb+Bool+s. This is because Chipper does not support bit assignment directly. Thus in order to get the n-bit wide \verb+sum+ in the above example, we use an n-bit wide \verb+Vec+ of \verb+Bool+s and then cast it to a UInt(). Note that it must first be casted to the \verb+Bits()+ type before casting it to \verb+UInt()+.
+
+You will notice that modules are instantiated in a Vec class which allows us to iterate through each module when assigning the ports connections to each \verb+FullAdder+. This is similar to the generate statement in Verilog. However, you will see in more advanced tutorials that Chipper can offer more powerful variations.
+
+Instantiating a parametrized module is very similar to instantiating an unparametrized module except that we must provide arguments for the parameter values. For instance, if we wanted to instantiate a 4-bit version of the \verb+Adder+ module we defined above, it would look like:
+
+\begin{stanza}
+inst adder4 : Adder(4)
+\end{stanza}
+
+We can also instantiate the \verb+Adder+ by explicitly specifying the value of it parameter \verb+n+ like the this:
+
+\begin{stanza}
+inst adder4 = Adder(n = 4)
+\end{stanza}
+
+Explicitly specifying the parameter is useful when you have a module with multiple parameters. Suppose you have a parametrized FIFO module with the following module definition:
+
+\begin{stanza}
+class FIFO(width: Int, depth: Int) extends Module {...}
+\end{stanza}
+
+You can explicitly specify the parameter values in any order:
+
+\begin{stanza}
+inst fifo1 : FIFO(16, 32)
+inst fifo2 : FIFO(width = 16, depth = 32)
+inst fifo3 : FIFO(depth = 32, width = 16)
+\end{stanza}
+
+All of the above definitions pass the same parameters to the FIFO module. Notice that when you explicitly assign the parameter values, they can occur in any order you want such as the definition for fifo3.
+
+\section{Advanced Parametrization}
+
+Although parameters can be passed explicitly through a Module's constructor, this technique does not scale when parameterizing large designs with many generic components. For a more detailed explanation of why a better parameterization method is needed, please see XXXX. In addition, XXXX explains heuristics for how to organize and parameterize large designs, which we highly recommend one reads prior to using this functionality in a design. The following, however, is a basic introduction.
+
+Every Module has its own \verb+params+ object, which acts as a dictionary. Querying this object is shown below.
+
+\begin{stanza}
+val width = params[Int]('width')
+\end{stanza}
+
+If \verb+params+ is queried and no parameter matches the query, Chipper throws a \verb+ParameterUndefinedException+. Notice the query return type must be provided.
+
+When a parent Module creates a child Module, the parent's \verb+params+ object is automatically cloned and passed to the child. In the following example, suppose the parent's params object returns \verb+10+ when queried for width. Because the \verb+Parent+ \verb+params+ object is automatically cloned for \verb+Child+, the \verb+Child+ query also returns \verb+10+.
+
+\begin{stanza}
+defmodule Parent :
+  input ...
+  val width = params[Int]('width') ;; returns 10
+  ;; create child Module implicitly passing params
+  inst child : Child
+defmodule Child :
+  input ...
+  val width = params[Int]('width') ;; returns 10
+\end{stanza}
+
+Suppose a parent Module wants to override or add parameters to its child's \verb+params+ object. This case requires adding a partial function (a Stanza way of defining key-value mappings) to the \verb+Child+ Module constructor:
+
+\begin{stanza}
+defmodule Parent :
+  input ...
+  val width = params[Int]('width') ;; returns 10
+  val n = params[Int]('n') ;; returns 20
+  ;; Partial function is added to Module constructor
+  inst child = Child,{'n' => 40}
+defmodule Child :
+  input ...
+  val width = params[Int]('width') ;; returns 10
+  val n = params[Int]('n') ;; returns 40
+\end{stanza}
+
+An example which is impossible to do with simple parameterization, but simple with the advanced parameterization, is when using a generic \verb+Mesh+ generator with a custom \verb+MyRouter+ Module. The existing source code might look like:
+
+\begin{stanza}
+defmodule Mesh (router-constructor: () -> Router, n:Int) :
+  input ...
+  wire routers : Router[n]
+  for i in 0 to n do :
+    routers[i] := inst-of router-constructor()
+  hook-up-routers(routers)
+\end{stanza}
+
+However, our custom \verb+MyRouter+ Module requires a parameter, \verb+RoutingFunction+ that we want to sweep for a design space evaluation. Using the simple parameterization method would require a change to the \verb+Mesh+ Module's constructor to include \verb+RoutingFunction+. 
+
+Alternatively, one can use the \verb+params+ object to implicitly pass the \verb+RoutingFunction+:
+
+\begin{stanza}
+defmodule MyRouter :
+  input ...
+  val my-routing-function = params[RoutingFunction]('r')
+  ...
+defmodule Top :
+  input ...
+  inst mesh : Mesh(() -> MyRouter, n){'r' => new RoutingFunction})
+\end{stanza}
+
+For more advanced uses, tips, and tricks, please see XXXX.
+
+\section{Built In Primitives}
+
+Like other HDL, Chipper provides some very basic primitives. These are constructs that are built in to the Chipper compiler and come for free. The Reg, UInt, and Bundle classes are such primitives that has already been covered. Unlike Module instantiations, primitive do not require explicit connections of their io ports to use. Other useful primitive types include the Mem and Vec classes which will be discussed in a more advanced tutorial. In this tutorial we explore the use of the \verb+Mux+ primitive
+
+\subsection{The Mux Class}
+
+The \verb+Mux+ primitive is a two input multiplexer. In order to use the \verb+Mux+ we first need to define the expected syntax of the \verb+Mux+ class. As with any two input multiplexer, it takes three inputs and one output. Two of the inputs correspond to the data values \verb+A+ and \verb+B+ that we would like to select which can be any width and data type as long as they are the same. The third input \verb+select+ which is a Bool type determines which one to output.
+A \verb+select+ value of \verb+true+ will output the first value \verb+A+, while a \verb+select+ value of \verb+false+ will pass \verb+B+.
+
+\begin{stanza}
+val out = Mux(select, A, B)
+\end{stanza}
+
+Thus if \verb+A=10+, \verb+B=14+, and \verb+select+ was \verb+true+, the value of \verb+out+ would be assigned 10. Notice how using the \verb+Mux+ primitive type abstracts away the logic structures required if we had wanted to implement the multiplexer explicitly.
+
+\subsection{\problem{Parameterized Width Adder}}
+
+The next assignment is to construct an adder with a parameterized width and using the built in addition operator \verb!+!.
+The following is a the template from \verb+$TUT_DIR/problems/Adder.stanza+:
+
+\begin{stanza}
+defmodule Adder (w:Int) :
+  input  in0 = UInt<1>
+  input  in1 = UInt<1>
+  output out = UInt<1>
+  ...
+  out := UInt(0)
+\end{stanza}
+
+\noindent
+where \verb+out+ is sum of \verb+w+ width unsigned inputs \verb+in0+ and \verb+in1+.  
+Notice how \verb+val+ is added to the width parameter value to 
+allow the width to be accessible from the tester as a field of the adder module object.  Run 
+
+\begin{bash}
+make Adder.out
+\end{bash}
+
+\noindent 
+until your circuit passes the tests.
+
+% Martin: I would drop the following as it is just confusing in a tutorial
+% state simple that there is a Mux primitive and that is fine.
+
+%The instantiation would look something like this:
+%
+%\begin{stanza}
+%;; where n is the width of A and m is the width of B
+%val mux = Module(new Mux(n, m))
+%mux.io.select := select
+%mux.io.A      := A
+%mux.io.B      := B
+%val out = mux.io.out
+%\end{stanza}
+%
+%We see that clearly it is much cleaner to use the primitive \verb+Mux+ type instead of trying to write and implement our own general multiplexer since the \verb+Mux+ type does all the wiring for you.
+
+
+%\section{Exercises}
+%
+%\subsection{n-bit Subtractor}
+%
+%Earlier in this tutorial we demonstarted how to parametrize and instantiate an n-bit ripple adder. <Finish this>
+%

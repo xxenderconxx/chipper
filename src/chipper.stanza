@@ -69,7 +69,10 @@ public defn RegisterExp<?T> (name:Symbol, type:?T&Data) :
    add(STATEMENT-VECTOR, fDefRegister(name*, firrtl-type(type)))
    handle(type, fRef(name*, fUnknownType()))
 
-public defn Reg<?T> (x:?T & Data) -> T : RegisterExp(`reg, x)
+public defn Reg<?T> (x:?T & Data) -> T :
+   val r = RegisterExp(`reg, type(x))
+   ConnectExp(r, x)
+   r
 
 public defn WireExp<?T> (name:Symbol, type:?T&Data) :
    val name* = gensym(name) ;; name

@@ -1,0 +1,199 @@
+\section{Using the {\tt for} loop}
+
+Often times parametrization requires instantiating multiple components which are connected in a very regular structure. A revisit to the parametrized \verb+Adder+ component definition shows the \verb+for+ loop construct in action:
+
+\begin{stanza}
+;; A n-bit adder with carry in and carry out
+defmodule Adder(n:Int) :
+  input A     : UInt<n>
+  input B     : UInt<n>
+  input Cin   : UInt<1>
+  output Sum  : UInt<n>
+  output Cout : UInt<1>
+  ;; create a vector of FullAdders
+  wire FAs : FullAdder[10]
+  for i in 0 to 10 do :
+    FAs := inst-of PlusOne
+
+  ;; define carry and sum wires
+  wire carry : UInt<1>[n + 1]
+  wire sum   : Bool[n]
+
+  ;; first carry is the top level carry in
+  carry[0] := Cin
+
+  ;; wire up the ports of the full adders
+  for i in 0 to n do :
+     FAs[i].a     := A[i]
+     FAs[i].b     := B[i]
+     FAs[i].cin   := carry[i]
+     carry[i + 1] := FAs[i].cout
+     sum[i]       := to-bool(FAs[i].sum)
+  Sum  := to-bits(sum)
+  Cout := carry[n]
+\end{stanza}
+
+Notice that a Stanza integer \verb+i+ value is used in the \verb+for+ loop definition as the index variable. This indexing variable is specified to take values from 0 \verb+until+ n, which means it takes values 0, 1, 2..., n-1. If we wanted it to take values from 0 to n inclusive, we would use \verb+for (i <- 0 to n)+.
+
+It is also important to note, that the indexing variable \verb+i+ does not actually manifest itself in the generated hardware. It exclusively belongs to Stanza and is only used in declaring how the connections are specified in the Chipper component definition.
+
+The for loop construct is also very useful for assigning to arbitrarily long \verb+Vec+s 
+
+\section{Using {\tt if}, {\tt else if}, {\tt else}}
+
+As previously mentioned, the \verb+if, elseif,+ and \verb+else+ keywords are reserved for Stanza control structures. What this means for Chipper is that these constructs allow you to selectively generate different structures depending on parameters that are supplied. This is particularly useful when you want to turn certain features of your implementation "on" or "off", or if you want to use a different variant of some component.
+
+For instance, suppose we have several simple counters that we would like to package up into a general purpose counter module: UpCounter, DownCounter, and OneHotCounter. From the definitions below, we notice that for these simple counters, the I/O interfaces and parameters are identical:
+
+\begin{stanza}
+;; Simple up counter that increments from 0 and wraps around
+defmodule UpCounter(CounterWidth:Int) :
+  output out : UInt<CounterWidth>
+  input  ce  : Bool
+  ...
+
+;; Simple down counter that decrements from 
+;; 2^CounterWidth-1 then wraps around
+defmodule DownCounter(CounterWidth:Int) :
+  output out : UInt<CounterWidth>
+  input  ce  : Bool
+  ...
+
+;; Simple one hot counter that increments from one hot 0 
+;; to CounterWidth-1 then wraps around
+defmodule OneHotCounter(CounterWidth:Int) :
+  output out : UInt<CounterWidth>
+  input  ce  : Bool
+  ...
+\end{stanza}
+
+We could just instantiate all three of these counters and multiplex between them but if we needed one at any given time this would be a waste of hardware. In order to choose between which of these three counters we want to instantiate, we can use Stanza's \verb+if, else if, else+ statements to tell Chipper how to pick which component to instantiate based on a \verb+CounterType+ parameter:
+
+\begin{stanza}
+defmodule Counter(counter-width: Int, counter-type: String) :
+  output out : UInt<counter-width>
+  input  ce  : Bool
+  if counter-type == "UpCounter" :
+    inst upcounter : UpCounter(counter-width)
+    upcounter.ce := ce
+    output := upcounter.output
+  else : if counter-type == "DownCounter" :
+    inst downcounter : DownCounter(counter-width)
+    downcounter.ce := ce
+    output := downcounter.output
+  else : if counter-type == "OneHotCounter" :
+    inst onehotcounter : OneHotCounter(counter-width)
+    onehotcounter.ce := ce
+    output := onehotcounter.output
+  else :
+    ;; default output 1
+    output := UInt(1)
+\end{stanza}
+
+By consolidating these three counter components into a single \verb+Counter+ module, we can instantiate a different counter by simply changing the parameter \verb+counter-type+. For instance:
+
+\begin{stanza}
+;; instantiate a down counter of width 16
+inst downcounter : Counter(16, "DownCounter")
+
+;; instantiate an up counter of width 16
+inst upcounter : Counter(16, "UpCounter")
+
+;; instantiate a one hot counter of width 16
+inst onehotcounter : Counter(16, "OneHotCounter")
+\end{stanza}
+
+This allows seamless alternation between them.
+
+\section{Using {\tt defn}}
+
+Chipper also allows the usage of the Stanza \verb+def+ statement to define Chipper code that may be used frequently. These \verb+def+ statements can be packaged into a Stanza Object and then called inside a Module. The following Chipper code shows an alternate implementation of an counter using \verb+def+ that increments by \verb+amt+ if the \verb+inc+ signal is asserted.
+
+\begin{stanza} 
+defn wrapAround(n: UInt, max: UInt) -> UInt :
+  mux(n > max, UInt(0), n)
+
+defn counter (max: UInt, en: Bool, amt: UInt) -> UInt :
+  reg x : UInt<#{width(max)}> <- UInt(0)
+  x := wrapAround(x + amt, max)
+  x
+
+defmodule Counter :
+  input inc : Bool
+  input amt : UInt<4>
+  output tot : UInt<8>
+  tot := counter(UInt(255), inc, amt)
+\end{stanza}
+ 
+\noindent
+In this example, we use calls to subroutines defined in the \verb+Counter+ object in order to perform the appropriate logic. 
+
+\section{\problem{Parameterized Vec Shift Reg}}
+
+The next assignment is to construct a bit shift register with delay parameter.
+The following is a the template from \verb+$TUT_DIR/problems/VecShiftRegisterParam.stanza+:
+
+\begin{stanza}
+defmodule VecShiftRegisterParam (n: Int, w: Int) :
+  input  in  : UInt<w>
+  output out : UInt<w>
+  ...
+  out := UInt(0)
+\end{stanza}
+
+\noindent
+where \verb+out+ is a \verb+n+ cycle delayed copy of values on \verb+in+.  
+Also notice how \verb+val+ is added to each parameter value to 
+allow those values to be accessible from the tester. Run 
+
+\begin{bash}
+make VecShiftRegisterParam.out
+\end{bash}
+
+\noindent 
+until your circuit passes the tests.
+
+\section{\problem{Mul Lookup Table}}
+
+The next assignment is to write a 16x16 multiplication table using \verb+Vec+.
+The following is a the template from \verb+$TUT_DIR/problems/Mul.stanza+:
+
+\begin{stanza}
+defmodule Mul :
+  input x   : UInt<4>
+  input y   : UInt<4>
+  output z  : UInt<8>
+  val muls = Vector<UInt>()
+
+  ;; flush this out ...
+
+  z := UInt(0)
+\end{stanza}
+
+\noindent
+As a hint build the lookup table using a rom constructed from the \verb+tab+ lookup table represented as a Stanza Vector with incrementally added elements (using \verb!add!):
+
+\begin{stanza}
+wire tab : UInt<8>[256]
+for i in 0 to 256 do :
+  tab[i] := muls[i]
+\end{stanza}
+
+\noindent
+and lookup the result using an address formed from the \verb+x+ and \verb+y+ inputs as follows:
+
+\begin{stanza}
+z := tab[cat(x, y)]
+\end{stanza}
+
+\noindent
+Run 
+
+\begin{bash}
+make Mul.out
+\end{bash}
+
+\noindent 
+until your circuit passes the tests.
+
+% The first call to \verb+counter+ in the \verb+Counter+ module

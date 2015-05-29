@@ -39,8 +39,8 @@ public defmodule Datapath :
  
   ;; ****** Fetch *****
   reg pc : UInt<instLen> pc <- PC_START - UInt<instLen>(4)
-  val iaddr = mux((ctrl.pc_sel === PC_ALU) || brCond.taken, alu.sum, pc + UInt(4))
-  val inst  = mux((ctrl.inst_type === I_KILL) || brCond.taken, NOP, icache.dout)
+  node iaddr = mux((ctrl.pc_sel === PC_ALU) || brCond.taken, alu.sum, pc + UInt(4))
+  node inst  = mux((ctrl.inst_type === I_KILL) || brCond.taken, NOP, icache.dout)
  
   icache.we   := Bool(false)
   icache.din  := UInt(0)

@@ -210,11 +210,13 @@ defsyntax chipper :
 
    ;Register statement
    defrule :
-      prefix-op = (reg ?name:#id! : ?type:#ch/type <- ?e:#exp!) :
+      prefix-op = (reg ?name:#id! : ?type:#ch/type <= ?e:#exp!) :
+         println-all(["MATCHED REG <= " name])
          expande $ list(
             compile(RegisterStmt(name, type))
             compile(OnResetStmt(name, e)))
       prefix-op = (reg ?name:#id! : ?type:#ch/type := ?e:#exp!) :
+         println-all(["MATCHED REG := " name])
          expande $ list(
             compile(RegisterStmt(name, type))
             compile(ConnectStmt(name, e)))
@@ -239,8 +241,16 @@ defsyntax chipper :
          expande $ list(
             compile(WireStmt(name, type))
             compile(ConnectStmt(name, e)))
+      prefix-op = (wire ?name:#id! := ?e:#exp!) :
+         val tmp = gensym(name)
+         expande $ list(
+            compile(NodeStmt(tmp, e))
+            compile(WireStmt(name, ExpT(false, tmp)))
+            compile(ConnectStmt(name, tmp)))
       prefix-op = (wire ?name:#id! : ?type:#ch/type) :
          compile(WireStmt(name, type))
+      prefix-op = (wire ?name:#id! = ?e:#exp!) :
+         compile(NodeStmt(name, e))
       prefix-op = (wireof ?type:#ch/type) :
          compile(WireExp(type))
 

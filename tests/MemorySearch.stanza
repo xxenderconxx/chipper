@@ -18,15 +18,14 @@ defmodule MemorySearch (depth:Int) :
   wire vals: UInt<4>[7]
   for i in 0 to length(inits) do:
     vals[i] := UInt(inits[i])
-  ;; wire vals = inits.map({ UInt(_, 4) })
   reg index : UInt<4>
-  wire elt : UInt elt := vals[index]
-  wire isDone : UInt<1> isDone := ! en & ((elt === target) | (index === UInt(7)))
+  node elt    = vals[index]
+  node isDone = ! en & ((elt === target) | (index === UInt(7)))
   when en :
     index := UInt(0)
   else when ! isDone :
     index := index + UInt(1)
-  done := isDone
+  done    := isDone
   address := index
 
 defn main () :
