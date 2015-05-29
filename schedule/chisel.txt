@@ -1,0 +1,15 @@
+Ecosystem:
+   - Accompanying documentation and support related to Chisel is
+     listed here.
+
+Features that need to be implemented:
+   - Features that need to be implemented and tested in time for the
+     bootcamp are listed here.
+   - NO FEATURES that are not IMMEDIATELY needed for the bootcamp are
+     listed.
+
+Complete listing of supported features by Chisel:
+   - The entire list of supported features by Chisel needs to go
+     here. We will test Chisel by going through this list one at a
+     time and checking all error conditions, input combinations,
+     etc...
