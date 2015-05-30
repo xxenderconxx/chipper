@@ -167,73 +167,96 @@ public defn UIntLit (w:Int, v:Int) :
    val e = fUIntValue(v, fIntWidth(w))
    handle(UInt(w), e)
 
+;================ SIGNED INTEGERS =========================
+public definterface SInt <: Data
+defclass SIntC <: SInt
+defn SIntHandle (w:fWidth, e:fExpression) :
+   new SIntC :
+      defmethod firrtl-exp (this) : e
+      defmethod type (this) : SIntType(w) as Type<SIntC>
 
-;=========== OPERATIONS ON UNSIGNED INTEGERS ================
-defn uint-binop (op:fPrimOp, x:UInt, y:UInt) :
-   handle{UInt(), Node(_)} $ fDoPrim(op, list(ex, ey), List(), fUnknownType()) where :
-      val ex = firrtl-exp(x)
-      val ey = firrtl-exp(y)   
-defn uint-unaop (op:fPrimOp, x:UInt, y:Int) :
-   handle{UInt(), Node(_)} $ fDoPrim(op, list(ex), List(y), fUnknownType()) where :
-      val ex = firrtl-exp(x)
-defn uint-unaop (op:fPrimOp, x:UInt, ys:List<Int>) :
-   handle{UInt(), Node(_)} $ fDoPrim(op, list(ex), ys, fUnknownType()) where :
-      val ex = firrtl-exp(x)
-      
-public defn plus (x:UInt, y:UInt) -> UInt : uint-binop(fADD-WRAP-OP, x, y)
-public defn minus (x:UInt, y:UInt) -> UInt : uint-binop(fSUB-WRAP-OP, x, y)
-public defn times (x:UInt, y:UInt) -> UInt : uint-binop(fMUL-OP, x, y)
-public defn divide (x:UInt, y:UInt) -> UInt : uint-binop(fDIV-OP, x, y)
-public defn modulo (x:UInt, y:UInt) -> UInt : uint-binop(fMOD-OP, x, y)
+public defclass SIntType <: Type<SInt>
+defn SIntType (w:fWidth) -> Type<SInt> :
+   new SIntType :
+      defmethod firrtl-type (this) : fSIntType(w)
+      defmethod handle (this, e:fExpression) : SIntHandle(w, e)
+      defmethod erase-width (this) : SIntType(fUnknownWidth())
 
-public defn less? (x:UInt, y:UInt) -> UInt : uint-binop(fLESS-OP, x, y)
-public defn less-eq? (x:UInt, y:UInt) -> UInt : uint-binop(fLESS-EQ-OP, x, y)
-public defn greater? (x:UInt, y:UInt) -> UInt : uint-binop(fGREATER-OP, x, y)
-public defn greater-eq? (x:UInt, y:UInt) -> UInt : uint-binop(fGREATER-EQ-OP, x, y)
-public defn bit-equal? (x:UInt, y:UInt) -> UInt : uint-binop(fEQUAL-OP, x, y)
+public defn SInt (w:Int) : SIntType(fIntWidth(w))
+public defn SInt () : SIntType(fUnknownWidth())
 
-public defn cat (x:UInt, y:UInt) -> UInt : uint-binop(fCONCAT-OP, x, y)
-public defn bitwise-and (x:UInt, y:UInt) -> UInt : uint-binop(fBIT-AND-OP, x, y)
-public defn bitwise-or (x:UInt, y:UInt) -> UInt : uint-binop(fBIT-OR-OP, x, y)
-public defn bitwise-xor (x:UInt, y:UInt) -> UInt : uint-binop(fBIT-XOR-OP, x, y)
-public defn shift-left (x:UInt, y:Int) -> UInt : uint-unaop(fSHIFT-LEFT-OP, x, y)
-public defn shift-right (x:UInt, y:Int) -> UInt : uint-unaop(fSHIFT-RIGHT-OP, x, y)
+public defn SIntLit (v:Int) :
+   val e = fSIntValue(v, fUnknownWidth())
+   handle(SInt(), e)
+public defn SIntLit (w:Int, v:Int) :
+   val e = fSIntValue(v, fIntWidth(w))
+   handle(SInt(w), e)
 
-public defn get (x:UInt, i:Int) -> UInt : uint-unaop(fBIT-SELECT-OP, x, i)
-public defn get (x:UInt, i:Int, j:Int) -> UInt : uint-unaop(fBITS-SELECT-OP, x, list(i, j))
-
-
-;============ OPERATIONS ON SIGNED INTERGERS ================
-defn sint-binop (op:fPrimOp, x:SInt, y:SInt) :
-   handle{SInt(), Node(_)} $ fDoPrim(op, list(ex, ey), List(), fUnknownType()) where :
-      val ex = firrtl-exp(x)
-      val ey = firrtl-exp(y)   
-defn sint-cmpop (op:fPrimOp, x:SInt, y:SInt) :
-   handle{UInt(), Node(_)} $ fDoPrim(op, list(ex, ey), List(), fUnknownType()) where :
+;============== CONVENIENCE FUNCTIONS =======================
+defn binop-node (ret:Type, op:fPrimOp, x:Data, y:Data) :
+   handle{ret, Node(_)} $ fDoPrim(op, list(ex, ey), List(), fUnknownType()) where :
       val ex = firrtl-exp(x)
       val ey = firrtl-exp(y)
-defn sint-unaop (op:fPrimOp, x:SInt, y:Int) :
-   handle{SInt(), Node(_)} $ fDoPrim(op, list(ex), List(y), fUnknownType()) where :
+
+defn unaop-node (ret:Type, op:fPrimOp, x:Data, ys:List<Int>) :
+   handle{ret, Node(_)} $ fDoPrim(op, list(ex), ys, fUnknownType()) where :
       val ex = firrtl-exp(x)
-      
-public defn plus (x:SInt, y:SInt) -> SInt : sint-binop(fADD-WRAP-OP, x, y)
-public defn minus (x:SInt, y:SInt) -> SInt : sint-binop(fSUB-WRAP-OP, x, y)
-public defn times (x:SInt, y:SInt) -> SInt : sint-binop(fMUL-OP, x, y)
-public defn divide (x:SInt, y:SInt) -> SInt : sint-binop(fDIV-OP, x, y)
-public defn modulo (x:SInt, y:SInt) -> SInt : sint-binop(fMOD-OP, x, y)
 
-public defn less? (x:SInt, y:SInt) -> UInt : sint-cmpop(fLESS-OP, x, y)
-public defn less-eq? (x:SInt, y:SInt) -> UInt : sint-cmpop(fLESS-EQ-OP, x, y)
-public defn greater? (x:SInt, y:SInt) -> UInt : sint-cmpop(fGREATER-OP, x, y)
-public defn greater-eq? (x:SInt, y:SInt) -> UInt : sint-cmpop(fGREATER-EQ-OP, x, y)
-public defn bit-equal? (x:SInt, y:SInt) -> UInt : sint-cmpop(fEQUAL-OP, x, y)
+defn unaop-node (ret:Type, op:fPrimOp, x:Data, y:Int) :
+   unaop-node(ret, op, x, list(y))
 
-public defn shift-left (x:SInt, y:Int) -> SInt : sint-unaop(fSHIFT-LEFT-OP, x, y)
-public defn shift-right (x:SInt, y:Int) -> SInt : sint-unaop(fSHIFT-RIGHT-OP, x, y)
+;=========== OPERATIONS ON UNSIGNED INTEGERS ================      
+public defn plus (x:UInt, y:UInt) -> UInt : binop-node(UInt(), fADD-WRAP-OP, x, y)
+public defn minus (x:UInt, y:UInt) -> UInt : binop-node(UInt(), fSUB-WRAP-OP, x, y)
+public defn times (x:UInt, y:UInt) -> UInt : binop-node(UInt(), fMUL-OP, x, y)
+public defn divide (x:UInt, y:UInt) -> UInt : binop-node(UInt(), fDIV-OP, x, y)
+public defn modulo (x:UInt, y:UInt) -> UInt : binop-node(UInt(), fMOD-OP, x, y)
+public defn neg (x:UInt) -> SInt : SIntLit(0) - to-sint(x)
 
+public defn less? (x:UInt, y:UInt) -> UInt : binop-node(UInt(), fLESS-OP, x, y)
+public defn less-eq? (x:UInt, y:UInt) -> UInt : binop-node(UInt(), fLESS-EQ-OP, x, y)
+public defn greater? (x:UInt, y:UInt) -> UInt : binop-node(UInt(), fGREATER-OP, x, y)
+public defn greater-eq? (x:UInt, y:UInt) -> UInt : binop-node(UInt(), fGREATER-EQ-OP, x, y)
+public defn bit-equal? (x:UInt, y:UInt) -> UInt : binop-node(UInt(), fEQUAL-OP, x, y)
 
+public defn cat (x:UInt, y:UInt) -> UInt : binop-node(UInt(), fCONCAT-OP, x, y)
+public defn bit-and (x:UInt, y:UInt) -> UInt : binop-node(UInt(), fBIT-AND-OP, x, y)
+public defn bit-or (x:UInt, y:UInt) -> UInt : binop-node(UInt(), fBIT-OR-OP, x, y)
+public defn bit-xor (x:UInt, y:UInt) -> UInt : binop-node(UInt(), fBIT-XOR-OP, x, y)
+public defn shift-left (x:UInt, y:Int) -> UInt : unaop-node(UInt(), fSHIFT-LEFT-OP, x, y)
+public defn shift-right (x:UInt, y:Int) -> UInt : unaop-node(UInt(), fSHIFT-RIGHT-OP, x, y)
+public defn shift-left (x:UInt, y:UInt) -> UInt : binop-node(UInt(), fDYN-SHIFT-LEFT-OP, x, y)
+public defn shift-right (x:UInt, y:UInt) -> UInt : binop-node(UInt(), fDYN-SHIFT-RIGHT-OP, x, y)
 
+public defn get (x:UInt, i:Int) -> UInt : unaop-node(UInt(), fBIT-SELECT-OP, x, i)
+public defn get (x:UInt, i:Int, j:Int) -> UInt : unaop-node(UInt(), fBITS-SELECT-OP, x, list(i, j))
 
+public defn to-sint (x:UInt) -> SInt : unaop-node(SInt(), fTO-SINT-OP, x, list())
+public defn as-uint (x:UInt) -> UInt : unaop-node(UInt(), fAS-UINT-OP, x, list())
+public defn as-sint (x:UInt) -> SInt : unaop-node(SInt(), fAS-SINT-OP, x, list())
+
+;============ OPERATIONS ON SIGNED INTERGERS ================      
+public defn plus (x:SInt, y:SInt) -> SInt : binop-node(SInt(), fADD-WRAP-OP, x, y)
+public defn minus (x:SInt, y:SInt) -> SInt : binop-node(SInt(), fSUB-WRAP-OP, x, y)
+public defn times (x:SInt, y:SInt) -> SInt : binop-node(SInt(), fMUL-OP, x, y)
+public defn divide (x:SInt, y:SInt) -> SInt : binop-node(SInt(), fDIV-OP, x, y)
+public defn modulo (x:SInt, y:SInt) -> SInt : binop-node(SInt(), fMOD-OP, x, y)
+public defn neg (x:SInt) -> SInt : SIntLit(0) - x
+
+public defn less? (x:SInt, y:SInt) -> UInt : binop-node(UInt(), fLESS-OP, x, y)
+public defn less-eq? (x:SInt, y:SInt) -> UInt : binop-node(UInt(), fLESS-EQ-OP, x, y)
+public defn greater? (x:SInt, y:SInt) -> UInt : binop-node(UInt(), fGREATER-OP, x, y)
+public defn greater-eq? (x:SInt, y:SInt) -> UInt : binop-node(UInt(), fGREATER-EQ-OP, x, y)
+public defn bit-equal? (x:SInt, y:SInt) -> UInt : binop-node(UInt(), fEQUAL-OP, x, y)
+
+public defn shift-left (x:SInt, y:Int) -> SInt : unaop-node(SInt(), fSHIFT-LEFT-OP, x, y)
+public defn shift-right (x:SInt, y:Int) -> SInt : unaop-node(SInt(), fSHIFT-RIGHT-OP, x, y)
+public defn shift-left (x:SInt, y:UInt) -> SInt : binop-node(SInt(), fDYN-SHIFT-LEFT-OP, x, y)
+public defn shift-right (x:SInt, y:UInt) -> SInt : binop-node(SInt(), fDYN-SHIFT-RIGHT-OP, x, y)
+
+public defn to-sint (x:SInt) -> SInt : unaop-node(SInt(), fTO-SINT-OP, x, list())
+public defn as-uint (x:SInt) -> UInt : unaop-node(UInt(), fAS-UINT-OP, x, list())
+public defn as-sint (x:SInt) -> SInt : unaop-node(SInt(), fAS-SINT-OP, x, list())
 
 
 

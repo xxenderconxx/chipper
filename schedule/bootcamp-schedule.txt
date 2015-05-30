@@ -86,6 +86,7 @@ reassuring Google of both the vision and our methodology.
 - GCD
 - FullAdder
 - LSFR16
+- Adder Tree
 
 ============================================================
 ==================== SCHEDULE ==============================

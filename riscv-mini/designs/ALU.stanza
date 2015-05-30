@@ -4,6 +4,7 @@ defpackage ALU :
    import core
    import verse
    import chipper
+   import stdlib
    import Params
 
 public val ALU_ADD    = UInt<4>(0)
@@ -19,13 +20,6 @@ public val ALU_SRA    = UInt<4>(9)
 public val ALU_COPY_A = UInt<4>(10)
 public val ALU_COPY_B = UInt<4>(11)
 public val ALU_XXX    = UInt<4>(15)
-
-public defn mux-lookup<?S,?T> (k: ?S & Bits, default: ?T & Data, mapping: Streamable<KeyValue<?S & Bits, ?T&Data>>) -> T :
-   var res = default
-   val kvs = reverse(to-list(mapping))
-   for kv in kvs do :
-     res = mux(key(kv) === k, value(kv), res)
-   res
 
 public defmodule ALU :
   input  A      : UInt<instLen>
@@ -50,5 +44,5 @@ public defmodule ALU :
       ALU_COPY_A => A])
 
   out := oot[instLen - 1, 0]
-  sum := A + mux(alu_op[0], neg(B), B)
+  sum := A + mux(alu_op[0], as-uint(neg(B)), B)
 
