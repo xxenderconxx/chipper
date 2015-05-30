@@ -323,12 +323,12 @@ defsyntax chipper :
 
    ;Bit Comparison Operator
    defrule :
-      suffix-op = (=== ?y:#exp!) :
+      eop0 = (=== ?y:#exp!) :
          fn (x) :
-            expande $ qquote(bit-equal?(~ x, ~ y))
-      suffix-op = (!== ?y:#exp!) :
+            expande $ qquote(chipper/bit-equal?(~ x, ~ y))
+      eop0 = (!== ?y:#exp!) :
          fn (x) :
-            expande $ qquote(bit-not-equal?(~ x, ~ y))
+            expande $ qquote(chipper/bit-not-equal?(~ x, ~ y))
 
    ;Bool Logical Operators
    defrule :
@@ -358,9 +358,9 @@ defsyntax chipper :
       prefix-op = (UInt<?w:#exp$>(?v:#exp$)) :
          expande $ qquote(chipper/UIntLit(~ v, ~ w))
       prefix-op = (SInt(?v:#exp$)) :
-         expande $ qquote(chipper/UIntLit(~ v))
+         expande $ qquote(chipper/SIntLit(~ v))
       prefix-op = (SInt<?w:#exp$>(?v:#exp$)) :
-         expande $ qquote(chipper/UIntLit(~ v, ~ w))
+         expande $ qquote(chipper/SIntLit(~ v, ~ w))
             
 ;============================================================
 

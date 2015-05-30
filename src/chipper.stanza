@@ -167,11 +167,19 @@ public defn UIntLit (w:Int, v:Int) :
    val e = fUIntValue(v, fIntWidth(w))
    handle(UInt(w), e)
 
+
 ;=========== OPERATIONS ON UNSIGNED INTEGERS ================
 defn uint-binop (op:fPrimOp, x:UInt, y:UInt) :
    handle{UInt(), Node(_)} $ fDoPrim(op, list(ex, ey), List(), fUnknownType()) where :
       val ex = firrtl-exp(x)
       val ey = firrtl-exp(y)   
+defn uint-unaop (op:fPrimOp, x:UInt, y:Int) :
+   handle{UInt(), Node(_)} $ fDoPrim(op, list(ex), List(y), fUnknownType()) where :
+      val ex = firrtl-exp(x)
+defn uint-unaop (op:fPrimOp, x:UInt, ys:List<Int>) :
+   handle{UInt(), Node(_)} $ fDoPrim(op, list(ex), ys, fUnknownType()) where :
+      val ex = firrtl-exp(x)
+      
 public defn plus (x:UInt, y:UInt) -> UInt : uint-binop(fADD-WRAP-OP, x, y)
 public defn minus (x:UInt, y:UInt) -> UInt : uint-binop(fSUB-WRAP-OP, x, y)
 public defn times (x:UInt, y:UInt) -> UInt : uint-binop(fMUL-OP, x, y)
@@ -183,6 +191,49 @@ public defn less-eq? (x:UInt, y:UInt) -> UInt : uint-binop(fLESS-EQ-OP, x, y)
 public defn greater? (x:UInt, y:UInt) -> UInt : uint-binop(fGREATER-OP, x, y)
 public defn greater-eq? (x:UInt, y:UInt) -> UInt : uint-binop(fGREATER-EQ-OP, x, y)
 public defn bit-equal? (x:UInt, y:UInt) -> UInt : uint-binop(fEQUAL-OP, x, y)
+
+public defn bitwise-and (x:UInt, y:UInt) -> UInt : uint-binop(fBIT-AND-OP, x, y)
+public defn bitwise-or (x:UInt, y:UInt) -> UInt : uint-binop(fBIT-OR-OP, x, y)
+public defn bitwise-xor (x:UInt, y:UInt) -> UInt : uint-binop(fBIT-XOR-OP, x, y)
+public defn shift-left (x:UInt, y:Int) -> UInt : uint-unaop(fSHIFT-LEFT-OP, x, y)
+public defn shift-right (x:UInt, y:Int) -> UInt : uint-unaop(fSHIFT-RIGHT-OP, x, y)
+
+public defn get (x:UInt, i:Int) -> UInt : uint-unaop(fBIT-SELECT-OP, x, i)
+public defn get (x:UInt, i:Int, j:Int) -> UInt : uint-unaop(fBITS-SELECT-OP, x, list(i, j))
+
+
+;============ OPERATIONS ON SIGNED INTERGERS ================
+defn sint-binop (op:fPrimOp, x:SInt, y:SInt) :
+   handle{SInt(), Node(_)} $ fDoPrim(op, list(ex, ey), List(), fUnknownType()) where :
+      val ex = firrtl-exp(x)
+      val ey = firrtl-exp(y)   
+defn sint-cmpop (op:fPrimOp, x:SInt, y:SInt) :
+   handle{UInt(), Node(_)} $ fDoPrim(op, list(ex, ey), List(), fUnknownType()) where :
+      val ex = firrtl-exp(x)
+      val ey = firrtl-exp(y)
+defn sint-unaop (op:fPrimOp, x:SInt, y:Int) :
+   handle{SInt(), Node(_)} $ fDoPrim(op, list(ex), List(y), fUnknownType()) where :
+      val ex = firrtl-exp(x)
+      
+public defn plus (x:SInt, y:SInt) -> SInt : sint-binop(fADD-WRAP-OP, x, y)
+public defn minus (x:SInt, y:SInt) -> SInt : sint-binop(fSUB-WRAP-OP, x, y)
+public defn times (x:SInt, y:SInt) -> SInt : sint-binop(fMUL-OP, x, y)
+public defn divide (x:SInt, y:SInt) -> SInt : sint-binop(fDIV-OP, x, y)
+public defn modulo (x:SInt, y:SInt) -> SInt : sint-binop(fMOD-OP, x, y)
+
+public defn less? (x:SInt, y:SInt) -> UInt : sint-cmpop(fLESS-OP, x, y)
+public defn less-eq? (x:SInt, y:SInt) -> UInt : sint-cmpop(fLESS-EQ-OP, x, y)
+public defn greater? (x:SInt, y:SInt) -> UInt : sint-cmpop(fGREATER-OP, x, y)
+public defn greater-eq? (x:SInt, y:SInt) -> UInt : sint-cmpop(fGREATER-EQ-OP, x, y)
+public defn bit-equal? (x:SInt, y:SInt) -> UInt : sint-cmpop(fEQUAL-OP, x, y)
+
+public defn shift-left (x:SInt, y:Int) -> SInt : sint-unaop(fSHIFT-LEFT-OP, x, y)
+public defn shift-right (x:SInt, y:Int) -> SInt : sint-unaop(fSHIFT-RIGHT-OP, x, y)
+
+
+
+
+
 
 
 ;============================================================
