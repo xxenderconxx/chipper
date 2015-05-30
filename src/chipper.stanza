@@ -192,6 +192,7 @@ public defn greater? (x:UInt, y:UInt) -> UInt : uint-binop(fGREATER-OP, x, y)
 public defn greater-eq? (x:UInt, y:UInt) -> UInt : uint-binop(fGREATER-EQ-OP, x, y)
 public defn bit-equal? (x:UInt, y:UInt) -> UInt : uint-binop(fEQUAL-OP, x, y)
 
+public defn cat (x:UInt, y:UInt) -> UInt : uint-binop(fCONCAT-OP, x, y)
 public defn bitwise-and (x:UInt, y:UInt) -> UInt : uint-binop(fBIT-AND-OP, x, y)
 public defn bitwise-or (x:UInt, y:UInt) -> UInt : uint-binop(fBIT-OR-OP, x, y)
 public defn bitwise-xor (x:UInt, y:UInt) -> UInt : uint-binop(fBIT-XOR-OP, x, y)
