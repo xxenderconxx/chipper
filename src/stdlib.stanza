@@ -6,6 +6,15 @@ defpackage stdlib :
    import utils
    import chipper
 
+public defn log2-up (in: Int) -> Int :
+   max(1, ceil-log2(in))
+
+public defn log2-down (in: Int) -> Int :
+   max(1, floor-log2(in))
+
+public defn pow2? (in: Int) -> True|False :
+  (in > 0) and ((in & (in - 1)) == 0)
+
 public defn mux<?T,?S> (p:UInt, c:?T&Data&S, a:?S&Data&T) -> T :
    wire w := a
    when p :
@@ -25,6 +34,85 @@ public defn mux-lookup<?K,?V> (k:?K&SInt, default:?V&Data, mapping:Streamable<Ke
       when k === key(entry) :
          w := value(entry)
    w      
+
+public defclass Counter
+public defmulti inc (c: Counter) -> UInt<1>
+public defmulti num (c: Counter) -> Int
+public defmulti value (c: Counter) -> UInt
+
+public defn Counter (n: Int) :
+   reg cnt : UInt<log2-up(n)>
+   on-reset cnt := UInt(0)
+   new Counter :
+      defmethod value (this) -> UInt : cnt
+      defmethod num (this) -> Int : n
+      defmethod inc (this) -> UInt :
+         if n == 1 :
+            UInt<1>(1)
+         else if pow2?(n) :
+            cnt := cnt + UInt(1)
+            cnt === UInt(n - 1)
+         else :
+            node wrap = cnt === UInt(n - 1)
+            when wrap : cnt := UInt(0)
+            else : cnt := cnt + UInt(1)
+            wrap
+
+public defbundle ValidIO<T> :
+  valid: UInt<1>
+  bits: T
+
+; Adds a ready-valid handshaking protocol to any interface.
+public defbundle DecoupledIO<T> :
+  valid: UInt<1>
+  bits: T
+  flip ready: UInt<1>
+ 
+public defmodule Fifo<T> (entries: Int, pipe: True|False, flow: True|False) : ;; , _reset: Bool = null
+  input enq: DecoupledIO<T>
+  output deq: DecoupledIO<T>
+  output count: UInt<log2-up(entries + 1)>
+  param entries: Int = entries
+
+  mem ram: T[entries]
+  val enq-ptr = Counter(entries)
+  val deq-ptr = Counter(entries)
+  reg maybe-full : UInt<1>
+  on-reset maybe-full := UInt(0)
+
+  node ptr-match = value(enq-ptr) === value(deq-ptr)
+  node empty = ptr-match & ! maybe-full
+  node full = ptr-match & maybe-full
+  node maybe-flow = UInt(flow) && empty
+  node do-flow = maybe-flow && deq.ready
+
+  node do-enq = enq.ready && enq.valid && ! do-flow
+  node do-deq = deq.ready && deq.valid && ! do-flow
+  when do-enq :
+    ram[value(enq-ptr)] := enq.bits
+    inc(enq-ptr)
+  when do-deq :
+    inc(deq-ptr)
+  when do-enq !== do-deq :
+    maybe-full := do-enq
+
+  ;TODO: What is the desired precedence???
+  deq.valid := ! empty || UInt(flow) && enq.valid
+  enq.ready := ! full || UInt(pipe) && deq.ready
+  deq.bits  := mux(maybe-flow, enq.bits, ram[value(deq-ptr)])
+
+  node ptr-diff = value(enq-ptr) - value(deq-ptr)
+  if pow2?(entries) :
+    count := cat(maybe-full && ptr-match, ptr-diff)
+  else :
+    when ptr-match :
+       when maybe-full : count := UInt(entries)
+       else : count := UInt(0)
+    else when value(deq-ptr) > value(enq-ptr) :
+       count := UInt(entries) + ptr-diff
+    else :
+       count := ptr-diff    
+
 
 ;============================================================
 ;==================== OLD STUFF =============================
@@ -201,25 +289,10 @@ public defn mux-lookup<?K,?V> (k:?K&SInt, default:?V&Data, mapping:Streamable<Ke
 ;  if width == -1 : UInt(1) << in
 ;  else : (UInt(1) << in[log2Up(width) - 1,0])[width - 1, 0]
 ;
-;public defclass Counter
-;public defmulti inc (c: Counter) -> Bool
-;public defmulti num (c: Counter) -> Int
-;public defmulti value (c: Counter) -> UInt
-;public defn Counter (n: Int) :
-;  reg cnt : UInt<log2Up(n)> cnt <- UInt(0)
-;  new Counter :
-;    defmethod value (this) -> UInt : cnt
-;    defmethod num (this) -> Int : n
-;    defmethod inc (this) -> Bool :
-;      if n == 1 : Bool(true)
-;      else :
-;        node wrap = cnt === UInt(n - 1)
-;        cnt := mux(Bool(not is-pow2(n)) && wrap, UInt(0), cnt + UInt(1))
-;        wrap
-;
-;public defn Counter (cond: Bool, n: Int) -> [UInt, Bool] :
+
+;Probably not correct: Use of "var"?
+;public defn Counter (cond:UInt, n:Int) -> [UInt, Bool] :
 ;  val c = Counter(n)
 ;  var wrap: Bool = Bool(false)
 ;  when cond : wrap = inc(c)
 ;  [value(c), cond && wrap]
-;

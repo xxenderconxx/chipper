@@ -139,7 +139,7 @@ defn VecType<T> (T:Type<T&Data>, n:Int) :
       defmethod erase-width (this) :
          VecType<T>(erase-width(T), n)
 
-public defn get<?T> (T:Type<?T&Data>, n:Int) :
+public defn Vec<?T> (T:Type<?T&Data>, n:Int) :
    VecType<T>(T, n)
 
 ;================ UNSIGNED INTEGERS =========================
@@ -166,6 +166,9 @@ public defn UIntLit (v:Int) :
 public defn UIntLit (w:Int, v:Int) :
    val e = fUIntValue(v, fIntWidth(w))
    handle(UInt(w), e)
+public defn UIntLit (v:String) : UIntLit(to-int(v))
+public defn UIntLit (w:Int, v:String) : UIntLit(w, to-int(v))
+public defn UIntLit (b:True|False) : UIntLit(1 when b else 0)
 
 ;================ SIGNED INTEGERS =========================
 public definterface SInt <: Data
@@ -191,6 +194,8 @@ public defn SIntLit (v:Int) :
 public defn SIntLit (w:Int, v:Int) :
    val e = fSIntValue(v, fIntWidth(w))
    handle(SInt(w), e)
+public defn SIntLit (v:String) : SIntLit(to-int(v))
+public defn SIntLit (w:Int, v:String) : SIntLit(w, to-int(v))
 
 ;============== CONVENIENCE FUNCTIONS =======================
 defn binop-node (ret:Type, op:fPrimOp, x:Data, y:Data) :

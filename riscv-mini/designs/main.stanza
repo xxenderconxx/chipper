@@ -5,9 +5,9 @@
 #include("src/stdlib.stanza")
 ;#include("src/decoupled.stanza")
 #include("riscv-mini/designs/Params.stanza")
-;#include("riscv-mini/designs/Opcodes.stanza")
+#include("riscv-mini/designs/Opcodes.stanza")
 #include("riscv-mini/designs/ALU.stanza")
-;#include("riscv-mini/designs/ALUTop.stanza")
+#include("riscv-mini/designs/ALUTop.stanza")
 ;#include("riscv-mini/designs/CSR.stanza")
 ;#include("riscv-mini/designs/Instructions.stanza")
 ;#include("riscv-mini/designs/Control.stanza")
@@ -25,8 +25,7 @@ defpackage mini :
    import core
    import verse
    import chipper
-   import ALU
-;   import ALUTop
+   import ALUTop
 ;   import Tile
 ;   import Core
 ;   import Control
@@ -35,8 +34,7 @@ defpackage mini :
 
 defn main () :
    val args = commandline-arguments()
-;   circuit c of ALUTop
-   circuit c of ALU
+   circuit c of ALUTop
    println(c)
    
 main()
