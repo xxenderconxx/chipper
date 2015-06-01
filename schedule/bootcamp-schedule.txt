@@ -1,0 +1,111 @@
+============================================================
+===================== TALKS ================================
+============================================================
+
+Each talk should be short, no more than 30 minutes. They should
+discuss high level concepts and philosophy, and is meant for
+reassuring Google of both the vision and our methodology.
+
+=== Chisel: Hardware Construction Language, Jonathan ===
+- What is Chisel?
+- Chisel is not HLS
+- Chisel is a DSL
+- Hardware Generation
+- Hardware Transformation
+- Successful Chips
+- Interoperability with Verilog
+- Generates C++ Simulators
+- Whirlwind Tour of Features
+
+=== Firrtl: Intermediate Representation and Compiler Flow, Adam ===
+- What is Firrtl?
+- What level of abstraction is it at?
+- High level overview of passes.
+- Transformers work at the Firrtl level.
+- Examples of Transformers.
+
+=== Stanza: Host Language, Patrick ===
+- General-purpose programming language.
+- Macros
+- Multimethods
+- Gradual Typing
+- Coroutines
+
+=== Upcoming Features ===
+- Multiclock Domains
+- Software-Defined Modules for Prototyping / Mocking
+- Package System and Community Library of HW Components
+
+============================================================
+=================== CONCEPTS ===============================
+============================================================
+
+- Installation
+- Modules
+   - Defining
+   - Instantiating
+- Connecting Components
+- Inspecting the generated FIRRTL
+- Types
+   - UInt
+   - SInt
+   - Vecs
+- User-Defined Bundles
+   - Valid / Decoupled
+- Parameterized Bundles
+- Type Parameterized Bundles
+- Simulation / Testing
+- Verilog Generation
+- When Statement
+- Registers
+- Wires
+- Memories
+- Parameterized Modules
+- Type Parameterized Modules
+- Type Bounds
+- Directions
+   - Flip/Fields
+   - Input/Output
+- Verilog Generation
+- Externally Declared Modules
+- Simple Generation
+- Reusable Generators
+- Transformers
+- Higher-Order Functions
+- Print Statements
+- Types of Errors
+   - Type Mismatch Error
+   - Width Mismatch Error
+   - Direction Mismatch Error
+   - Combinational Cycles   
+
+============================================================
+============ RUNNING EXAMPLES / TUTORIALS ==================
+============================================================
+
+- GCD
+- FullAdder
+- LSFR16
+- Adder Tree
+
+============================================================
+==================== SCHEDULE ==============================
+============================================================
+
+=== Day One ===
+Morning:
+  - Chisel Talk
+
+Afternoon:
+=== Day Two ===
+Morning:
+  - Firrtl Talk
+
+Afternoon:
+
+=== Day Three ===  
+Morning:
+  - Stanza Talk
+
+Afternoon:
+  - Upcoming Features Talk

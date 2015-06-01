@@ -4,6 +4,7 @@ defpackage ALU :
    import core
    import verse
    import chipper
+   import stdlib
    import Params
 
 public val ALU_ADD    = UInt<4>(0)
@@ -43,5 +44,5 @@ public defmodule ALU :
       ALU_COPY_A => A])
 
   out := oot[instLen - 1, 0]
-  sum := A + mux(alu_op[0], neg(B), B)
+  sum := A + mux(alu_op[0], as-uint(neg(B)), B)
 

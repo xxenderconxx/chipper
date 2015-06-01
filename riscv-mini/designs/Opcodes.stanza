@@ -7,66 +7,66 @@ defpackage Opcodes :
    import Params
 
 ;; Special immediate instructions
-public val Opcode-LUI       = Bits("b0110111")
-public val Opcode-AUIPC     = Bits("b0010111")
+public val Opcode-LUI       = UInt("0b0110111")
+public val Opcode-AUIPC     = UInt("0b0010111")
 
 ;; Jump instructions
-public val Opcode-JAL       = Bits("b1101111")
-public val Opcode-JALR      = Bits("b1100111")
+public val Opcode-JAL       = UInt("0b1101111")
+public val Opcode-JALR      = UInt("0b1100111")
 
 ;; Branch instructions
-public val Opcode-BRANCH    = Bits("b1100011")
+public val Opcode-BRANCH    = UInt("0b1100011")
 
 ;; Load and store instrucdtions
-public val Opcode-STORE     = Bits("b0100011")
-public val Opcode-LOAD      = Bits("b0000011")
+public val Opcode-STORE     = UInt("0b0100011")
+public val Opcode-LOAD      = UInt("0b0000011")
 
 ;; Arithmetic instructions
-public val Opcode-ARI_RTYPE = Bits("b0110011")
-public val Opcode-ARI_ITYPE = Bits("b0010011")
+public val Opcode-ARI_RTYPE = UInt("0b0110011")
+public val Opcode-ARI_ITYPE = UInt("0b0010011")
 
-public val Opcode-SYSTEM    = Bits("b1110011")
+public val Opcode-SYSTEM    = UInt("0b1110011")
 
 ;; Branch function codes
-public val Funct3-BEQ  = Bits("b000")
-public val Funct3-BNE  = Bits("b001")
-public val Funct3-BLT  = Bits("b100")
-public val Funct3-BGE  = Bits("b101")
-public val Funct3-BLTU = Bits("b110")
-public val Funct3-BGEU = Bits("b111")
+public val Funct3-BEQ  = UInt("0b000")
+public val Funct3-BNE  = UInt("0b001")
+public val Funct3-BLT  = UInt("0b100")
+public val Funct3-BGE  = UInt("0b101")
+public val Funct3-BLTU = UInt("0b110")
+public val Funct3-BGEU = UInt("0b111")
 
 ;; Load and store function codes
-public val Funct3-LB   = Bits("b000")
-public val Funct3-LH   = Bits("b001")
-public val Funct3-LW   = Bits("b010")
-public val Funct3-LBU  = Bits("b100")
-public val Funct3-LHU  = Bits("b101")
-public val Funct3-SB   = Bits("b000")
-public val Funct3-SH   = Bits("b001")
-public val Funct3-SW   = Bits("b010")
+public val Funct3-LB   = UInt("0b000")
+public val Funct3-LH   = UInt("0b001")
+public val Funct3-LW   = UInt("0b010")
+public val Funct3-LBU  = UInt("0b100")
+public val Funct3-LHU  = UInt("0b101")
+public val Funct3-SB   = UInt("0b000")
+public val Funct3-SH   = UInt("0b001")
+public val Funct3-SW   = UInt("0b010")
 
 ;; Arithemetic R-type and I-type functions codes
-public val Funct3-ADD_SUB = Bits("b000")
-public val Funct3-SLL     = Bits("b001")
-public val Funct3-SLT     = Bits("b010")
-public val Funct3-SLTU    = Bits("b011")
-public val Funct3-XOR     = Bits("b100")
-public val Funct3-OR      = Bits("b110")
-public val Funct3-AND     = Bits("b111")
-public val Funct3-SRL_SRA = Bits("b101")
+public val Funct3-ADD_SUB = UInt("0b000")
+public val Funct3-SLL     = UInt("0b001")
+public val Funct3-SLT     = UInt("0b010")
+public val Funct3-SLTU    = UInt("0b011")
+public val Funct3-XOR     = UInt("0b100")
+public val Funct3-OR      = UInt("0b110")
+public val Funct3-AND     = UInt("0b111")
+public val Funct3-SRL_SRA = UInt("0b101")
 
-public val Funct3-CSRRW   = Bits("b001")
-public val Funct3-CSRRS   = Bits("b010")
-public val Funct3-CSRRC   = Bits("b011")
-public val Funct3-CSRRWI  = Bits("b101")
-public val Funct3-CSRRSI  = Bits("b110")
-public val Funct3-CSRRCI  = Bits("b111")
+public val Funct3-CSRRW   = UInt("0b001")
+public val Funct3-CSRRS   = UInt("0b010")
+public val Funct3-CSRRC   = UInt("0b011")
+public val Funct3-CSRRWI  = UInt("0b101")
+public val Funct3-CSRRSI  = UInt("0b110")
+public val Funct3-CSRRCI  = UInt("0b111")
 
 
-public val Funct7-U = Bits("b0000000")
-public val Funct7-S = Bits("b0100000")
+public val Funct7-U = UInt("0b0000000")
+public val Funct7-S = UInt("0b0100000")
 
-public val AddRshiftType-ADD = Bits("b0")
-public val AddRshiftType-SUB = Bits("b1")
-public val AddRshiftType-SRL = Bits("b0")
-public val AddRshiftType-SRA = Bits("b1")
+public val AddRshiftType-ADD = UInt("0b0")
+public val AddRshiftType-SUB = UInt("0b1")
+public val AddRshiftType-SRL = UInt("0b0")
+public val AddRshiftType-SRA = UInt("0b1")
