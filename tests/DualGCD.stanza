@@ -13,9 +13,9 @@ defbundle Dual<T> :
    b: T
 
 defmodule GCD :
-   input in: Dual<UInt<16>>
+   input in: Dual<T>
    input e: UInt<1>
-   output z: UInt<16>
+   output z: UInt<1>
    output v: UInt<1>
 
    reg x: UInt

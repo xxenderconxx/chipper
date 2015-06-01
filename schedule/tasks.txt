@@ -1,0 +1,6 @@
+Overall tasks that need to be done:
+   - Presentation/Slides for bootcamp.
+   - Exercises for bootcamp.
+   - Documentation for Chisel.
+   - Documentation for Stanza.
+   - Firrtl Specification.
