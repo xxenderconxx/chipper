@@ -44,8 +44,8 @@ public defmodule Memory :
   inst memReqCmdQueue  of Fifo<MemReqCmd>(4, false, false)
   inst memReqDataQueue of Fifo<MemReqData>(4, false, false)
   val [s_READY, s_WAIT] = [UInt(0), UInt(1)]
-  reg state  : UInt state <- s_READY
-  reg tag    : UInt<tagLen> tag <- UInt(0)
+  reg state  = s_READY
+  reg tag    = UInt<tagLen>(0)
   node cpuReq = (state === s_READY) && (icache.re || dcache.re || bit-or-reduce(dcache.we))
   node iaddr  = cat(icache.addr[addrLen - 1, 2], UInt<2>(0))
   node daddr  = cat(dcache.addr[addrLen - 1, 2], UInt<2>(0))

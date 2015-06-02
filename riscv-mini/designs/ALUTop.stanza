@@ -4,6 +4,7 @@ defpackage ALUTop :
    import core
    import verse
    import chipper
+   import stdlib
    import Params
    import Opcodes
    import ALU

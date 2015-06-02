@@ -4,6 +4,7 @@ defpackage RegFile :
    import core
    import verse
    import chipper
+   import stdlib
    import Params
 
 public defmodule RegFile:
@@ -15,7 +16,7 @@ public defmodule RegFile:
   output rdata1 : UInt<instLen>
   output rdata2 : UInt<instLen>
 
-  mem regs : UInt<instLen>[32]
+  cmem regs : UInt<instLen>[32]
   rdata1 := mux(bit-or-reduce(raddr1), regs[raddr1], UInt(0))
   rdata2 := mux(bit-or-reduce(raddr2), regs[raddr2], UInt(0))
   when wen && bit-or-reduce(waddr) :

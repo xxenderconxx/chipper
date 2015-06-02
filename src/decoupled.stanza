@@ -28,10 +28,10 @@ public defmodule Fifo<T> (entries: Int, pipe: True|False, flow: True|False) : ;;
   output deq: DecoupledIO<T>
   output count: UInt<log2Up(entries + 1)>
 
-  mem ram: T[entries]
+  cmem ram: T[entries]
   val enq-ptr = Counter(entries)
   val deq-ptr = Counter(entries)
-  reg maybe-full : Bool maybe-full <- Bool(false)
+  reg maybe-full = Bool(false)
 
   node ptr-match = value(enq-ptr) === value(deq-ptr)
   node empty = ptr-match && ! maybe-full
@@ -70,7 +70,7 @@ public defmodule Fifo<T> (entries: Int, pipe: True|False, flow: True|False) : ;;
 public defn FifoOf<?T> (enq: DecoupledIO<?T & Data>) -> DecoupledIO<T> : FifoOf(enq, 2)
 public defn FifoOf<?T> (enq: DecoupledIO<?T & Data>, entries: Int) -> DecoupledIO<T> : FifoOf(enq, entries, false)
 public defn FifoOf<?T> (enq: DecoupledIO<?T & Data>, entries: Int, pipe: True|False) -> DecoupledIO<T> :
-  inst q of Fifo(enq.bits, entries, pipe, false)
+  inst q of Fifo(type(enq.bits), entries, pipe, false)
   q.enq.valid := enq.valid ;; not using <> so that override is allowed
   q.enq.bits  := enq.bits
   enq.ready   := q.enq.ready

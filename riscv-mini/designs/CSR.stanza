@@ -28,8 +28,8 @@ public defmodule CSR :
   output host : HostIO
   output data : Bits<instLen>
 
-  reg reg_tohost : UInt<32> reg_tohost <- UInt(0)
-  reg reg_status : UInt<32> reg_status <- UInt(0)
+  reg reg_tohost = UInt<32>(0)
+  reg reg_status = UInt<32>(0)
 
   host.tohost := reg_tohost
   host.status := reg_status

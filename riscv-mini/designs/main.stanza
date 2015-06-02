@@ -1,23 +1,22 @@
 #include("src/firrtl-ir.stanza")
 #include("src/ir-utils.stanza")
 #include("src/chipper.stanza")
-#include("src/utils.stanza")
 #include("src/stdlib.stanza")
-;#include("src/decoupled.stanza")
+#include("src/decoupled.stanza")
 #include("riscv-mini/designs/Params.stanza")
-;#include("riscv-mini/designs/Opcodes.stanza")
+#include("riscv-mini/designs/Opcodes.stanza")
 #include("riscv-mini/designs/ALU.stanza")
-;#include("riscv-mini/designs/ALUTop.stanza")
-;#include("riscv-mini/designs/CSR.stanza")
-;#include("riscv-mini/designs/Instructions.stanza")
-;#include("riscv-mini/designs/Control.stanza")
-;#include("riscv-mini/designs/BrCond.stanza")
-;#include("riscv-mini/designs/RegFile.stanza")
-;#include("riscv-mini/designs/ImmGen.stanza")
-;#include("riscv-mini/designs/Datapath.stanza")
-;#include("riscv-mini/designs/Core.stanza")
-;#include("riscv-mini/designs/Memory.stanza")
-;#include("riscv-mini/designs/Tile.stanza")
+#include("riscv-mini/designs/ALUTop.stanza")
+#include("riscv-mini/designs/CSR.stanza")
+#include("riscv-mini/designs/Instructions.stanza")
+#include("riscv-mini/designs/Control.stanza")
+#include("riscv-mini/designs/BrCond.stanza")
+#include("riscv-mini/designs/RegFile.stanza")
+#include("riscv-mini/designs/ImmGen.stanza")
+#include("riscv-mini/designs/Datapath.stanza")
+#include("riscv-mini/designs/Core.stanza")
+#include("riscv-mini/designs/Memory.stanza")
+#include("riscv-mini/designs/Tile.stanza")
 
 #use-syntax(core, chipper)
 
@@ -26,16 +25,17 @@ defpackage mini :
    import verse
    import chipper
    import ALU
-;   import ALUTop
-;   import Tile
-;   import Core
-;   import Control
-;   import Datapath
-;   import Memory
+   import ALUTop
+   import Tile
+   import Core
+   import Control
+   import Datapath
+   import Memory
 
 defn main () :
    val args = commandline-arguments()
-   circuit c of ALU
+   ;; circuit c of ALU
+   circuit c of Tile
    println(c)
    
 main()

@@ -4,6 +4,16 @@ defpackage chipper :
    import firrtl/ir with :
       prefix => f
 
+;;; UTILS
+
+defn map (f : Char -> Char, s : String) -> String :
+  val ls = map(f, to-list(s))
+  val buf = StringBuffer()
+  do(add{buf, _}, ls)
+  to-string(buf)
+
+;;;
+
 public defn sizeof (in: Int) -> Int :
   max(1, ceil-log2(in + 1))
 
@@ -183,8 +193,11 @@ defn VecType<T> (T:Type<T&Data>, n:Int) :
 public defn Vec<?T> (T:Type<?T&Data>, n:Int) :
    VecType<T>(T, n)
 
+;================ BITS =========================
+public definterface Bits <: Data
+
 ;================ UNSIGNED INTEGERS =========================
-public definterface UInt <: Data
+public definterface UInt <: Bits
 defclass UIntC <: UInt
 defn UIntHandle (w:fWidth, e:fExpression) :
    new UIntC :
@@ -203,14 +216,42 @@ defn UIntType (w:fWidth) -> Type<UInt> :
 public defn UInt (w:Int) : UIntType(fIntWidth(w))
 public defn UInt () : UIntType(fUnknownWidth())
 
+public defn UIntLit (v:True|False) :
+   UIntLit(if v: 1 else: 0)
 public defn UIntLit (v:Int) :
    UIntLit(v, sizeof(v))
 public defn UIntLit (v:Int, w:Int) :
    val e = fUIntValue(v, fIntWidth(w))
    handle(UInt(w), e)
+public defn UIntLit (v:String) : UIntLit(to-lit-val(v))
+public defn UIntLit (v:String, w:Int) : UIntLit(to-lit-val(v), w)
+
+;================ Bools =========================
+public definterface Bool <: UInt
+defclass BoolC <: Bool
+defn BoolHandle (e:fExpression) :
+   new BoolC :
+      defmethod firrtl-exp (this) : e
+      defmethod type (this) : BoolType() as Type<BoolC>
+      defmethod flatten (this) -> Streamable<Bool> : list(this)
+      defmethod width (this) : 1
+
+public defclass BoolType <: Type<Bool>
+defn BoolType () -> Type<Bool> :
+   new BoolType :
+      defmethod firrtl-type (this) : fUIntType(fIntWidth(1))
+      defmethod handle (this, e:fExpression) : BoolHandle(e)
+      defmethod erase-width (this) : BoolType()
+
+public defn Bool () : BoolType()
+
+public defn BoolLit (b:True|False) :
+   val v = if b: 1 else: 0
+   val e = fUIntValue(v, fIntWidth(1))
+   handle(Bool(), e)
 
 ;================ SIGNED INTEGERS =========================
-public definterface SInt <: Data
+public definterface SInt <: Bits
 defclass SIntC <: SInt
 defn SIntHandle (w:fWidth, e:fExpression) :
    new SIntC :
@@ -255,30 +296,47 @@ public defn times (x:UInt, y:UInt) -> UInt : binop-node(UInt(), fMUL-OP, x, y)
 public defn divide (x:UInt, y:UInt) -> UInt : binop-node(UInt(), fDIV-OP, x, y)
 public defn modulo (x:UInt, y:UInt) -> UInt : binop-node(UInt(), fMOD-OP, x, y)
 public defn neg (x:UInt) -> SInt : SIntLit(0) - to-sint(x)
+public defn pad (x:UInt, w:Int) -> UInt : unaop-node(UInt(), fPAD-OP, x, w)
 
-public defn less? (x:UInt, y:UInt) -> UInt : binop-node(UInt(), fLESS-OP, x, y)
-public defn less-eq? (x:UInt, y:UInt) -> UInt : binop-node(UInt(), fLESS-EQ-OP, x, y)
-public defn greater? (x:UInt, y:UInt) -> UInt : binop-node(UInt(), fGREATER-OP, x, y)
-public defn greater-eq? (x:UInt, y:UInt) -> UInt : binop-node(UInt(), fGREATER-EQ-OP, x, y)
-public defn bit-equal? (x:UInt, y:UInt) -> UInt : binop-node(UInt(), fEQUAL-OP, x, y)
-public defn bit-not-equal? (x:UInt, y:UInt) -> UInt : binop-node(UInt(), fNEQUAL-OP, x, y)
+public defn less? (x:UInt, y:UInt) -> Bool : binop-node(Bool(), fLESS-OP, x, y)
+public defn less-eq? (x:UInt, y:UInt) -> Bool : binop-node(Bool(), fLESS-EQ-OP, x, y)
+public defn greater? (x:UInt, y:UInt) -> Bool : binop-node(Bool(), fGREATER-OP, x, y)
+public defn greater-eq? (x:UInt, y:UInt) -> Bool : binop-node(Bool(), fGREATER-EQ-OP, x, y)
+public defn bit-equal? (x:UInt, y:UInt) -> Bool : binop-node(Bool(), fEQUAL-OP, x, y)
+public defn bit-not-equal? (x:UInt, y:UInt) -> Bool : binop-node(Bool(), fNEQUAL-OP, x, y)
 
 public defn cat (x:UInt, y:UInt) -> UInt : binop-node(UInt(), fCONCAT-OP, x, y)
+public defn cat (elts:Streamable<UInt>) -> UInt  : reduce(cat, to-list(elts))
 public defn bit-and (x:UInt, y:UInt) -> UInt : binop-node(UInt(), fBIT-AND-OP, x, y)
 public defn bit-or (x:UInt, y:UInt) -> UInt : binop-node(UInt(), fBIT-OR-OP, x, y)
 public defn bit-xor (x:UInt, y:UInt) -> UInt : binop-node(UInt(), fBIT-XOR-OP, x, y)
+public defn bit-or-reduce (x:UInt) -> Bool : bool-not(bit-equal?(x, UIntLit(0)))
+public defn bit-and-reduce (x:UInt) -> Bool : bit-equal?(x, UIntLit(-1))
+public defn bit-xor-reduce (x:UInt) -> Bool : unaop-node(Bool(), fBIT-XOR-REDUCE-OP, x, list())
+
 public defn shift-left (x:UInt, y:Int) -> UInt : unaop-node(UInt(), fSHIFT-LEFT-OP, x, y)
 public defn shift-right (x:UInt, y:Int) -> UInt : unaop-node(UInt(), fSHIFT-RIGHT-OP, x, y)
 public defn shift-left (x:UInt, y:UInt) -> UInt : binop-node(UInt(), fDYN-SHIFT-LEFT-OP, x, y)
 public defn shift-right (x:UInt, y:UInt) -> UInt : binop-node(UInt(), fDYN-SHIFT-RIGHT-OP, x, y)
 
 public defn bit-not (x:UInt) -> UInt : unaop-node(UInt(), fBIT-NOT-OP, x, list())
-public defn get (x:UInt, i:Int) -> UInt : unaop-node(UInt(), fBIT-SELECT-OP, x, i)
+public defn get (x:UInt, i:Int) -> Bool : unaop-node(Bool(), fBIT-SELECT-OP, x, i)
 public defn get (x:UInt, i:Int, j:Int) -> UInt : unaop-node(UInt(), fBITS-SELECT-OP, x, list(i, j))
 
+public defn to-uint (x:UInt) -> UInt : unaop-node(UInt(), fTO-UINT-OP, x, list())
 public defn to-sint (x:UInt) -> SInt : unaop-node(SInt(), fTO-SINT-OP, x, list())
 public defn as-uint (x:UInt) -> UInt : unaop-node(UInt(), fAS-UINT-OP, x, list())
 public defn as-sint (x:UInt) -> SInt : unaop-node(SInt(), fAS-SINT-OP, x, list())
+
+public defn to-bool (x: UInt) -> Bool:
+   val w = WireExp(`tmp, Bool())
+   ConnectExp(w, x)
+   w as Bool
+
+;============ OPERATIONS ON BOOLS ================      
+public defn bool-not (x:Bool) -> Bool : unaop-node(Bool(), fBIT-NOT-OP, x, list())
+public defn bool-and (x:Bool, y:Bool) -> Bool : binop-node(Bool(), fBIT-AND-OP, x, y)
+public defn bool-or (x:Bool, y:Bool) -> Bool : binop-node(Bool(), fBIT-OR-OP, x, y)
 
 ;============ OPERATIONS ON SIGNED INTERGERS ================      
 public defn plus (x:SInt, y:SInt) -> SInt : binop-node(SInt(), fADD-WRAP-OP, x, y)
@@ -287,23 +345,80 @@ public defn times (x:SInt, y:SInt) -> SInt : binop-node(SInt(), fMUL-OP, x, y)
 public defn divide (x:SInt, y:SInt) -> SInt : binop-node(SInt(), fDIV-OP, x, y)
 public defn modulo (x:SInt, y:SInt) -> SInt : binop-node(SInt(), fMOD-OP, x, y)
 public defn neg (x:SInt) -> SInt : SIntLit(0) - x
+public defn pad (x:SInt, w:Int) -> SInt : unaop-node(SInt(), fPAD-OP, x, w)
 
-public defn less? (x:SInt, y:SInt) -> UInt : binop-node(UInt(), fLESS-OP, x, y)
-public defn less-eq? (x:SInt, y:SInt) -> UInt : binop-node(UInt(), fLESS-EQ-OP, x, y)
-public defn greater? (x:SInt, y:SInt) -> UInt : binop-node(UInt(), fGREATER-OP, x, y)
-public defn greater-eq? (x:SInt, y:SInt) -> UInt : binop-node(UInt(), fGREATER-EQ-OP, x, y)
-public defn bit-equal? (x:SInt, y:SInt) -> UInt : binop-node(UInt(), fEQUAL-OP, x, y)
+public defn less? (x:SInt, y:SInt) -> Bool : binop-node(Bool(), fLESS-OP, x, y)
+public defn less-eq? (x:SInt, y:SInt) -> Bool : binop-node(Bool(), fLESS-EQ-OP, x, y)
+public defn greater? (x:SInt, y:SInt) -> Bool : binop-node(Bool(), fGREATER-OP, x, y)
+public defn greater-eq? (x:SInt, y:SInt) -> Bool : binop-node(Bool(), fGREATER-EQ-OP, x, y)
+public defn bit-equal? (x:SInt, y:SInt) -> Bool : binop-node(Bool(), fEQUAL-OP, x, y)
 
 public defn shift-left (x:SInt, y:Int) -> SInt : unaop-node(SInt(), fSHIFT-LEFT-OP, x, y)
 public defn shift-right (x:SInt, y:Int) -> SInt : unaop-node(SInt(), fSHIFT-RIGHT-OP, x, y)
 public defn shift-left (x:SInt, y:UInt) -> SInt : binop-node(SInt(), fDYN-SHIFT-LEFT-OP, x, y)
 public defn shift-right (x:SInt, y:UInt) -> SInt : binop-node(SInt(), fDYN-SHIFT-RIGHT-OP, x, y)
 
+public defn to-uint (x:SInt) -> UInt : unaop-node(UInt(), fTO-UINT-OP, x, list())
 public defn to-sint (x:SInt) -> SInt : unaop-node(SInt(), fTO-SINT-OP, x, list())
 public defn as-uint (x:SInt) -> UInt : unaop-node(UInt(), fAS-UINT-OP, x, list())
 public defn as-sint (x:SInt) -> SInt : unaop-node(SInt(), fAS-SINT-OP, x, list())
 
+;; MInt
+val hex-nibbles = "0123456789abcdef"
 
+defn as-digit (c: Char) -> Int :
+  index-of(hex-nibbles, c) as Int
+
+defn to-lower (c: Char) -> Char :
+  if to-int(c) >= to-int('A') and to-int(c) <= to-int('Z') :
+    to-char(to-int(c) - to-int('A') + to-int('a'))
+  else :
+    c
+
+defn to-lit-val (x: String) -> Int :
+  if x[0] == '0' and x[1] == 'x' :
+    to-lit-val(substring(x, 2), 16)
+  else : if x[0] == 'x' :
+    to-lit-val(substring(x, 1), 16)
+  else : if x[0] == 'b' :
+    to-lit-val(substring(x, 1), 2)
+  else : 
+    error(string-join(["Unknown lit base " x]))
+
+defn to-lit-val (x: String, shamt: Int) -> Int :
+  var res = 0
+  for c in x do :
+    if c != '_' :
+      if not contains?(hex-nibbles, to-lower(c)) :
+        error(string-join(["Bad Literal " x " CONTAINS ILLEGAL CHARACTER " c " TO-LOWER " to-lower(c)]))
+      res = res * shamt + as-digit(c)
+  res
+
+defn parse-lit (x: String) -> [String, String, Int] :
+   [map(fn (c): if c == '?': '0' else: c,   x),
+    map(fn (c): if c == '?': '0' else: '1', x),
+    length(x)]
+
+public defclass MInt
+public defmulti width (x:MInt) -> Int
+public defmulti mask (x:MInt) -> String
+public defmulti bits (x:MInt) -> String
+public defn MInt (pat: String) :
+   val [bits, mask, width] = parse-lit(substring(pat, 1))
+   new MInt :
+      defmethod width (this) : width
+      defmethod bits (this) : bits
+      defmethod mask (this) : mask
+
+public defmethod to-string (m: MInt) -> String :
+  string-join(["MInt(" mask(m) "," bits(m) ")"])
+
+;; TODO: BOTH SIDES
+public defn bit-equal? (x:MInt, y:UInt) -> Bool: 
+  bit-equal?((UIntLit(to-lit-val(mask(x), 2), width(x)) & y),
+              UIntLit(to-lit-val(bits(x), 2), width(x)))
+public defn bit-not-equal? (x:MInt, y:UInt) -> Bool : 
+  bool-not(bit-equal?(x, y))
 
 ;============================================================
 ;==================== OLD STUFF =============================

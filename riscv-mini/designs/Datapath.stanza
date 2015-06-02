@@ -4,6 +4,7 @@ defpackage Datapath :
    import core
    import verse
    import chipper
+   import stdlib
    import Params
    import ALU
    import BrCond
@@ -29,16 +30,16 @@ public defmodule Datapath :
   inst immGen  of ImmGenWire
 
   ;; ***** Fetch / Execute Registers *****
-  reg fe_inst : UInt<instLen> fe_inst <- UInt(0)
+  reg fe_inst = UInt<instLen>(0)
   reg fe_pc   : UInt
 
   ;; ***** Execute / Write Back Registers *****
-  reg ew_inst : UInt<instLen> ew_inst <- UInt(0)
+  reg ew_inst = UInt<instLen>(0)
   reg ew_pc  : UInt
   reg ew_alu : UInt
  
   ;; ****** Fetch *****
-  reg pc : UInt<instLen> pc <- PC_START - UInt<instLen>(4)
+  reg pc = PC_START - UInt<instLen>(4)
   node iaddr = mux((ctrl.pc_sel === PC_ALU) || brCond.taken, alu.sum, pc + UInt(4))
   node inst  = mux((ctrl.inst_type === I_KILL) || brCond.taken, NOP, icache.dout)
  
