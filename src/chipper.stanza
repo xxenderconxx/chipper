@@ -4,10 +4,33 @@ defpackage chipper :
    import firrtl/ir with :
       prefix => f
 
+public defn sizeof (in: Int) -> Int :
+  max(1, ceil-log2(in + 1))
+
 ;========= CHIPPER BASIC INTERFACE ===========
 public definterface Data
 public defmulti firrtl-exp (e:Data) -> fExpression
 public defmulti type<?T> (e:?T&Data) -> Type<T>
+public defmulti flatten (e:Data) -> Streamable<UInt>
+public defmulti width (x:Data) -> Int
+
+public defmethod width (x:Data) -> Int :
+   reduce(plus, 0, map(width, to-list(flatten(x))))
+
+public defn value (w: fWidth) -> Int :
+  match(w) :
+    (iw:fIntWidth): fwidth(iw)
+    (o):            error("Unable to get width")
+
+public defn to-bits (x:Data) -> UInt :
+   reduce(cat, UIntLit(0), to-list(flatten(x)))
+
+public defn from-bits<?T> (dst:?T & Data, from:UInt) :
+   var i = 0
+   for x in flatten(dst) do :
+     ConnectExp(x, from[i + width(x) - 1, i])
+     i = i + width(x)
+   dst
 
 public definterface Type<T>
 public defmulti firrtl-type (t:Type) -> fType
@@ -34,6 +57,7 @@ defn build-statement (f: () -> ?) :
 
 ;=== Module Vector ===
 var MODULE-VECTOR:Vector<fModule> = Vector<fModule>()
+var MODULE-NAMES  = HashTable<Symbol,True|False>(symbol-hash, 8)
 public defn Node (e:fExpression) :
    val name = gensym(`tmp)
    add(STATEMENT-VECTOR, fDefNode(name, e))
@@ -41,7 +65,7 @@ public defn Node (e:fExpression) :
 
 ;=== Component Creation ===
 public defn RegisterExp<?T> (name:Symbol, type:Type<?T>) :
-   val name* = name ;; gensym(name)
+   val name* = gensym(name)
    add(STATEMENT-VECTOR, fDefRegister(name*, firrtl-type(type)))
    handle(type, fRef(name*, fUnknownType()))
 
@@ -50,11 +74,16 @@ public defn RegisterFromExp<?T> (name:Symbol, exp:?T&Data) :
    ConnectExp(h, exp)
    h
 
+public defn RegisterResetFromExp<?T> (name:Symbol, exp:?T&Data) :
+   val h = RegisterExp(name, erase-width(type(exp)))
+   OnResetExp(h, exp)
+   h
+
 public defn Reg<?T> (x:?T & Data) -> T :
    RegisterFromExp(gensym(`reg), x)
 
 public defn WireExp<?T> (name:Symbol, type:Type<?T>) :
-   val name* = name ;; gensym(name)
+   val name* = gensym(name)
    add(STATEMENT-VECTOR, fDefWire(name*, firrtl-type(type)))
    handle(type, fRef(name*, fUnknownType()))
 
@@ -64,24 +93,30 @@ public defn WireFromExp<?T> (name:Symbol, exp:?T&Data) :
    h
 
 public defn NodeExp<?T> (name:Symbol, x:?T&Data) -> T :
-   val name* = name ;; gensym?
+   val name* = gensym(name)
    add(STATEMENT-VECTOR, fDefNode(name*, firrtl-exp(x)))
    handle(type(x), fRef(name*, fUnknownType()))
 
-public defn MemExp<?T> (name:Symbol, type:Type<?T>) -> T :
-   val name* = name ;; gensym(name)
-   add(STATEMENT-VECTOR, fDefMemory(name*, firrtl-type(type) as fVectorType))
+public defn CMemExp<?T> (name:Symbol, type:Type<?T>) -> T :
+   val name* = gensym(name)
+   add(STATEMENT-VECTOR, fDefCMemory(name*, firrtl-type(type) as fVectorType))
+   handle(type, fRef(name*, fUnknownType()))
+
+public defn SMemExp<?T> (name:Symbol, type:Type<?T>) -> T :
+   val name* = gensym(name)
+   add(STATEMENT-VECTOR, fDefSMemory(name*, firrtl-type(type) as fVectorType))
    handle(type, fRef(name*, fUnknownType()))
 
 public defn InstanceExp<?T> (name:Symbol, module:Type<?T>&CHModule) :
-   val name* = name ;; gensym(name)
+   val name* = gensym(name)
    add(STATEMENT-VECTOR, fDefInstance(name*, fRef(firrtl-module(module), fUnknownType())))
    handle(module, fRef(name*, fUnknownType()))
 
 public defn CircuitExp (module:CHModule) :
    let-var MODULE-VECTOR = Vector<fModule>() :
-      val main = firrtl-module(module)
-      fCircuit(to-list(MODULE-VECTOR), main)
+      let-var MODULE-NAMES  = HashTable<Symbol,True|False>(symbol-hash, 8) :
+        val main = firrtl-module(module)
+        fCircuit(to-list(MODULE-VECTOR), main)
 
 public defn ConnectExp (x:Data, y:Data) :
    val x* = firrtl-exp(x)
@@ -105,7 +140,8 @@ public defn WhenExp (pred:Data, conseq: () -> ?) :
    add(STATEMENT-VECTOR, fConditionally(p, c, fEmptyStmt()))
 
 public defn ModuleExp (name, ports:List<fPort>, f: () -> ?) -> Symbol :
-   val name* = name ;; gensym(name)
+   val name? = set?(MODULE-NAMES, name, true)
+   val name* = if name?: name else: gensym(name) 
    val body = build-statement(f)
    add(MODULE-VECTOR, fModule(name*, ports, body))
    name*
@@ -115,11 +151,11 @@ public defclass Vec<T> <: Data & Streamable<T> & Lengthable
 public defmulti get<?T> (v:Vec<?T>, i:Int) -> T
 public defmulti get<?T> (v:Vec<?T>, i:Data) -> T
 defn VecHandle<T> (T:Type<T&Data>, n:Int, e:fExpression) :
-   new Vec<T> :
+   new Vec<T&Data> :
       defmethod firrtl-exp (this) :
          e
       defmethod type (this) :
-         VecType<T>(T, n)
+         VecType<T&Data>(T, n)
       defmethod length (this) :
          n
       defmethod get (this, i:Int) :
@@ -131,6 +167,8 @@ defn VecHandle<T> (T:Type<T&Data>, n:Int, e:fExpression) :
       defmethod to-stream (this) :
          for i in 0 to n stream :
             this[i]
+      defmethod flatten (this) -> Streamable<UInt> :
+         concat-all(map(flatten, to-list(this)))
 
 public defclass VecType<T> <: Type<Vec<T>>
 defn VecType<T> (T:Type<T&Data>, n:Int) :
@@ -152,6 +190,8 @@ defn UIntHandle (w:fWidth, e:fExpression) :
    new UIntC :
       defmethod firrtl-exp (this) : e
       defmethod type (this) : UIntType(w) as Type<UIntC>
+      defmethod flatten (this) -> Streamable<UInt> : list(this)
+      defmethod width (this) : value(w)
 
 public defclass UIntType <: Type<UInt>
 defn UIntType (w:fWidth) -> Type<UInt> :
@@ -164,9 +204,8 @@ public defn UInt (w:Int) : UIntType(fIntWidth(w))
 public defn UInt () : UIntType(fUnknownWidth())
 
 public defn UIntLit (v:Int) :
-   val e = fUIntValue(v, fUnknownWidth())
-   handle(UInt(), e)
-public defn UIntLit (w:Int, v:Int) :
+   UIntLit(v, sizeof(v))
+public defn UIntLit (v:Int, w:Int) :
    val e = fUIntValue(v, fIntWidth(w))
    handle(UInt(w), e)
 
@@ -177,6 +216,8 @@ defn SIntHandle (w:fWidth, e:fExpression) :
    new SIntC :
       defmethod firrtl-exp (this) : e
       defmethod type (this) : SIntType(w) as Type<SIntC>
+      defmethod flatten (this) -> Streamable<UInt> : list(as-uint(this))
+      defmethod width (this) : value(w)
 
 public defclass SIntType <: Type<SInt>
 defn SIntType (w:fWidth) -> Type<SInt> :
@@ -189,9 +230,8 @@ public defn SInt (w:Int) : SIntType(fIntWidth(w))
 public defn SInt () : SIntType(fUnknownWidth())
 
 public defn SIntLit (v:Int) :
-   val e = fSIntValue(v, fUnknownWidth())
-   handle(SInt(), e)
-public defn SIntLit (w:Int, v:Int) :
+   SIntLit(v, sizeof(v) + (if v < 0: 0 else: 1))
+public defn SIntLit (v:Int, w:Int) :
    val e = fSIntValue(v, fIntWidth(w))
    handle(SInt(w), e)
 
@@ -221,6 +261,7 @@ public defn less-eq? (x:UInt, y:UInt) -> UInt : binop-node(UInt(), fLESS-EQ-OP, 
 public defn greater? (x:UInt, y:UInt) -> UInt : binop-node(UInt(), fGREATER-OP, x, y)
 public defn greater-eq? (x:UInt, y:UInt) -> UInt : binop-node(UInt(), fGREATER-EQ-OP, x, y)
 public defn bit-equal? (x:UInt, y:UInt) -> UInt : binop-node(UInt(), fEQUAL-OP, x, y)
+public defn bit-not-equal? (x:UInt, y:UInt) -> UInt : binop-node(UInt(), fNEQUAL-OP, x, y)
 
 public defn cat (x:UInt, y:UInt) -> UInt : binop-node(UInt(), fCONCAT-OP, x, y)
 public defn bit-and (x:UInt, y:UInt) -> UInt : binop-node(UInt(), fBIT-AND-OP, x, y)
@@ -231,6 +272,7 @@ public defn shift-right (x:UInt, y:Int) -> UInt : unaop-node(UInt(), fSHIFT-RIGH
 public defn shift-left (x:UInt, y:UInt) -> UInt : binop-node(UInt(), fDYN-SHIFT-LEFT-OP, x, y)
 public defn shift-right (x:UInt, y:UInt) -> UInt : binop-node(UInt(), fDYN-SHIFT-RIGHT-OP, x, y)
 
+public defn bit-not (x:UInt) -> UInt : unaop-node(UInt(), fBIT-NOT-OP, x, list())
 public defn get (x:UInt, i:Int) -> UInt : unaop-node(UInt(), fBIT-SELECT-OP, x, i)
 public defn get (x:UInt, i:Int, j:Int) -> UInt : unaop-node(UInt(), fBITS-SELECT-OP, x, list(i, j))
 
@@ -385,7 +427,7 @@ public defn as-sint (x:SInt) -> SInt : unaop-node(SInt(), fAS-SINT-OP, x, list()
 ;public defn ModuleExp (name, ports:List<fPort>, f: () -> ?) -> Symbol :
 ;   val name? = set?(MODULE-NAMES, name, true)
 ;   val name* = if name? : name else : gensym(name)
-;   val body = build-statement(f)
+;   Val body = build-statement(f)
 ;   add(MODULE-VECTOR, fModule(name*, ports, body))
 ;   name*
 ;

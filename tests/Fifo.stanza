@@ -10,11 +10,11 @@ defpackage stack :
    import chipper
 
 defbundle DecoupledIO<T> :
-  valid: Bool
+  valid: UInt<1>
   bits: T
-  flip ready: Bool
+  flip ready: UInt<1>
 
-defmodule Fifo<T> (entries: Int, pipe: True|False, flow: True|False) : ;; , _reset: Bool = null
+defmodule Fifo<T> (entries: Int, pipe: True|False, flow: True|False) : ;; , _reset: UInt<1> = null
   input  enq: DecoupledIO<T>
   output deq: DecoupledIO<T>
   output count: UInt<sizeof(entries + 1)>

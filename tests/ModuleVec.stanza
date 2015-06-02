@@ -1,33 +1,40 @@
 #include("src/firrtl-ir.stanza")
 #include("src/ir-utils.stanza")
 #include("src/chipper.stanza")
+#include("src/utils.stanza")
+#include("src/stdlib.stanza")
 #use-syntax(core, chipper)
 
 defpackage module-vec :
    import core
    import verse
    import chipper
+   import stdlib
 
-defmodule PlusOne :
+definterface AnyPlusMinusOne <: Data
+defmulti inc (mod:AnyPlusMinusOne)
+
+defmodule PlusMinusOne <: AnyPlusMinusOne :
   input in : UInt<32>
   output out : UInt<32>
+  input isInc : UInt<1>
+  out := mux(isInc, in + UInt(1), in - UInt(1))
   out := in + UInt(1)
+
+defmethod inc (mod:PlusMinusOne) : mod.isInc := UInt(1)
 
 defmodule ModuleVec (n: Int) :
   input ins  : UInt<32>[n]
   output outs : UInt<32>[n]
-  ;; val pluses = Rom(n, fn () : (inst m of PlusOne, m))
-  ;; val pluses = Rom(n, fn () : inst-of PlusOne)
-  ;; val pluses = Rom(n, { inst-of PlusOne })
-  ;; val pluses = Rom(n, {(inst m of PlusOne, m)})
-
-  wire pluses : PlusOne[n]
+  wire pluses : PlusMinusOne[n]
   for i in 0 to n do :
-     pluses[i] := instof PlusOne
+     pluses[i] := instof PlusMinusOne
      
   for i in 0 to n do :
-    pluses[i].in := ins[i]
-    outs[i]      := pluses[i].out 
+    pluses[i].in    := ins[i]
+    inc(pluses[i])
+    ;; pluses[i].isInc := UInt(1)
+    outs[i]         := pluses[i].out 
 
 defn main () :
    circuit c of ModuleVec(4)

@@ -10,7 +10,7 @@ defpackage lfsr16 :
    import chipper
 
 defmodule LFSR16 :
-  input inc : Bool
+  input inc : UInt<1>
   output out : UInt<16>
   reg res : UInt<16>
   ;; when reset: 

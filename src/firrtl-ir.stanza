@@ -134,7 +134,10 @@ public defstruct DefRegister <: Stmt :
 public defstruct DefInstance <: Stmt :
    name: Symbol
    module: Expression
-public defstruct DefMemory <: Stmt :
+public defstruct DefCMemory <: Stmt :
+   name: Symbol
+   type: VectorType
+public defstruct DefSMemory <: Stmt :
    name: Symbol
    type: VectorType
 public defstruct DefNode <: Stmt :

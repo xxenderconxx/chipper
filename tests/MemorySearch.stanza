@@ -19,8 +19,8 @@ defmodule MemorySearch (depth:Int) :
   for i in 0 to length(inits) do:
     vals[i] := UInt(inits[i])
   reg index : UInt<4>
-  node elt    = vals[index]
-  node isDone = ! en & ((elt === target) | (index === UInt(7)))
+  wire elt    = vals[index]
+  wire isDone = ! en & ((elt === target) | (index === UInt(7)))
   when en :
     index := UInt(0)
   else when ! isDone :

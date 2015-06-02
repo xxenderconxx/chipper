@@ -15,7 +15,7 @@ defmodule Stack (depth:Int) :
   input dataIn: UInt<32>
   output dataOut: UInt<32>
 
-  mem stack_mem : UInt<32>[depth]
+  cmem stack_mem : UInt<32>[depth]
   reg sp : UInt<sizeof(depth)> sp := UInt(0)
   wire out : UInt<32> out := UInt(0)
 

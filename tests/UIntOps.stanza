@@ -1,6 +1,8 @@
 #include("src/firrtl-ir.stanza")
 #include("src/ir-utils.stanza")
+#include("src/utils.stanza")
 #include("src/chipper.stanza")
+#include("src/stdlib.stanza")
 
 #use-syntax(core, chipper)
 
@@ -8,6 +10,7 @@ defpackage uintops :
    import core
    import verse
    import chipper
+   import stdlib
 
 defmodule UIntOps :
   input a : UInt<16>
@@ -19,17 +22,17 @@ defmodule UIntOps :
   output modout : UInt<16>
   output lshiftout : UInt<16>
   output rshiftout : UInt<16>
-  output lessout : Bool
-  output greatout : Bool
-  output eqout : Bool
-  output noteqout : Bool
-  output lesseqout : Bool
-  output greateqout : Bool
+  output lessout : UInt<1>
+  output greatout : UInt<1>
+  output eqout : UInt<1>
+  output noteqout : UInt<1>
+  output lesseqout : UInt<1>
+  output greateqout : UInt<1>
 
   addout     := a + b
   subout     := a - b
   timesout   := (a * b)[15, 0]
-  divout     := a / Mux(b === UInt(0), UInt(1), b)
+  divout     := a / mux(b === UInt(0), UInt(1), b)
   ;; modout  := a % b
   ;; TODO: 
   modout     := UInt(0)

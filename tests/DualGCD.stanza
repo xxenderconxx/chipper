@@ -12,7 +12,7 @@ defbundle Dual<T> :
    a: T
    b: T
 
-defmodule GCD :
+defmodule GCD<T> :
    input in: Dual<T>
    input e: UInt<1>
    output z: UInt<1>
@@ -31,7 +31,7 @@ defmodule GCD :
    v := y === UInt(0)
 
 defn main () :
-   circuit c of GCD
+   circuit c of GCD<UInt<16>>
    println(c)
    
 main()

@@ -94,8 +94,10 @@ defmethod print (o:OutputStream, c:Stmt) :
          print(o, "wire ~ : ~" << [name(c), type(c)])
       (c:DefRegister) :
          print(o, "reg ~ : ~" << [name(c), type(c)])
-      (c:DefMemory) :
-         print(o, "mem ~ : ~" << [name(c), type(c)])
+      (c:DefCMemory) :
+         print(o, "cmem ~ : ~" << [name(c), type(c)])
+      (c:DefSMemory) :
+         print(o, "smem ~ : ~" << [name(c), type(c)])
       (c:DefInstance) :
          print(o, "inst ~ of ~" << [name(c), module(c)])
       (c:DefNode) :

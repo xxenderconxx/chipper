@@ -49,9 +49,11 @@ defstruct Param : (inherit:True|False, name, type, exp)
 defstruct DefModule : (name, parent, targs:List<TArg>, arglist:List, ports:List<Port>, params:List<Param>, body:List)
 defstruct RegisterStmt : (name, type:Type)
 defstruct RegisterFromExp : (name, exp)
+defstruct RegisterResetFromExp : (name, exp)
 defstruct RegisterExp : (type:Type)
 defstruct NodeStmt : (name, x)
-defstruct MemStmt : (name, type:Type)
+defstruct CMemStmt : (name, type:Type)
+defstruct SMemStmt : (name, type:Type)
 defstruct WireStmt : (name, type:Type)
 defstruct WireFromExp : (name, exp)
 defstruct WireExp : (type:Type)
@@ -112,8 +114,11 @@ defmethod print (o:OutputStream, s:RegisterStmt) :
 defmethod print (o:OutputStream, s:NodeStmt) :
    print(o, "node ~ : ~" << [name(s), x(s)])
 
-defmethod print (o:OutputStream, s:MemStmt) :
-   print(o, "mem ~ : ~" << [name(s), type(s)])
+defmethod print (o:OutputStream, s:CMemStmt) :
+   print(o, "cmem ~ : ~" << [name(s), type(s)])
+
+defmethod print (o:OutputStream, s:SMemStmt) :
+   print(o, "smem ~ : ~" << [name(s), type(s)])
 
 defmethod print (o:OutputStream, s:WireStmt) :
    print(o, "wire ~ : ~" << [name(s), type(s)])
@@ -252,6 +257,12 @@ defsyntax chipper :
          expande $ list $ list(
             compile(RegisterStmt(name, type))
             compile(ConnectStmt(name, e)))
+      prefix-op = (reg ?name:#id! : ?type:#ch/type = ?e:#exp!) :
+         expande $ list $ list(
+            compile(RegisterStmt(name, type))
+            compile(OnResetStmt(name, e)))
+      prefix-op = (reg ?name:#id! = ?e:#exp!) :
+         compile(RegisterResetFromExp(name, e))
       prefix-op = (reg ?name:#id! : ?type:#ch/type!) :
          compile(RegisterStmt(name, type))
       prefix-op = (regof ?type:#ch/type!) :
@@ -264,8 +275,10 @@ defsyntax chipper :
 
    ;Mem statement
    defrule :
-      prefix-op = (mem ?name:#id! : ?type:#ch/type!) :
-         compile(MemStmt(name, type))
+      prefix-op = (cmem ?name:#id! : ?type:#ch/type!) :
+         compile(CMemStmt(name, type))
+      prefix-op = (smem ?name:#id! : ?type:#ch/type!) :
+         compile(SMemStmt(name, type))
 
    ;Wire statement
    defrule :
@@ -321,7 +334,7 @@ defsyntax chipper :
    ;Invert expression
    defrule :
       prefix-op = (~ ! ?e:#exp!) :
-         expande $ qquote(chipper/invert(~ e))
+         expande $ qquote(chipper/bit-not(~ e))
 
    ;Bit Comparison Operator
    defrule :
@@ -616,6 +629,13 @@ defn compile (s:RegisterFromExp) :
       `name => name(s)
       `exp => exp(s)])
       
+defn compile (s:RegisterResetFromExp) :
+   val template = `(
+      val name = chipper/RegisterResetFromExp(`name, exp))
+   expande $ fill-template(template, [
+      `name => name(s)
+      `exp => exp(s)])
+      
 defn compile (s:RegisterExp) :
    val template = `(
       chipper/RegisterExp(`reg, type))
@@ -655,9 +675,15 @@ defn compile (s:NodeStmt) :
 ;============================================================
 
 ;================= Mem COMPILATION =========================
-defn compile (s:MemStmt) :
+defn compile (s:SMemStmt) :
    val template = `(
-      val name = chipper/MemExp(`name, type))
+      val name = chipper/SMemExp(`name, type))
+   expande $ fill-template(template, [
+      `name => name(s)
+      `type => compile-to-type-exp(type(s))])
+defn compile (s:CMemStmt) :
+   val template = `(
+      val name = chipper/CMemExp(`name, type))
    expande $ fill-template(template, [
       `name => name(s)
       `type => compile-to-type-exp(type(s))])
