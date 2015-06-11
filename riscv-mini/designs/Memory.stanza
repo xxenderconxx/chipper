@@ -14,11 +14,11 @@ public defbundle CacheIO :
   addr : UInt<addrLen>
   din  : UInt<instLen>
   flip dout : UInt<instLen>
-  re   : Bool
+  re   : UInt<1>
   we   : UInt<4>
 
 public defbundle MemReqCmd :
-  rw   : Bool
+  rw   : UInt<1>
   addr : UInt<addrLen>
   tag  : UInt<tagLen>
   mask : UInt<4>
@@ -36,7 +36,7 @@ public defbundle MemIO :
   flip resp : DecoupledIO<MemResp>
 
 public defmodule Memory :
-  output stall  : Bool
+  output stall  : UInt<1>
   output memory : MemIO
   input  icache : CacheIO
   input  dcache : CacheIO
@@ -46,38 +46,38 @@ public defmodule Memory :
   val [s_READY, s_WAIT] = [UInt(0), UInt(1)]
   reg state  = s_READY
   reg tag    = UInt<tagLen>(0)
-  node cpuReq = (state === s_READY) && (icache.re || dcache.re || bit-or-reduce(dcache.we))
+  node cpuReq = (state === s_READY) & (icache.re | dcache.re | bit-or-reduce(dcache.we))
   node iaddr  = cat(icache.addr[addrLen - 1, 2], UInt<2>(0))
   node daddr  = cat(dcache.addr[addrLen - 1, 2], UInt<2>(0))
   reg idata : UInt
   reg ddata  : UInt
-  reg ire    : Bool
-  reg dre    : Bool
+  reg ire    : UInt<1>
+  reg dre    : UInt<1>
   ;; TODO: PERHAPS DO THIS WITH REG WRAPPER
   icache.dout := idata ;; memory.resp.bits.data
   dcache.dout := ddata ;; memory.resp.bits.data
   memory.req_cmd := memReqCmdQueue.deq
   memory.req_data := memReqDataQueue.deq
-  memory.resp.ready := Bool(false)
-  stall := (state === s_WAIT) || ! memReqCmdQueue.enq.ready || ! memReqDataQueue.enq.ready
+  memory.resp.ready := UInt(false)
+  stall := (state === s_WAIT) | ! memReqCmdQueue.enq.ready | ! memReqDataQueue.enq.ready
   memReqCmdQueue.enq.bits.rw    := bit-or-reduce(dcache.we)
   memReqCmdQueue.enq.bits.tag   := tag
-  memReqCmdQueue.enq.bits.addr  := mux(bit-or-reduce(dcache.we) || ! icache.re, daddr, iaddr)
+  memReqCmdQueue.enq.bits.addr  := mux(bit-or-reduce(dcache.we) | ! icache.re, daddr, iaddr)
   memReqCmdQueue.enq.bits.mask  := dcache.we
-  memReqCmdQueue.enq.valid      := memReqDataQueue.enq.ready && cpuReq
+  memReqCmdQueue.enq.valid      := memReqDataQueue.enq.ready & cpuReq
   memReqDataQueue.enq.bits.data := dcache.din
-  memReqDataQueue.enq.valid     := memReqCmdQueue.enq.ready && cpuReq && bit-or-reduce(dcache.we)
+  memReqDataQueue.enq.valid     := memReqCmdQueue.enq.ready & cpuReq & bit-or-reduce(dcache.we)
 
   when state === s_READY :
-    when (icache.re || dcache.re) && ! bit-or-reduce(dcache.we) && memReqCmdQueue.enq.ready :
+    when (icache.re | dcache.re) & ! bit-or-reduce(dcache.we) & memReqCmdQueue.enq.ready :
       ire := icache.re 
       dre := dcache.re 
       state := s_WAIT
   when state === s_WAIT :
-    memory.resp.ready := Bool(true)
-    when memory.resp.valid && memory.resp.bits.tag === tag:
+    memory.resp.ready := UInt(true)
+    when memory.resp.valid & memory.resp.bits.tag === tag:
       state := s_READY
       tag   := tag + UInt(1)
-      memory.resp.ready := Bool(false)
+      memory.resp.ready := UInt(false)
       when ire : idata := memory.resp.bits.data
       when dre : ddata := memory.resp.bits.data

@@ -10,8 +10,8 @@ defpackage Control :
    import CSR
    import Instructions
 
-public val Y = Bool(true)
-public val N = Bool(false)
+public val Y = UInt(true)
+public val N = UInt(false)
 
 ;; pc_sel
 public val PC_4   = UInt<1>(0)
@@ -71,22 +71,22 @@ public val WB_CSR  = UInt<2>(3)
 
 public defbundle ControlSignals :
   pc_sel     : UInt<1>
-  inst_re    : Bool
+  inst_re    : UInt<1>
   inst_type  : UInt<1>
   A_sel      : UInt<1>
   B_sel      : UInt<1>
   imm_sel    : UInt<3>
   alu_op     : UInt<4>
   br_type    : UInt<3>
-  data_re    : Bool
+  data_re    : UInt<1>
   st_type    : UInt<2>
   ld_type    : UInt<3>
   wb_sel     : UInt<2>
-  wb_en      : Bool
+  wb_en      : UInt<1>
   csr_cmd    : UInt<2>
  
   flip ins   : UInt<instLen>
-  flip stall : Bool
+  flip stall : UInt<1>
 
 public defmodule Control :
   output ctrl : ControlSignals
@@ -142,16 +142,16 @@ public defmodule Control :
    ])
   node rs1_addr = ctrl.ins[19, 15]
   node rs2_addr = ctrl.ins[24, 20]
-  reg st_type  : Bool st_type := ctrl.st_type
-  reg ld_type  : Bool ld_type := ctrlSignals[8]
-  reg wb_sel   : Bool wb_sel := ctrlSignals[9]
-  reg wb_en    : Bool wb_en := ctrlSignals[10]
-  reg csr_cmd  : Bool csr_cmd := ctrlSignals[11]
+  reg st_type  := ctrl.st_type
+  reg ld_type  := ctrlSignals[8]
+  reg wb_sel   := ctrlSignals[9]
+  reg wb_en    := ctrlSignals[10]
+  reg csr_cmd  := ctrlSignals[11]
 
   ;; Control signals for Fetch
   ctrl.pc_sel    := ctrlSignals[0]
-  ctrl.inst_re   := ! ctrl.stall && ! ctrl.data_re
-  ctrl.inst_type := mux((ctrlSignals[8] !== LD_XXX) || to-bool(ctrlSignals[6]), I_KILL, I_NEXT)
+  ctrl.inst_re   := ! ctrl.stall & ! ctrl.data_re
+  ctrl.inst_type := mux((ctrlSignals[8] !== LD_XXX) | ctrlSignals[6], I_KILL, I_NEXT)
 
   ;; Control signals for Execute
   ctrl.A_sel   := ctrlSignals[1]

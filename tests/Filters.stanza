@@ -11,7 +11,7 @@ defpackage Filters :
 
 defbundle Valid<T <: Data> () :
   data : T
-  valid : Bool
+  valid : UInt<1>
 
 defbundle FilterIO<T <: Data> () :
   flip in : Valid<T>
@@ -29,7 +29,7 @@ defbundle FilterIO<T <: Data> () :
   
 ;; ;; definterface Filter <: Data
 ;; ;; defmulti field#data (f:Filter) -> UInt
-;; ;; defmulti field#valid (f:Filter) -> Bool
+;; ;; defmulti field#valid (f:Filter) -> UInt
 ;; 
 ;; ;; defmodule FunctionFilter<T>  (f: T -> T) : 
 ;; ;;   output io : FilterIO<T>

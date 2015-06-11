@@ -1,7 +1,7 @@
 #include("src/firrtl-ir.stanza")
 #include("src/ir-utils.stanza")
 #include("src/chipper.stanza")
-#include("src/dl-tester.stanza")
+#include("src/tester.stanza")
 
 defpackage gcd :
   import core

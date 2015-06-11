@@ -11,7 +11,7 @@ public defmodule BrCond :
   input  rs1     : UInt<instLen>
   input  rs2     : UInt<instLen>
   input  br_type : UInt<3>
-  output taken   : Bool
+  output taken   : UInt<1>
 
   node eq   = rs1 === rs2
   node neq  = ! eq
@@ -20,10 +20,10 @@ public defmodule BrCond :
   node ltu  = rs1 < rs2
   node geu  = ! ltu
   taken :=     
-    ((br_type === BR_EQ) && eq) ||
-    ((br_type === BR_NE) && neq) ||
-    ((br_type === BR_LT) && lt) ||
-    ((br_type === BR_GE) && ge) ||
-    ((br_type === BR_LTU) && ltu) ||
-    ((br_type === BR_GEU) && geu)
+    ((br_type === BR_EQ) & eq) |
+    ((br_type === BR_NE) & neq) |
+    ((br_type === BR_LT) & lt) |
+    ((br_type === BR_GE) & ge) |
+    ((br_type === BR_LTU) & ltu) |
+    ((br_type === BR_GEU) & geu)
 

@@ -226,30 +226,6 @@ public defn UIntLit (v:Int, w:Int) :
 public defn UIntLit (v:String) : UIntLit(to-lit-val(v))
 public defn UIntLit (v:String, w:Int) : UIntLit(to-lit-val(v), w)
 
-;================ Bools =========================
-public definterface Bool <: UInt
-defclass BoolC <: Bool
-defn BoolHandle (e:fExpression) :
-   new BoolC :
-      defmethod firrtl-exp (this) : e
-      defmethod type (this) : BoolType() as Type<BoolC>
-      defmethod flatten (this) -> Streamable<Bool> : list(this)
-      defmethod width (this) : 1
-
-public defclass BoolType <: Type<Bool>
-defn BoolType () -> Type<Bool> :
-   new BoolType :
-      defmethod firrtl-type (this) : fUIntType(fIntWidth(1))
-      defmethod handle (this, e:fExpression) : BoolHandle(e)
-      defmethod erase-width (this) : BoolType()
-
-public defn Bool () : BoolType()
-
-public defn BoolLit (b:True|False) :
-   val v = if b: 1 else: 0
-   val e = fUIntValue(v, fIntWidth(1))
-   handle(Bool(), e)
-
 ;================ SIGNED INTEGERS =========================
 public definterface SInt <: Bits
 defclass SIntC <: SInt
@@ -298,21 +274,21 @@ public defn modulo (x:UInt, y:UInt) -> UInt : binop-node(UInt(), fMOD-OP, x, y)
 public defn neg (x:UInt) -> SInt : SIntLit(0) - to-sint(x)
 public defn pad (x:UInt, w:Int) -> UInt : unaop-node(UInt(), fPAD-OP, x, w)
 
-public defn less? (x:UInt, y:UInt) -> Bool : binop-node(Bool(), fLESS-OP, x, y)
-public defn less-eq? (x:UInt, y:UInt) -> Bool : binop-node(Bool(), fLESS-EQ-OP, x, y)
-public defn greater? (x:UInt, y:UInt) -> Bool : binop-node(Bool(), fGREATER-OP, x, y)
-public defn greater-eq? (x:UInt, y:UInt) -> Bool : binop-node(Bool(), fGREATER-EQ-OP, x, y)
-public defn bit-equal? (x:UInt, y:UInt) -> Bool : binop-node(Bool(), fEQUAL-OP, x, y)
-public defn bit-not-equal? (x:UInt, y:UInt) -> Bool : binop-node(Bool(), fNEQUAL-OP, x, y)
+public defn less? (x:UInt, y:UInt) -> UInt : binop-node(UInt(), fLESS-OP, x, y)
+public defn less-eq? (x:UInt, y:UInt) -> UInt : binop-node(UInt(), fLESS-EQ-OP, x, y)
+public defn greater? (x:UInt, y:UInt) -> UInt : binop-node(UInt(), fGREATER-OP, x, y)
+public defn greater-eq? (x:UInt, y:UInt) -> UInt : binop-node(UInt(), fGREATER-EQ-OP, x, y)
+public defn bit-equal? (x:UInt, y:UInt) -> UInt : binop-node(UInt(), fEQUAL-OP, x, y)
+public defn bit-not-equal? (x:UInt, y:UInt) -> UInt : binop-node(UInt(), fNEQUAL-OP, x, y)
 
 public defn cat (x:UInt, y:UInt) -> UInt : binop-node(UInt(), fCONCAT-OP, x, y)
 public defn cat (elts:Streamable<UInt>) -> UInt  : reduce(cat, to-list(elts))
 public defn bit-and (x:UInt, y:UInt) -> UInt : binop-node(UInt(), fBIT-AND-OP, x, y)
 public defn bit-or (x:UInt, y:UInt) -> UInt : binop-node(UInt(), fBIT-OR-OP, x, y)
 public defn bit-xor (x:UInt, y:UInt) -> UInt : binop-node(UInt(), fBIT-XOR-OP, x, y)
-public defn bit-or-reduce (x:UInt) -> Bool : bool-not(bit-equal?(x, UIntLit(0)))
-public defn bit-and-reduce (x:UInt) -> Bool : bit-equal?(x, UIntLit(-1))
-public defn bit-xor-reduce (x:UInt) -> Bool : unaop-node(Bool(), fBIT-XOR-REDUCE-OP, x, list())
+public defn bit-or-reduce (x:UInt) -> UInt : bit-not(bit-equal?(x, UIntLit(0)))
+public defn bit-and-reduce (x:UInt) -> UInt : bit-equal?(x, UIntLit(-1))
+public defn bit-xor-reduce (x:UInt) -> UInt : unaop-node(UInt(), fBIT-XOR-REDUCE-OP, x, list())
 
 public defn shift-left (x:UInt, y:Int) -> UInt : unaop-node(UInt(), fSHIFT-LEFT-OP, x, y)
 public defn shift-right (x:UInt, y:Int) -> UInt : unaop-node(UInt(), fSHIFT-RIGHT-OP, x, y)
@@ -320,23 +296,13 @@ public defn shift-left (x:UInt, y:UInt) -> UInt : binop-node(UInt(), fDYN-SHIFT-
 public defn shift-right (x:UInt, y:UInt) -> UInt : binop-node(UInt(), fDYN-SHIFT-RIGHT-OP, x, y)
 
 public defn bit-not (x:UInt) -> UInt : unaop-node(UInt(), fBIT-NOT-OP, x, list())
-public defn get (x:UInt, i:Int) -> Bool : unaop-node(Bool(), fBIT-SELECT-OP, x, i)
+public defn get (x:UInt, i:Int) -> UInt : unaop-node(UInt(), fBIT-SELECT-OP, x, i)
 public defn get (x:UInt, i:Int, j:Int) -> UInt : unaop-node(UInt(), fBITS-SELECT-OP, x, list(i, j))
 
 public defn to-uint (x:UInt) -> UInt : unaop-node(UInt(), fTO-UINT-OP, x, list())
 public defn to-sint (x:UInt) -> SInt : unaop-node(SInt(), fTO-SINT-OP, x, list())
 public defn as-uint (x:UInt) -> UInt : unaop-node(UInt(), fAS-UINT-OP, x, list())
 public defn as-sint (x:UInt) -> SInt : unaop-node(SInt(), fAS-SINT-OP, x, list())
-
-public defn to-bool (x: UInt) -> Bool:
-   val w = WireExp(`tmp, Bool())
-   ConnectExp(w, x)
-   w as Bool
-
-;============ OPERATIONS ON BOOLS ================      
-public defn bool-not (x:Bool) -> Bool : unaop-node(Bool(), fBIT-NOT-OP, x, list())
-public defn bool-and (x:Bool, y:Bool) -> Bool : binop-node(Bool(), fBIT-AND-OP, x, y)
-public defn bool-or (x:Bool, y:Bool) -> Bool : binop-node(Bool(), fBIT-OR-OP, x, y)
 
 ;============ OPERATIONS ON SIGNED INTERGERS ================      
 public defn plus (x:SInt, y:SInt) -> SInt : binop-node(SInt(), fADD-WRAP-OP, x, y)
@@ -347,11 +313,12 @@ public defn modulo (x:SInt, y:SInt) -> SInt : binop-node(SInt(), fMOD-OP, x, y)
 public defn neg (x:SInt) -> SInt : SIntLit(0) - x
 public defn pad (x:SInt, w:Int) -> SInt : unaop-node(SInt(), fPAD-OP, x, w)
 
-public defn less? (x:SInt, y:SInt) -> Bool : binop-node(Bool(), fLESS-OP, x, y)
-public defn less-eq? (x:SInt, y:SInt) -> Bool : binop-node(Bool(), fLESS-EQ-OP, x, y)
-public defn greater? (x:SInt, y:SInt) -> Bool : binop-node(Bool(), fGREATER-OP, x, y)
-public defn greater-eq? (x:SInt, y:SInt) -> Bool : binop-node(Bool(), fGREATER-EQ-OP, x, y)
-public defn bit-equal? (x:SInt, y:SInt) -> Bool : binop-node(Bool(), fEQUAL-OP, x, y)
+public defn less? (x:SInt, y:SInt) -> UInt : binop-node(UInt(), fLESS-OP, x, y)
+public defn less-eq? (x:SInt, y:SInt) -> UInt : binop-node(UInt(), fLESS-EQ-OP, x, y)
+public defn greater? (x:SInt, y:SInt) -> UInt : binop-node(UInt(), fGREATER-OP, x, y)
+public defn greater-eq? (x:SInt, y:SInt) -> UInt : binop-node(UInt(), fGREATER-EQ-OP, x, y)
+public defn bit-equal? (x:SInt, y:SInt) -> UInt : binop-node(UInt(), fEQUAL-OP, x, y)
+public defn bit-not-equal? (x:SInt, y:SInt) -> UInt : binop-node(UInt(), fNEQUAL-OP, x, y)
 
 public defn shift-left (x:SInt, y:Int) -> SInt : unaop-node(SInt(), fSHIFT-LEFT-OP, x, y)
 public defn shift-right (x:SInt, y:Int) -> SInt : unaop-node(SInt(), fSHIFT-RIGHT-OP, x, y)
@@ -414,11 +381,11 @@ public defmethod to-string (m: MInt) -> String :
   string-join(["MInt(" mask(m) "," bits(m) ")"])
 
 ;; TODO: BOTH SIDES
-public defn bit-equal? (x:MInt, y:UInt) -> Bool: 
+public defn bit-equal? (x:MInt, y:UInt) -> UInt: 
   bit-equal?((UIntLit(to-lit-val(mask(x), 2), width(x)) & y),
               UIntLit(to-lit-val(bits(x), 2), width(x)))
-public defn bit-not-equal? (x:MInt, y:UInt) -> Bool : 
-  bool-not(bit-equal?(x, y))
+public defn bit-not-equal? (x:MInt, y:UInt) -> UInt : 
+  bit-not(bit-equal?(x, y))
 
 ;============================================================
 ;==================== OLD STUFF =============================

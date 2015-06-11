@@ -18,7 +18,7 @@ defpackage Datapath :
 public val PC_START = UInt("0x2000")
 
 public defmodule Datapath :
-  input  stall  : Bool
+  input  stall  : UInt<1>
   input  ctrl   : ControlSignals
   output host   : HostIO
   output icache : CacheIO
@@ -40,14 +40,14 @@ public defmodule Datapath :
  
   ;; ****** Fetch *****
   reg pc = PC_START - UInt<instLen>(4)
-  node iaddr = mux((ctrl.pc_sel === PC_ALU) || brCond.taken, alu.sum, pc + UInt(4))
-  node inst  = mux((ctrl.inst_type === I_KILL) || brCond.taken, NOP, icache.dout)
+  node iaddr = mux((ctrl.pc_sel === PC_ALU) | brCond.taken, alu.sum, pc + UInt(4))
+  node inst  = mux((ctrl.inst_type === I_KILL) | brCond.taken, NOP, icache.dout)
  
-  icache.we   := Bool(false)
+  icache.we   := UInt(false)
   icache.din  := UInt(0)
   icache.addr := iaddr 
   icache.re   := ctrl.inst_re
-  pc          := mux(icache.re && ! bit-or-reduce(dcache.we), iaddr, pc)
+  pc          := mux(icache.re & ! bit-or-reduce(dcache.we), iaddr, pc)
  
   ;; Pipelining
   when ! stall :
@@ -73,10 +73,10 @@ public defmodule Datapath :
   ;; bypass
   node rs1NotZero = bit-or-reduce(rs1_addr)
   node rs2NotZero = bit-or-reduce(rs2_addr)
-  node alutype = ctrl.wb_en && ctrl.wb_sel === WB_ALU
+  node alutype = ctrl.wb_en & ctrl.wb_sel === WB_ALU
   node ex_rd_addr = ew_inst[11, 7]
-  node rs1 = mux(alutype && rs1NotZero && (rs1_addr === ex_rd_addr), ew_alu, regFile.rdata1)
-  node rs2 = mux(alutype && rs2NotZero && (rs2_addr === ex_rd_addr), ew_alu, regFile.rdata2) 
+  node rs1 = mux(alutype & rs1NotZero & (rs1_addr === ex_rd_addr), ew_alu, regFile.rdata1)
+  node rs2 = mux(alutype & rs2NotZero & (rs2_addr === ex_rd_addr), ew_alu, regFile.rdata2) 
   
   ;; ALU operations
   alu.A := mux(ctrl.A_sel === A_RS1, rs1, fe_pc)

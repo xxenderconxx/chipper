@@ -10,7 +10,7 @@ defpackage RegFile :
 public defmodule RegFile:
   input  raddr1 : UInt<5>
   input  raddr2 : UInt<5>
-  input  wen    : Bool
+  input  wen    : UInt<1>
   input  waddr  : UInt<5>
   input  wdata  : UInt<instLen>
   output rdata1 : UInt<instLen>
@@ -19,6 +19,6 @@ public defmodule RegFile:
   cmem regs : UInt<instLen>[32]
   rdata1 := mux(bit-or-reduce(raddr1), regs[raddr1], UInt(0))
   rdata2 := mux(bit-or-reduce(raddr2), regs[raddr2], UInt(0))
-  when wen && bit-or-reduce(waddr) :
+  when wen & bit-or-reduce(waddr) :
     regs[waddr] := wdata
 

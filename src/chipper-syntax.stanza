@@ -34,7 +34,6 @@ defn CPE (form, x) :
 definterface Type
 defstruct UIntT <: Type
 defstruct UIntWT <: Type : (width)
-defstruct BoolT <: Type
 defstruct SIntT <: Type
 defstruct SIntWT <: Type : (width)
 defstruct VecT <: Type : (type:Type, length)
@@ -78,7 +77,6 @@ defmethod print (o:OutputStream, t:TArg) :
 defmethod print (o:OutputStream, t:Type) :
    print{o, _} $ match(t) :
       (t:UIntT) : "UInt"
-      (t:BoolT) : "Bool"
       (t:UIntWT) : "UInt<~>" << [width(t)]
       (t:SIntT) : "SInt"
       (t:SIntWT) : "SInt<~>" << [width(t)]
@@ -205,7 +203,6 @@ defsyntax chipper :
       ch/term = (~ #{?e:#exp$}) : EscapeT(e)
       ch/term = (Bits<?e:#exp$>) : UIntWT(e)
       ch/term = (Bits) : UIntT()
-      ch/term = (Bool) : BoolT()
       ch/term = (UInt<?e:#exp$>) : UIntWT(e)
       ch/term = (UInt) : UIntT()
       ch/term = (SInt<?e:#exp$>) : SIntWT(e)
@@ -338,19 +335,8 @@ defsyntax chipper :
 
    ;Not expression
    defrule :
-      prefix-op = (~ ~ ?e:#exp!) :
-         expande $ qquote(chipper/bit-not(~ e))
       prefix-op = (~ ! ?e:#exp!) :
-         expande $ qquote(chipper/bool-not(~ e))
-
-   ;Bool Operators
-   defrule :
-      eop0 = (&& ?y:#exp!) :
-         fn (x) :
-            expande $ qquote(chipper/bool-and(~ x, ~ y))
-      eop0 = (|| ?y:#exp!) :
-         fn (x) :
-            expande $ qquote(chipper/bool-or(~ x, ~ y))
+         expande $ qquote(chipper/bit-not(~ e))
 
    ;Bit Comparison Operator
    defrule :
@@ -375,8 +361,6 @@ defsyntax chipper :
 
    ;Literal Syntax
    defrule :
-      prefix-op = (Bool(?v:#exp$)) :
-         expande $ qquote(chipper/BoolLit(~ v))
       prefix-op = (Bits(?v:#exp$)) :
          expande $ qquote(chipper/UIntLit(~ v))
       prefix-op = (Bits<?w:#exp$>(?v:#exp$)) :
@@ -402,7 +386,7 @@ defn expande (form) :
 ;================== TYPE VALIDITY ===========================
 defn statically-known? (t:Type) :
    match(t) :
-      (t:UIntT|UIntWT|BoolT|SIntT|SIntWT|ParamT) : true
+      (t:UIntT|UIntWT|SIntT|SIntWT|ParamT) : true
       (t:VecT) : statically-known?(type(t))
       (t:NamedT) : all?(statically-known?, targs(t))
       (t:EscapeT) : false
@@ -415,8 +399,6 @@ defn compile-to-type-exp (t:Type) :
          qquote(chipper/UInt())
       (t:UIntWT) :
          qquote(chipper/UInt(~ (width(t))))
-      (t:BoolT) :
-         qquote(chipper/Bool())
       (t:SIntT) :
          qquote(chipper/SInt())
       (t:SIntWT) :
@@ -439,8 +421,6 @@ defn compile-to-type (t:Type) :
    match(t) :
       (t:UIntT|UIntWT) :
          qquote(chipper/UInt)
-      (t:BoolT) :
-         qquote(chipper/Bool)
       (t:SIntT|SIntWT) :
          qquote(chipper/SInt)
       (t:VecT) :

@@ -7,23 +7,23 @@ defpackage decoupled :
    import stdlib
 
 public defbundle ValidIO<T> :
-  valid: Bool
+  valid: UInt<1>
   bits: T
 
-public defn fired<?T> (d: ValidIO<?T>) -> Bool : d.valid
+public defn fired<?T> (d: ValidIO<?T>) -> UInt : d.valid
 
 ;; Adds a ready-valid handshaking protocol to any interface.
 ;;  The standard used is that the consumer uses the flipped
 ;;  interface.
 public defbundle DecoupledIO<T> :
-  valid: Bool
+  valid: UInt<1>
   bits: T
-  flip ready: Bool
+  flip ready: UInt<1>
 
-public defn fired<?T> (d: DecoupledIO<?T>) -> Bool : d.ready && d.valid
+public defn fired<?T> (d: DecoupledIO<?T>) -> UInt : d.ready & d.valid
  
 ;; TODO entries as getter
-public defmodule Fifo<T> (entries: Int, pipe: True|False, flow: True|False) : ;; , _reset: Bool = null
+public defmodule Fifo<T> (entries: Int, pipe: True|False, flow: True|False) : ;; , _reset: UInt = null
   input enq: DecoupledIO<T>
   output deq: DecoupledIO<T>
   output count: UInt<log2Up(entries + 1)>
@@ -31,16 +31,16 @@ public defmodule Fifo<T> (entries: Int, pipe: True|False, flow: True|False) : ;;
   cmem ram: T[entries]
   val enq-ptr = Counter(entries)
   val deq-ptr = Counter(entries)
-  reg maybe-full = Bool(false)
+  reg maybe-full = UInt(false)
 
   node ptr-match = value(enq-ptr) === value(deq-ptr)
-  node empty = ptr-match && ! maybe-full
-  node full = ptr-match && maybe-full
-  node maybe-flow = Bool(flow) && empty
-  node do-flow = maybe-flow && deq.ready
+  node empty = ptr-match & ! maybe-full
+  node full = ptr-match & maybe-full
+  node maybe-flow = UInt(flow) & empty
+  node do-flow = maybe-flow & deq.ready
 
-  node do-enq = enq.ready && enq.valid && ! do-flow
-  node do-deq = deq.ready && deq.valid && ! do-flow
+  node do-enq = enq.ready & enq.valid & ! do-flow
+  node do-deq = deq.ready & deq.valid & ! do-flow
   when do-enq :
     ram[value(enq-ptr)] := enq.bits
     inc(enq-ptr)
@@ -49,13 +49,13 @@ public defmodule Fifo<T> (entries: Int, pipe: True|False, flow: True|False) : ;;
   when do-enq !== do-deq :
     maybe-full := do-enq
 
-  deq.valid := ! empty || Bool(flow) && enq.valid
-  enq.ready := ! full || Bool(pipe) && deq.ready
+  deq.valid := ! empty | UInt(flow) & enq.valid
+  enq.ready := ! full | UInt(pipe) & deq.ready
   deq.bits  := mux(maybe-flow, enq.bits, ram[value(deq-ptr)])
 
   node ptr-diff = value(enq-ptr) - value(deq-ptr)
   if is-pow2(entries) :
-    count := cat(maybe-full && ptr-match, ptr-diff)
+    count := cat(maybe-full & ptr-match, ptr-diff)
   else :
     count := mux(ptr-match, mux(maybe-full, UInt(entries), UInt(0)), mux(value(deq-ptr) > value(enq-ptr), UInt(entries) + ptr-diff, ptr-diff))
 

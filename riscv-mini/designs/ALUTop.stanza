@@ -12,7 +12,7 @@ defpackage ALUTop :
 public defmodule ALUdec :
   input opcode : UInt<7>
   input funct  : UInt<3>
-  input add_rshift_type : Bool
+  input add_rshift_type : UInt<1>
   output alu_op : UInt<4>
 
   node alu_op1 = mux-lookup(funct, ALU_XXX, [
@@ -41,7 +41,7 @@ public defmodule ALUdec :
 public defmodule ALUTop :
   input  opcode : UInt<7>
   input  funct : UInt<3>
-  input  add_rshift_type : Bool
+  input  add_rshift_type : UInt<1>
   input  A : UInt<instLen>
   input  B : UInt<instLen>
   output out : UInt<instLen>

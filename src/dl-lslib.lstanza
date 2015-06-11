@@ -1,0 +1,18 @@
+externfn hw_open : (ptr<byte>) -> ptr<?>
+defn hw-open-lo (filename:ref<String>) -> ref<Ptr> :
+  val handle = callc(hw_open, filename.chars)
+  if handle == null :
+    callc(printf, "Could not open hw file %s.\n", filename.chars)
+    exit_stanza(-1)
+  return ref<Ptr>(handle)
+
+externfn hw_eval : (ptr<?>, ptr<byte>) -> ptr<byte>
+defn hw-eval-lo (handle:ref<Ptr>, cmd:ref<String>) -> ref<String> :
+  val response = callc(hw_eval, handle.value, cmd.chars)
+  val len = callc(strlen, response)
+  return literal_string(len, response)
+
+externfn hw_close : (ptr<?>) -> ref<False>
+defn hw-close-lo (handle:ref<Ptr>) -> ref<False> :
+  callc(hw_close, handle.value)
+  return ref<False>()
