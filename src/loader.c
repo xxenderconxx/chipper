@@ -25,13 +25,13 @@ void test_dl_error(char* msg) {
 
 void* load_sym (void* handle, char* name) {
   void* sym = dlsym(handle, name);
-  fprintf(stderr, "HW_OPEN: LOADING SYMBOL %s HANDLE %p\n", name, sym);
+  // fprintf(stderr, "HW_OPEN: LOADING SYMBOL %s HANDLE %p\n", name, sym);
   return sym;
 }
 
 void* hw_open(const char* name) {
   void* handle = dlopen(name, RTLD_LAZY);
-  fprintf(stderr, "HW_OPEN: LOADING %s -> HANDLE %p\n", name, handle);
+  // fprintf(stderr, "HW_OPEN: LOADING %s -> HANDLE %p\n", name, handle);
   if (!handle) {
     fprintf(stderr, "Cannot load library: %s\n", dlerror());
     exit(-1);

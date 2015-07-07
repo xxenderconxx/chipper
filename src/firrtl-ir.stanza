@@ -66,8 +66,8 @@ public val LOG-OP = new PrimOp
 public definterface Expression
 public defmulti type (e:Expression) -> Type
 
-public defstruct None <: Expression
-defmethod type (e:None) -> Type : UnknownType()
+public defstruct NoExp <: Expression
+defmethod type (e:NoExp) -> Type : UnknownType()
 
 public defstruct Ref <: Expression :
    name: Symbol

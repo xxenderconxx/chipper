@@ -1,8 +1,6 @@
-#include("src/firrtl-ir.stanza")
-#include("src/ir-utils.stanza")
-#include("src/chipper.stanza")
-#include("src/utils.stanza")
+#include("src/use-chipper.stanza")
 #include("src/stdlib.stanza")
+
 #use-syntax(core, chipper)
 
 defpackage module-vec :
@@ -37,7 +35,7 @@ defmodule ModuleVec (n: Int) :
     outs[i]         := pluses[i].out 
 
 defn main () :
-   circuit c of ModuleVec(4)
+   circuit c : ModuleVec(4)
    println(c)
 
 main()

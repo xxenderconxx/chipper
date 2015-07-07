@@ -1,6 +1,5 @@
-#include("src/firrtl-ir.stanza")
-#include("src/ir-utils.stanza")
-#include("src/chipper.stanza")
+#include("src/use-chipper.stanza")
+#include("src/stdlib.stanza")
 
 #use-syntax(core, chipper)
 
@@ -8,12 +7,13 @@ defpackage Filters :
    import core
    import verse
    import chipper
+   import stdlib
 
-defbundle Valid<T <: Data> () :
+defbundle Valid<T & Data> () :
   data : T
   valid : UInt<1>
 
-defbundle FilterIO<T <: Data> () :
+defbundle FilterIO<T & Data> () :
   flip in : Valid<T>
   out : Valid<T>
 
@@ -41,16 +41,28 @@ defbundle FilterIO<T <: Data> () :
 ;; ;; defmethod field#valid (f:FunctionFilter) :
 ;; ;;   f.io.valid
 
-defmodule FunctionFilter<T <: Bits> (f: T&Bits -> T&Bits) :
-  output io : FilterIO<T>
+defn wire-filter<?T> (io:FilterIO<?T>, f: T -> T) :
   io.out.valid := io.in.valid
   io.out.data  := f(io.in.data)
 
+defmodule FunctionFilter<T & Bits> (f: T&Bits -> T&Bits) :
+  output io : FilterIO<T>
+  wire-filter(io, f)
+
+defmodule FunctionFilter<T & Bits> (f: T&Bits -> T&Bits) :
+  output io : FilterIO<T>
+  wire-filter(io, f)
+
+;; defmodule FunctionFilter<T & Bits> (f: T&Bits -> T&Bits) :
+;;   output io : FilterIO<T>
+;;   io.out.valid := io.in.valid
+;;   io.out.data  := f(io.in.data)
+
 defn min<?T> (x:?T&Bits, y:?T&Bits) -> T :
-  Mux(x < y, x, y)
+  mux(x < y, x, y)
 
 defn max<?T> (x:?T&Bits, y:?T&Bits) -> T :
-  Mux(x < y, y, x)
+  mux(x < y, y, x)
 
 defn ClippingFilter<?T> (dtype:?T&Bits, limit: T&Bits) :
   instof FunctionFilter<#{dtype}>(min{limit, max(neg(limit), _)})
@@ -58,8 +70,10 @@ defn ClippingFilter<?T> (dtype:?T&Bits, limit: T&Bits) :
 defn ShiftingFilter<?T> (dtype:?T&Bits, shift: Int) :
   instof FunctionFilter<#{dtype}>({_ >> shift})
 
-defmodule ShiftingClippingFilter<T <: Bits> (limit: T&Bits, shift: Int) :
+defmodule ShiftingClippingFilter<T & Bits> (limit: T&Bits, shift: Int) :
   output io : FilterIO<T>
+  ;; val sf = ShiftingFilter(T, shift)
+  ;; val cf = ClippingFilter(T, limit)
   val sf = ShiftingFilter(T, shift)
   val cf = ClippingFilter(T, limit)
   sf.io.in := io.in
@@ -68,10 +82,10 @@ defmodule ShiftingClippingFilter<T <: Bits> (limit: T&Bits, shift: Int) :
 
 defn main () :
    ;; max(UInt(0), UInt(1))
-   ;; circuit c of ShiftingFilter<UInt<32>>(2))
-   ;; circuit c of ShiftingFilter(#{UInt<32>}, 2)
-   ;; circuit c of ClippingFilter(#{UInt<32>}, UInt(2))
-   circuit c of ShiftingClippingFilter<UInt<32>>(UInt(2), 2)
+   ;; circuit c : ShiftingFilter<UInt<32>>(2))
+   ;; circuit c : ShiftingFilter(#{UInt<32>}, 2)
+   ;; circuit c : ClippingFilter(#{UInt<32>}, UInt(2))
+   circuit c : ShiftingClippingFilter<UInt<32>>(UInt(2), 2)
    println(c)
    
 main()

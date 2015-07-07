@@ -1,5 +1,6 @@
 #!/bin/bash
 shift 1
 for file in "$@"; do
-    bin/fir2flo.sh $file
+    echo FLOING $file
+    bin/fir2flo.sh $file >& $file.flo-out
 done

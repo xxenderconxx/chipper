@@ -1,5 +1,6 @@
 #!/bin/bash
 shift 1
 for file in "$@"; do
-    bin/flo2app.sh $file
+    echo APPING "$file"
+    bin/flo2app.sh $file >& $file.app-out
 done

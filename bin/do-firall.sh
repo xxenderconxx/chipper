@@ -1,6 +1,6 @@
 #!/bin/bash
 shift 1
 for file in "$@"; do
-    bin/chipper.sh $file
-    generated/$file > generated/$file.fir
+    echo "CHIPPERING" $file
+    bin/to-fir.sh $file
 done

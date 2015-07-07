@@ -1,7 +1,4 @@
-#include("src/firrtl-ir.stanza")
-#include("src/ir-utils.stanza")
-#include("src/utils.stanza")
-#include("src/chipper.stanza")
+#include("src/use-chipper.stanza")
 #include("src/stdlib.stanza")
 
 #use-syntax(core, chipper)
@@ -46,7 +43,7 @@ defmodule UIntOps :
   greateqout := a >= b
 
 defn main () :
-   circuit c of UIntOps()
+   circuit c : UIntOps()
    println(c)
 
 main()

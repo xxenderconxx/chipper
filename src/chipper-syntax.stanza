@@ -63,10 +63,19 @@ defstruct CircuitStmt : (name, module:Type)
 defstruct WhenStmt : (pred, conseq, alt)
 defstruct ConnectStmt : (x, y)
 defstruct OnResetStmt : (x, y)
+defstruct WithTesterStmt : (tester, instance, module, body:List)
+defstruct RepArg : (binding, init)
+defstruct RepStmt : (name, args, type, body:List)
 ;============================================================
 
 ;============ DEBUG: PRINTING ===============================
 defn commas (xs) : join(xs, ", ")
+
+defmethod print (o:OutputStream, s:RepArg) :
+   print(o, "RepArg(~ = ~)" << [binding(s), init(s)])
+
+defmethod print (o:OutputStream, s:RepStmt) :
+   print(o, "RepStmt(~ ~ -> ~ : ~)" << [name(s), args(s), type(s), body(s)])
 
 defmethod print (o:OutputStream, t:TArg) :
    print(o, "~~ <: ~" << [
@@ -165,6 +174,8 @@ defn name? (x) :
             val var fn label for)
       (x) : false
 
+val BAD-ARGLIST-MSG = "Incorrect syntax for argument list. Did you forget to put a space between the function name and the argument list?"
+
 defsyntax chipper :
    ;Holds the current type parameters in scope
    var TYPE-PARAMETERS:List<TArg> = List()
@@ -175,6 +186,28 @@ defsyntax chipper :
       for v in TYPE-PARAMETERS any? :
          unwrap-token(name(v)) == x*
 
+   ;Rep Argument Lists
+   defrule Rep :
+      repargbinding = (?x:#argbinding = ?e:#exp!) : RepArg(x, e)
+      
+      reparglist != ((@do _ ...)) :
+         CPE(form, BAD-ARGLIST-MSG)
+      reparglist = ((?xs:#repargbinding ... ?rest ...)) :
+         if empty?(rest) : xs
+         else : CPE(rest, "Expected an argument declaration here.")
+      
+      repheader = (?args:#reparglist -> ?a2:#type!) :
+         [args, type]
+      repheader = (?args:#reparglist) :
+         [args, false]
+
+      repheader! = (?h:#repheader) : h
+      repheader! != () : CPE(form, "Expected argument list here.")
+
+      prefix-op = (rep ?name:#id! ?header:#repheader! #:! ?body:#exp!) :
+        val [args, type] = header
+        compile(RepStmt(name, args, type, body))
+      
    ;Chipper Error Handling
    defrule :
       ch/type! = (?t:#ch/type) : t
@@ -299,14 +332,14 @@ defsyntax chipper :
 
    ;Instance Statement
    defrule :
-      prefix-op = (inst ?name:#id! of ?module:#ch/type!) :
+      prefix-op = (inst ?name:#id! #:! ?module:#ch/type!) :
          compile(InstanceStmt(name, module))
       prefix-op = (instof ?module:#ch/type!) :
          compile(InstanceExp(module))
 
    ;Circuit Statement
    defrule :
-      prefix-op = (circuit ?name:#id! of ?module:#ch/type!) :
+      prefix-op = (circuit ?name:#id! #:! ?module:#ch/type!) :
          compile(CircuitStmt(name, module))
 
    ;When Statement
@@ -319,6 +352,12 @@ defsyntax chipper :
          compile(WhenStmt(pred, conseq, false))
       prefix-op = (?e:#when-exp) :
          e         
+
+   ;with-tester [t, c] = Module(args ...) : body
+   defrule with-tester :
+      prefix-op = (with-tester [?t:#id! ?c:#id!] = ?m:#ch/type #:!
+                    ?stmts:#exps!) :
+         compile(WithTesterStmt(t, c, m, stmts))
 
    ;Connect Statement
    defrule :
@@ -335,7 +374,7 @@ defsyntax chipper :
 
    ;Not expression
    defrule :
-      prefix-op = (~ ! ?e:#exp!) :
+      prefix-op = (~ ! ?e:#term!) :
          expande $ qquote(chipper/bit-not(~ e))
 
    ;Bit Comparison Operator
@@ -606,8 +645,8 @@ defn compile (b:DefModule) :
          `inherit => choice(inherit(p))
          `type => type(p)
          `exp => exp(p)]])
-   println("=== Expanding Module ===")
-   println(r)
+   ;; println("=== Expanding Module ===")
+   ;; println(r)
    expande(r)
 ;============================================================
 
@@ -638,6 +677,55 @@ defn compile (s:RegisterExp) :
       chipper/RegisterExp(`reg, type))
    expande $ fill-template(template, [
       `type => compile-to-type-exp(type(s))])
+;============================================================
+
+;================= WITH-TESTER COMPILATION =========================
+defn compile (s:WithTesterStmt) :
+   val template = `((
+      val instance = chipper/InstanceExp(`instance, module)
+      ;; inst instance : module (args)
+      defn do-tester (tester) -> True|False :
+        body
+      run(Tester(to-string(`module-name)), do-tester) ))
+   defn module-name (type) :
+     match(type) :
+       (n:NamedT) : name(n)
+       (o) : CPE(type, "Type ~ does not have a name." % [type])
+   val r = expande $ fill-template(template, [
+      `do-tester => gensym(`do-tester)
+      `instance => instance(s)
+      `module => compile-to-type-exp(module(s))
+      `module-name => module-name(module(s))
+      `tester => tester(s)
+      `body => body(s)
+      ])
+   ;; println(r)
+   r
+
+;============================================================
+
+;================= REP COMPILATION =========================
+defn compile (s:RepStmt) :
+   println("COMPILING REP STMT")
+   println(s)
+   val template = `((
+      defn* name (params{ pname ptype?{ : ptype }{ } }) type?{ -> type }{ } :
+        body
+      name(inits)))
+   val r = expande $ fill-template(template, [
+      `name => name(s)
+      `type? => choice(type(s) != false)
+      `type => type(s)
+      `body => body(s)
+      `params => nested $ for p in map(binding, args(s)) stream : [
+        `pname  => key(p)
+        `ptype? => choice(value(p) != false)
+        `ptype  => value(p)]
+      `inits => splice(map(init, args(s)))
+      ])
+   println(r)
+   r
+
 ;============================================================
 
 ;================= WIRE COMPILATION =========================

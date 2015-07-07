@@ -1,0 +1,38 @@
+#include("src/use-chipper.stanza")
+
+#use-syntax(core, chipper)
+
+defpackage counter :
+   import core
+   import verse
+   import chipper
+
+defbundle Adder :
+  flip in: UInt<32>
+  out : UInt<32>
+
+defmodule AddOne <: Adder ()  :
+  inherit input  in:  UInt<32>
+  inherit output out: UInt<32>
+  out := in + UInt(1)
+
+defmodule AddTwo <: Adder ()  :
+  inherit input  in:  UInt<32>
+  inherit output out: UInt<32>
+  out := in + UInt(2)
+
+defmodule FnAdder <: Adder (f:() -> Adder) :
+  inherit input  in:  UInt<32>
+  inherit output out: UInt<32>
+  val adder : Adder = f()
+  adder.in := in
+  out := adder.out
+
+defn main () :
+  ;; val a = "One"
+  ;; val x = if a == "One": instof AddOne else: instof AddTwo
+  ;; circuit c : FnAdder({ x })
+  circuit c : FnAdder(fn () : instof AddOne)
+  println(c)
+   
+main()

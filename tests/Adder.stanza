@@ -1,6 +1,5 @@
-#include("src/firrtl-ir.stanza")
-#include("src/ir-utils.stanza")
-#include("src/chipper.stanza")
+#include("src/use-chipper.stanza")
+#include("src/use-tester.stanza")
 
 #use-syntax(core, chipper)
 
@@ -29,7 +28,7 @@ defmodule Adder (n:Int) :
    wire carry: UInt<1>[n + 1]
    wire sums: UInt<1>[n]
    for i in 0 to n do :
-      inst fa of FullAdder
+      inst fa : FullAdder
       fa.a := a[i]
       fa.b := b[i]
       fa.cin := carry[i]
@@ -40,7 +39,7 @@ defmodule Adder (n:Int) :
    cout := carry[n]
    
 defn main () :
-   circuit c of Adder(10)
+   circuit c : Adder(10)
    println(c)
 
 main()

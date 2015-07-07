@@ -1,0 +1,12 @@
+
+
+defn sint-delays (x: SInt, n: Int): List<T> :
+  if n <= 1 : list(x) else List(x, sint-delays(reg-next(x), n - 1))
+
+defn SIntFIR<T> (ws: Streamable<SInt>&Lengthable, x: T): T = 
+  reduce(+, stream(*, ws, sint-delays(x, length(ws))))
+
+defmodule SIntFIRTst :
+  input x : SInt
+  output z : SInt
+  z := SIntFIR([SInt(0.25), SInt(0.75)], x)

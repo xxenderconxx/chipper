@@ -1,6 +1,4 @@
-#include("src/firrtl-ir.stanza")
-#include("src/ir-utils.stanza")
-#include("src/chipper.stanza")
+#include("src/base-chipper.stanza")
 
 #use-syntax(core, chipper)
 

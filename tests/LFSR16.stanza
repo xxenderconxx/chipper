@@ -1,6 +1,4 @@
-#include("src/firrtl-ir.stanza")
-#include("src/ir-utils.stanza")
-#include("src/chipper.stanza")
+#include("src/use-chipper.stanza")
 
 #use-syntax(core, chipper)
 
@@ -20,7 +18,7 @@ defmodule LFSR16 :
   out := res
 
 defn main () :
-   circuit c of LFSR16()
+   circuit c : LFSR16()
    println(c)
 
 main()

@@ -1,6 +1,4 @@
-#include("src/firrtl-ir.stanza")
-#include("src/ir-utils.stanza")
-#include("src/chipper.stanza")
+#include("src/use-chipper.stanza")
 
 #use-syntax(core, chipper)
 
@@ -25,7 +23,7 @@ defmodule SimpleALU :
       output := b      
    
 defn main () :
-   circuit c of SimpleALU
+   circuit c : SimpleALU
    println(c)
 
 main()

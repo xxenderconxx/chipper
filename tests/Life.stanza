@@ -1,6 +1,5 @@
-#include("src/firrtl-ir.stanza")
-#include("src/ir-utils.stanza")
-#include("src/chipper.stanza")
+#include("src/use-chipper.stanza")
+
 #use-syntax(core, chipper)
 
 defpackage life :
@@ -49,7 +48,7 @@ defmodule Life (n:Int) :
       
    val cells = to-array $
       for i in 0 to n * n stream :
-         inst c of Cell(rand(2) == 0)
+         inst c : Cell(rand(2) == 0)
          c
 
    for j in 0 to n do :
@@ -60,7 +59,7 @@ defmodule Life (n:Int) :
             cells[k].nbrs[ni] := cells[nk].out         
 
 defn main () :
-   circuit c of Life(5)
+   circuit c : Life(5)
    println(c)
    
 main()

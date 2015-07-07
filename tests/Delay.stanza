@@ -1,0 +1,35 @@
+#include("src/use-chipper.stanza")
+#include("src/use-tester.stanza")
+
+#use-syntax(core, chipper)
+
+defpackage delay :
+   import core
+   import verse
+   import chipper
+   import tester
+
+defmodule Delay :
+  input in:  UInt<32>
+  output out: UInt<32>
+
+  reg r := in
+  out := r
+
+defn delay-tests () :
+  with-tester [t, c] = Delay() :
+    var pin = 0
+    for i in 0 to 16 all? :
+      val in = rand(1 << 30)
+      poke(t, c.in, in)
+      step(t)
+      expect(t, c.out, in)
+
+defn main (args) :
+   if length(args) > 1 and args[1] == "--testing" :
+     delay-tests()
+   else :
+     circuit c : Delay
+     println(c)
+   
+main(commandline-arguments())

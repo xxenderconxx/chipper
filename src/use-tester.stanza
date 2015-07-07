@@ -1,0 +1,3 @@
+#include("src/tester.stanza")
+#include("src/dl-lslib.lstanza")
+#link("src/loader.c")

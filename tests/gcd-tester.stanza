@@ -1,32 +1,72 @@
-#include("src/firrtl-ir.stanza")
-#include("src/ir-utils.stanza")
-#include("src/chipper.stanza")
-#include("src/tester.stanza")
+#include("src/use-chipper.stanza")
+#include("src/use-tester.stanza")
+
+#use-syntax(core, chipper)
 
 defpackage gcd :
   import core
   import verse
   import tester
+  import chipper
+
+defmodule GCD :
+   input a: UInt<16>
+   input b: UInt<16>
+   input e: UInt<1>
+   output z: UInt<16>
+   output v: UInt<1>
+
+   reg x: UInt<16>
+   reg y: UInt<16>
+   when x > y :
+      x := x - y
+   else :
+      y := y - x
+   when e :
+      x := a
+      y := b
+   z := x
+   v := y === UInt(0)
 
 defn gcd-tests () :
-  val t = Tester("GCD")
-  val [a, b, c] = [64, 48, 16]
-  defn* loop () -> True|False :
-    val first = 1 when (cycles(t) == 0) else 0
-    poke(t, "GCD.a", a)
-    poke(t, "GCD.b", b)
-    poke(t, "GCD.e", first)
+  inst c : GCD
+  val [a, b, z] = [64, 48, 16]
+  defn* loop (t) -> True|False :
+    val first = if cycles(t) == 0: 1 else: 0
+    poke(t, c.a, a)
+    poke(t, c.b, b)
+    poke(t, c.e, first)
     step(t)
     if cycles(t) > 100 :
       println-all(["FAILURE "])
       false
-    else if cycles(t) <= 1 or peek(t, "GCD.v") == 0 :
-      loop()
+    else if cycles(t) <= 1 or peek(t, c.v) == 0 :
+      loop(t)
     else :
-      val res = expect(t, "GCD.z", c)
+      val res = expect(t, c.z, z)
       println-all(["SUCCESS " res])
       res 
-  run(t, loop)
+  run(Tester("GCD"), loop)
   println-all(["DONE"])
+
+;; defn gcd-tests () :
+;;   val [a, b, c] = [64, 48, 16]
+;;   defn* loop (t) -> True|False :
+;;     val first = 1 when (cycles(t) == 0) else 0
+;;     poke(t, "GCD.a", a)
+;;     poke(t, "GCD.b", b)
+;;     poke(t, "GCD.e", first)
+;;     step(t)
+;;     if cycles(t) > 100 :
+;;       println-all(["FAILURE "])
+;;       false
+;;     else if cycles(t) <= 1 or peek(t, "GCD.v") == 0 :
+;;       loop(t)
+;;     else :
+;;       val res = expect(t, "GCD.z", c)
+;;       println-all(["SUCCESS " res])
+;;       res 
+;;   run(Tester("GCD"), loop)
+;;   println-all(["DONE"])
 
 gcd-tests()

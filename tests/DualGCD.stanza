@@ -1,6 +1,5 @@
-#include("src/firrtl-ir.stanza")
-#include("src/ir-utils.stanza")
-#include("src/chipper.stanza")
+#include("src/use-chipper.stanza")
+
 #use-syntax(core, chipper)
 
 defpackage dualgcd :
@@ -31,7 +30,7 @@ defmodule GCD<T> :
    v := y === UInt(0)
 
 defn main () :
-   circuit c of GCD<UInt<16>>
+   circuit c : GCD<UInt<16>>
    println(c)
    
 main()

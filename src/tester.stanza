@@ -10,6 +10,8 @@
 defpackage tester :
   import core
   import verse
+  import chipper
+  import firrtl/ir
 
 defn hw-open (filename:String) -> ? :
   ($do-prim ls hw-open-lo filename)
@@ -22,6 +24,7 @@ defn hw-close (handle) -> ? :
   
 public defclass Tester
 defmulti cmd (this, args:Streamable) -> String
+public defmulti dut (t:Tester) -> String
 public defmulti peek (t:Tester, name: String) -> Int
 public defmulti peek (t:Tester, name: String, index: Int) -> Int
 public defmulti poke (t:Tester, name: String, value: Int) -> False
@@ -29,7 +32,7 @@ public defmulti poke (t:Tester, name: String, index: Int, value: Int) -> False
 public defmulti step (t:Tester) -> False
 public defmulti reset (t:Tester) -> False
 public defmulti expect (t:Tester, name: String, value: Int) -> True|False
-public defmulti run (t:Tester, f: () -> True|False) -> True|False
+public defmulti run (t:Tester, f: (Tester) -> True|False) -> True|False
 public defmulti cycles (t:Tester) -> Int
 
 val hex-tbl = Array<Int>(256)
@@ -53,6 +56,7 @@ public defn Tester (dut: String) -> Tester :
       res = 16 * res + hex-tbl[to-int(s[i])]
     res
   new Tester :
+    defmethod dut (this) -> String : dut
     defmethod cmd (this, args:Streamable) -> String :
       hw-eval(handle, string-join(args))
     defmethod poke (this, name: String, value: Int) :
@@ -81,15 +85,44 @@ public defn Tester (dut: String) -> Tester :
       val got = peek(this, name)
       println-all(["EXPECT " name " VALUE " value " -> " got])
       got == value
-    defmethod run (this, f:() -> True|False) -> True|False :
+    defmethod run (this, f:(Tester) -> True|False) -> True|False :
       reset(this)
-      val res = f()
+      val res = f(this)
       hw-close(handle)
-      println-all(["DISCONNECTED "])
+      println-all(["SUCCESS" when res else "FAILURE"])
       res
     defmethod cycles (this) -> Int :
       cycles
 
+public defn debug-name (top:String, e:Data) :
+  debug-name(top, firrtl-exp(e))
+
+public defn debug-name (top:String, e:Expression) :
+  match(e) :
+    (r:Ref) : top
+    (e:Subfield) : "~.~" << [debug-name(top, exp(e)), name(e)]
+    (e:Index) : "~_~" << [debug-name(top, exp(e)), value(e)]
+
+public defn poke (t:Tester, e:Data, i:Int, v:Int) :
+  poke(t, to-string(debug-name(dut(t), e)), i, v)
+
+public defn peek (t:Tester, e:Data, i:Int) :
+  peek(t, to-string(debug-name(dut(t), e)), i)
+
+public defn poke (t:Tester, e:Data, v:Int) :
+  poke(t, to-string(debug-name(dut(t), e)), v)
+
+public defn peek (t:Tester, e:Data) :
+  peek(t, to-string(debug-name(dut(t), e)))
+  
+public defn expect (t:Tester, e:Data, v:Int) :
+  expect(t, to-string(debug-name(dut(t), e)), v)
+  
+public defn expect (isGood:True|False, args:Streamable) :
+  if not isGood :
+    println-all(args)
+  isGood
+  
 ;; defn parse-args (str:String) :
 ;;    val args = to-stream(unwrap-all(lex(str)))
 ;;    val arg  = next(args)

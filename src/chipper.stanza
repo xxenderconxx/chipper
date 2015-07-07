@@ -295,6 +295,7 @@ public defn shift-right (x:UInt, y:Int) -> UInt : unaop-node(UInt(), fSHIFT-RIGH
 public defn shift-left (x:UInt, y:UInt) -> UInt : binop-node(UInt(), fDYN-SHIFT-LEFT-OP, x, y)
 public defn shift-right (x:UInt, y:UInt) -> UInt : binop-node(UInt(), fDYN-SHIFT-RIGHT-OP, x, y)
 
+public defn complement (x:UInt) -> UInt : bit-not(x)
 public defn bit-not (x:UInt) -> UInt : unaop-node(UInt(), fBIT-NOT-OP, x, list())
 public defn get (x:UInt, i:Int) -> UInt : unaop-node(UInt(), fBIT-SELECT-OP, x, i)
 public defn get (x:UInt, i:Int, j:Int) -> UInt : unaop-node(UInt(), fBITS-SELECT-OP, x, list(i, j))
@@ -345,9 +346,11 @@ defn to-lower (c: Char) -> Char :
 defn to-lit-val (x: String) -> Int :
   if x[0] == '0' and x[1] == 'x' :
     to-lit-val(substring(x, 2), 16)
-  else : if x[0] == 'x' :
+  else if x[0] == 'x' or x[0] == 'h' :
     to-lit-val(substring(x, 1), 16)
-  else : if x[0] == 'b' :
+  else if x[0] == 'o' :
+    to-lit-val(substring(x, 1), 8)
+  else if x[0] == 'b' :
     to-lit-val(substring(x, 1), 2)
   else : 
     error(string-join(["Unknown lit base " x]))

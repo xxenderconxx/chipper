@@ -179,12 +179,11 @@ public defn reverse (in: UInt, length: Int) -> UInt :
 public defn reverse (in: UInt) -> UInt : reverse(in, width(in))
 
 public defn reg-next<?T> (in: ?T & Data) -> T :
-  val r = Reg(in)
-  r := in
+  reg r := in
   r
 
 public defn reg-enable<?T> (in: ?T & Data, en: UInt) -> T :
-  val r = Reg(in)
+  reg r : typeof(in)
   when en : r := in
   r
 
@@ -195,7 +194,7 @@ public defn shift-register<?T> (in: ?T & Data, n: Int, en: UInt) -> T :
   if n == 1 :
     reg-enable(in, en)
   else : if n != 0 :
-    Reg(shift-register(in, n - 1, en))
+    reg-next(shift-register(in, n - 1, en))
   else :
     in
 

@@ -1,0 +1,27 @@
+#include("src/base-chipper.stanza")
+#include("src/stdlib.stanza")
+
+#use-syntax(core, chipper)
+
+defpackage sint-fir :
+   import core
+   import verse
+   import chipper
+   import stdlib
+
+defn sint-delays (x: SInt, n: Int) -> List<SInt> :
+  if n <= 1 : list(x) else: List(x, sint-delays(reg-next(x), n - 1))
+
+defn doSIntFIR (ws: Streamable<SInt>&Lengthable, x: SInt) -> SInt :
+  reduce(plus, stream(times, ws, sint-delays(x, length(ws))))
+
+defmodule SIntFIR :
+  input  x : SInt<8>
+  output z : SInt<8>
+  z := doSIntFIR([SInt(64), SInt(196)], x)
+
+defn main () :
+  circuit c : SIntFIR
+  println(c)
+   
+main()
