@@ -4,5 +4,5 @@
 # chipperc -platform os-x -path ~/bar/stanza -install chipper
 
 stanza -e src/chipper-syntax.stanza -s chipperc.s -flags OPTIMIZE
-gcc -o chipperc chipperc.s /Users/jrb/bar/stanza/runtime/runtime.c /Users/jrb/bar/stanza/runtime/main.c src/loader.c
+gcc -o chipperc chipperc.s `stanza -exe-paths` src/loader.c
 chipperc -platform os-x -path ~/bar/stanza -install chipper

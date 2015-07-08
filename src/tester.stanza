@@ -45,8 +45,25 @@ defn init-hex-tbl () :
       hex-tbl[i + to-int('a')] = i + 10
     hex-tbl-init? = true
 
-public defn Tester (dut: String) -> Tester :
-  val so     = string-join(["generated/lib" dut ".so"])
+var tester-path = "generated"
+
+public defn set-tester-path (path:String) :
+  tester-path = path
+
+defn exe-path () :
+  val exe = commandline-arguments()[0]
+  defn* loop (i) :
+    if i == 0 :
+      exe
+    else if exe[i] == '/' :
+      substring(exe, 0, i)
+    else :
+      loop(i - 1)
+  loop(length(exe) - 1)
+  
+public defn Tester (dut:String) -> Tester :
+  val path   = exe-path()
+  val so     = string-join([exe-path() "/lib" dut ".so"])
   val handle = hw-open(so)
   var cycles: Int = 0
   defn to-hex-int (s:String) -> Int :
@@ -101,7 +118,7 @@ public defn debug-name (top:String, e:Expression) :
   match(e) :
     (r:Ref) : top
     (e:Subfield) : "~.~" << [debug-name(top, exp(e)), name(e)]
-    (e:Index) : "~_~" << [debug-name(top, exp(e)), value(e)]
+    (e:Index) : "~.~" << [debug-name(top, exp(e)), value(e)]
 
 public defn poke (t:Tester, e:Data, i:Int, v:Int) :
   poke(t, to-string(debug-name(dut(t), e)), i, v)

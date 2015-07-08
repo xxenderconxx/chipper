@@ -699,7 +699,7 @@ defn compile (s:WithTesterStmt) :
       `tester => tester(s)
       `body => body(s)
       ])
-   ;; println(r)
+   println(r)
    r
 
 ;============================================================
