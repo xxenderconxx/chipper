@@ -110,10 +110,10 @@ public defn priority-mux<?T> (sel: Streamable<UInt>, in: Streamable<?T & Bits>) 
 public defn priority-mux<?T> (sel: UInt, in: Streamable<?T & Bits>) -> T :
   priority-mux(to-bools(sel), in)
 
-;; public defn mux-lookup<?S,?T> (k: ?S & Bits, default: ?T & Data, mapping: Streamable<KeyValue<?S & (Bits|MInt), ?T&Data>>) -> T :
+;; public defn mux-lookup<?S,?T> (k: ?S & Bits, default: ?T & Data, mapping: Streamable<KeyValue<?S & (Bits|BitPat), ?T&Data>>) -> T :
 ;;    mux-case(default, stream(fn (kv): KeyValue(key(kv) === k, value(kv)), mapping))
 
-public defn mux-lookup<?T> (k: UInt, default: ?T & Data, mapping: Streamable<KeyValue<MInt, ?T&Data>>) -> T :
+public defn mux-lookup<?T> (k: UInt, default: ?T & Data, mapping: Streamable<KeyValue<BitPat, ?T&Data>>) -> T :
    mux-case(default, stream(fn (kv): KeyValue(key(kv) === k, value(kv)), mapping))
 
 public defn mux-lookup<?T> (k: UInt, default: ?T & Data, mapping: Streamable<KeyValue<UInt, ?T&Data>>) -> T :
@@ -150,15 +150,15 @@ public defmethod fill (n: Int, y: UInt) -> UInt :
     error("Fill requires nonnegative integer")
   ;;    case _ => throw new IllegalArgumentException(s"n (=$n) must be nonnegative integer.")
 
-public defn list-lookup<?T> (addr: UInt, _default: Streamable<?T&Data>, _mapping: Streamable<KeyValue<MInt, Streamable<?T&Data>>>) -> List<T> :
+public defn list-lookup<?T> (addr: UInt, _default: Streamable<?T&Data>, _mapping: Streamable<KeyValue<BitPat, Streamable<?T&Data>>>) -> List<T> :
   val default = to-list(_default)
   val mapping = to-list(_mapping)
   val [keys, _values] = unzip(mapping)
   val values = map(to-list, _values)
-  val matches = map(fn (key:MInt) : key === addr, keys)
+  val matches = map(fn (key:BitPat) : key === addr, keys)
   to-list(stream(fn (i:Int): mux-case(default[i], stream(KeyValue{_,_[i]}, matches, values)), 0 to length(default)))
 
-public defn lookup<?T> (addr: UInt, default: ?T & Data, mapping: Streamable<KeyValue<MInt, ?T & Data>>) -> T :
+public defn lookup<?T> (addr: UInt, default: ?T & Data, mapping: Streamable<KeyValue<BitPat, ?T & Data>>) -> T :
   head(list-lookup(addr, list(default), stream(fn (m): KeyValue(key(m), list(value(m))), mapping)))
 
 ;; Litte/big bit endian convertion: reverse the order of the bits in a UInt.
