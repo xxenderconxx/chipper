@@ -374,7 +374,7 @@ defsyntax chipper :
 
    ;Not expression
    defrule :
-      prefix-op = (~ ! ?e:#term!) :
+      prefix-op = (~ ! ?e:#term) :
          expande $ qquote(chipper/bit-not(~ e))
 
    ;Bit Comparison Operator
