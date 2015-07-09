@@ -1,9 +1,17 @@
 #!/bin/bash -f
 
-# stanza -e src/chipper-syntax.stanza -o chipperc -flags OPTIMIZE
-# chipperc -platform os-x -path ~/bar/stanza -install chipper
+if [ `uname` == "Linux" ] ; then
+  flags="-lm -ldl"
+  platform="linux"
+elif [ `uname` == "Darwin" ] ; then
+  flags=""
+  platform="os-x"
+else 
+  flags=""
+  platform="unknown"
+fi
 
 stanza -e src/chipper-syntax.stanza -s chipperc.s -flags OPTIMIZE
-gcc -o chipperc chipperc.s `stanza -exepaths` src/loader.c
-chipperc -platform os-x -path `stanza -stanzadir` -install chipper
+gcc -o chipperc chipperc.s `stanza -exepaths` src/loader.c $flags
+chipperc -platform $platform -path `stanza -stanzadir` -install bin/chipper
 

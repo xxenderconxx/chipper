@@ -48,6 +48,7 @@ void* hw_open(const char* name) {
   hw->open  = open_hw;
   hw->eval  = eval_hw;
   hw->close = close_hw;
+  // fprintf(stderr, "HW = %p\n", hw);
   return hw;
 }
 
@@ -56,8 +57,10 @@ const char* hw_eval (void* hw, const char* cmd) {
 }
 
 void hw_close (void* hw) {
+  // fprintf(stderr, "HW_CLOSE: HW %p HANDLE %p\n", hw, ((hw_t*)hw)->handle);
   ((hw_t*)hw)->close();
-  dlclose(((hw_t*)hw)->handle);
+  if (((hw_t*)hw)->handle != NULL)
+    dlclose(((hw_t*)hw)->handle);
   free(hw);
 }
 
