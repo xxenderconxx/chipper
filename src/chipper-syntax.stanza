@@ -699,15 +699,15 @@ defn compile (s:WithTesterStmt) :
       `tester => tester(s)
       `body => body(s)
       ])
-   println(r)
+   ;; println(r)
    r
 
 ;============================================================
 
 ;================= REP COMPILATION =========================
 defn compile (s:RepStmt) :
-   println("COMPILING REP STMT")
-   println(s)
+   ;; println("COMPILING REP STMT")
+   ;; println(s)
    val template = `((
       defn* name (params{ pname ptype?{ : ptype }{ } }) type?{ -> type }{ } :
         body
@@ -723,7 +723,7 @@ defn compile (s:RepStmt) :
         `ptype  => value(p)]
       `inits => splice(map(init, args(s)))
       ])
-   println(r)
+   ;; println(r)
    r
 
 ;============================================================

@@ -140,6 +140,9 @@ public defn expect (isGood:True|False, args:Streamable) :
     println-all(args)
   isGood
   
+public defn int (x:True|False) -> Int :
+  if x: 1 else: 0
+
 ;; defn parse-args (str:String) :
 ;;    val args = to-stream(unwrap-all(lex(str)))
 ;;    val arg  = next(args)
