@@ -484,25 +484,29 @@ defn compile (b:DefBundle) :
          inherit{}{defmulti field#T<targs{?T}> (a:A<targs{?T}>) -> chipper/Type<T&bound>}
       }
       fields{
-         inherit{}{defmulti field#name<targs{?T}> (a:A<targs{?T}>) -> type}
+         inherit{}{defmulti field#name<targs{?T}> (a:A<targs{?T}>) -> type} ;; &bound
       }
       defclass AClass<targs{T}> <: A<targs{T}>
       defn AHandle<targs{T}> (targs{T:chipper/Type<T&bound>}, fields{ft:chipper/Type<type>}, e:firrtl/ir/Expression) :
-         new AClass<targs{T}> :
+         new AClass<targs{T}> : ;; &bound
             defmethod chipper/firrtl-exp (this) : e
             defmethod chipper/type (this) :
                AType<targs{T}>(targs{T}, fields{ft}) as chipper/Type<AClass<targs{T}>>
+
             targs{
                defmethod field#T (this) : T}
             fields{
                defmethod field#name (this) :
                   val e = firrtl/ir/Subfield(e, `name, firrtl/ir/UnknownType())
-                  chipper/handle(ft, e)}
+                  chipper/handle(ft, e)} ;; as type ????
+
+      defmethod chipper/flatten (b:AClass) :
+        concat-all([ fields{flatten(field#name(b))} ])
 
       ;Type Class Definition
       defclass AType<targs{T}> <: chipper/Type<A>
       defn AType<targs{T}> (targs{T:chipper/Type<T&bound>},
-                            fields{ft:chipper/Type<type>})
+                            fields{ft:chipper/Type<type>}) ;; &bound
                          -> chipper/Type<A<targs{T}>> :
          new AType<targs{T}> :               
             defmethod chipper/handle (this, e:firrtl/ir/Expression) :
@@ -544,8 +548,8 @@ defn compile (b:DefBundle) :
          `type => compile-to-type(type(p))
          `type-exp => compile-to-type-exp(type(p))]])
          
-   println("=== Expanding Bundle ===")
-   println(r)
+   ;; println("=== Expanding Bundle ===")
+   ;; println(r)
    expande(r)
 ;============================================================
 

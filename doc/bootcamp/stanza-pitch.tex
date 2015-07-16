@@ -1,0 +1,68 @@
+\documentclass[xcolor=pdflatex,dvipsnames,table]{beamer}
+\usepackage{epsfig,graphicx}
+\usepackage{palatino}
+\usepackage{fancybox}
+\usepackage{relsize}
+\usepackage[procnames]{listings}
+
+\input{../style/scala.tex}
+\input{../style/stanza.tex}
+\input{../style/talk.tex}
+
+
+\begin{document}
+\begin{frame}[fragile]{Stanza* Essence}
+\begin{itemize}
+\item best of scripting and production languages
+\begin{itemize}
+\item easy to understand and powerful to use
+\item gradual types -> easy parameteric types
+\end{itemize}
+\item simple orthogonal concepts
+\begin{itemize}
+\item functions, objects, pipes, and namespace separated
+\item use concepts in unlimited ways -- serendipity
+\item entire language including optimizing native compiler in 20K LOC
+\end{itemize}
+\item powerful macros for conventional syntax
+\begin{itemize}
+\item almost entire stanza syntax written as macros
+\item better DSL hosting language
+\end{itemize}
+\end{itemize}
+\vspace{0.25cm}
+\begin{center}
+\includegraphics[height=0.2\textheight]{figs/patrick.jpg} \\
+* developed by Patrick Li @ EECS Berkeley
+\end{center}
+\end{frame}
+
+\begin{frame}[fragile]{Stanza by Contrast}
+\begin{itemize}
+\item like Python but
+\begin{itemize}
+\item types and on and on and on ...
+\end{itemize}
+\item like Scala but
+\begin{itemize}
+\item thinner -- native compiler + runtime in 20K LOC
+\item simpler -- fewer base concepts
+\item more separated -- orthogonal functions / objects
+\end{itemize}
+\item like Clojure but
+\begin{itemize}
+\item conventional syntax -- love the parens but ...
+\item thinner -- native
+\item more powerful macro system -- not just name macros
+\end{itemize}
+\item like Dylan but
+\begin{itemize}
+\item improved gradual types -- parameteric types
+\item better multimethod namespaces -- fewer name clashes
+\item more powerful macros -- syntax written in it
+\item has pipes -- generalized control flow mechanism
+\end{itemize}
+\end{itemize}
+\end{frame}
+
+\end{document}

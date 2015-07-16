@@ -12,6 +12,23 @@ defn map (f : Char -> Char, s : String) -> String :
   do(add{buf, _}, ls)
   to-string(buf)
 
+public defn to-hex (num: Int) -> String :
+  val buf = StringBuffer()
+  print(buf, "0x")
+  var rems = List<Int>()
+  var x : Int = num
+  defn* loop () :
+    rems = List(x % 16, rems)
+    x = x / 16
+    if x > 0: loop()
+  loop()
+  for r in rems do :
+    print(buf, to-char((to-int('0') + r) when r < 10 else (to-int('a') + r - 10)))
+  to-string(buf)
+
+public defn rand (lo:Int, hi:Int) -> Int :
+   (rand() % (hi - lo + 1)) + lo
+
 ;;;
 
 public defn sizeof (in: Int) -> Int :
@@ -22,7 +39,21 @@ public definterface Data
 public defmulti firrtl-exp (e:Data) -> fExpression
 public defmulti type<?T> (e:?T&Data) -> Type<T>
 public defmulti flatten (e:Data) -> Streamable<UInt>
+public defmulti unflatten<?T> (e:?T&Data, v:Streamable<UInt>) -> T
 public defmulti width (x:Data) -> Int
+
+public defn unflatten-ints<?T> (e:?T&Data, v:Streamable<Int>) -> T :
+  unflatten(e, stream(UIntLit, v))
+
+public defn lit-value (d:Data) -> Int|False :
+  match(firrtl-exp(d)) :
+    (e:fUIntValue): fvalue(e)
+    (e)           : false
+
+public defn lit-value! (d:Data) -> Int :
+  match(lit-value(d)) :
+    (e:Int): e
+    (e)    : error("Expected Lit Value")
 
 public defmethod width (x:Data) -> Int :
    reduce(plus, 0, map(width, to-list(flatten(x))))
@@ -35,7 +66,7 @@ public defn value (w: fWidth) -> Int :
 public defn to-bits (x:Data) -> UInt :
    reduce(cat, UIntLit(0), to-list(flatten(x)))
 
-public defn from-bits<?T> (dst:?T & Data, from:UInt) :
+public defn from-bits!<?T> (dst:?T & Data, from:UInt) :
    var i = 0
    for x in flatten(dst) do :
      ConnectExp(x, from[i + width(x) - 1, i])
@@ -179,6 +210,12 @@ defn VecHandle<T> (T:Type<T&Data>, n:Int, e:fExpression) :
             this[i]
       defmethod flatten (this) -> Streamable<UInt> :
          concat-all(map(flatten, to-list(this)))
+      defmethod unflatten (this, v:Streamable<UInt>) :
+         val w = WireExp(gensym("T"), type(this))
+         val s = to-stream(v)
+         for (i in 0 to n) do :
+           unflatten(w[i], s)
+         w
 
 public defclass VecType<T> <: Type<Vec<T>>
 defn VecType<T> (T:Type<T&Data>, n:Int) :
@@ -197,13 +234,15 @@ public defn Vec<?T> (T:Type<?T&Data>, n:Int) :
 public definterface Bits <: Data
 
 ;================ UNSIGNED INTEGERS =========================
-public definterface UInt <: Bits
-defclass UIntC <: UInt
+;; public definterface UInt <: Bits
+;; defclass UIntC <: UInt
+public defclass UInt <: Bits
 defn UIntHandle (w:fWidth, e:fExpression) :
-   new UIntC :
+   new UInt : ;; UIntC
       defmethod firrtl-exp (this) : e
-      defmethod type (this) : UIntType(w) as Type<UIntC>
+      defmethod type (this) : UIntType(w) as Type<UInt> ;; UIntC
       defmethod flatten (this) -> Streamable<UInt> : list(this)
+      defmethod unflatten (this, v:Streamable<UInt>) : next(to-stream(v))
       defmethod width (this) : value(w)
 
 public defclass UIntType <: Type<UInt>
@@ -227,13 +266,15 @@ public defn UIntLit (v:String) : UIntLit(to-lit-val(v))
 public defn UIntLit (v:String, w:Int) : UIntLit(to-lit-val(v), w)
 
 ;================ SIGNED INTEGERS =========================
-public definterface SInt <: Bits
-defclass SIntC <: SInt
+;; public definterface SInt <: Bits
+;; defclass SIntC <: SInt
+public defclass SInt <: Bits
 defn SIntHandle (w:fWidth, e:fExpression) :
-   new SIntC :
+   new SInt : ;; SIntC
       defmethod firrtl-exp (this) : e
-      defmethod type (this) : SIntType(w) as Type<SIntC>
+      defmethod type (this) : SIntType(w) as Type<SInt> ;; SIntC
       defmethod flatten (this) -> Streamable<UInt> : list(as-uint(this))
+      defmethod unflatten (this, v:Streamable<UInt>) : as-sint(next(to-stream(v)))
       defmethod width (this) : value(w)
 
 public defclass SIntType <: Type<SInt>

@@ -25,9 +25,11 @@
 
 \begin{itemize}
 \item introduction to reconfigurable computing
+\item introduce you to stanza
 \item get you started with Chipper
 \item get a basic working knowledge of Chipper
 \item learn how to think in Chipper
+\item how to write an accelerator
 \item know where to get more information
 \end{itemize}
 
@@ -283,7 +285,7 @@ when need more powerful construction people write perl scripts to write verilog}
 \end{frame}
 
 \begin{frame}[fragile]
-\frametitle{Chisel is a {\it Library}}
+\frametitle{Chipper is a {\it Library}}
 \begin{itemize}
 \item Classes are provided for circuit components:
 \begin{itemize}
@@ -305,7 +307,7 @@ and \verb+new+ used to construct components and \verb+connect+ used to wire them
 \end{frame}
 
 \begin{frame}[fragile]
-\frametitle{What if Chisel was a Stanza Library?}
+\frametitle{What if Chipper was a Stanza Library?}
 \begin{columns}
 \column{0.50\textwidth}
 {\lstset{basicstyle={\tiny\ttfamily}}
@@ -339,7 +341,7 @@ defn main () :
 \end{frame}
 
 \begin{frame}[fragile]
-\frametitle{What if Chisel was a Stanza Library?}
+\frametitle{What if Chipper was a Stanza Library?}
 \begin{columns}
 \column{0.50\textwidth}
 {\lstset{basicstyle={\tiny\ttfamily}}
@@ -378,7 +380,7 @@ defn main () :
 \end{frame}
 
 \begin{frame}[fragile]
-\frametitle{What if Chisel was a Stanza Library?}
+\frametitle{What if Chipper was a Stanza Library?}
 \begin{columns}
 \column{0.50\textwidth}
 {\lstset{basicstyle={\tiny\ttfamily}}
@@ -424,7 +426,7 @@ defn main () :
   ;; Create Components
   val reset       = Wire("reset")
   val counter     = Register("counter")
-  !\colorbox{red}{val adder       = Adder()}!
+  !\colorbox{yellow}{val adder       = Adder()}!
   val multiplexor = Multiplexor()
   val one         = UInt(1)
   val zero        = UInt(0)
@@ -432,10 +434,10 @@ defn main () :
   ;; Connect Components
   connect(multiplexor.choice, reset)
   connect(multiplexor.in_a, zero.out)
-  !\colorbox{red}{connect(multiplexor.in\_b, adder.out)}!
+  !\colorbox{yellow}{connect(multiplexor.in\_b, adder.out)}!
   connect(counter.in, multiplexor.out)
-  !\colorbox{red}{connect(adder.in\_a, counter.out)}!
-  !\colorbox{red}{connect(adder.in\_b, one.out)}!
+  !\colorbox{yellow}{connect(adder.in\_a, counter.out)}!
+  !\colorbox{yellow}{connect(adder.in\_b, one.out)}!
 
   ;; Produce Verilog
   generate_verilog(counter)
@@ -462,7 +464,7 @@ defn main () :
   connect(multiplexor.choice, reset)
   connect(multiplexor.in_a, zero.out)
   connect(multiplexor.in_b, 
-          !\colorbox{red}{make\_adder(one.out, counter.out))}!
+          !\colorbox{yellow}{make\_adder(one.out, counter.out))}!
   connect(counter.in, multiplexor.out)
 
   ;; Produce Verilog
@@ -484,16 +486,16 @@ defn main () :
   ;; Create Components
   val reset       = Wire("reset")
   val counter     = Register("counter")
-  !\colorbox{red}{val multiplexor = Multiplexor()}!
+  !\colorbox{yellow}{val multiplexor = Multiplexor()}!
   val one         = UInt(1)
   val zero        = UInt(0)
 
   ;; Connect Components
-  !\colorbox{red}{connect(multiplexor.choice, reset)}!
-  !\colorbox{red}{connect(multiplexor.in\_a, zero.out)}!
-  !\colorbox{red}{connect(multiplexor.in\_b,}!
-          !\colorbox{red}{make\_adder(one.out, counter.out))}!
-  !\colorbox{red}{connect(counter.in, multiplexor.out)}!
+  !\colorbox{yellow}{connect(multiplexor.choice, reset)}!
+  !\colorbox{yellow}{connect(multiplexor.in\_a, zero.out)}!
+  !\colorbox{yellow}{connect(multiplexor.in\_b,}!
+          !\colorbox{yellow}{make\_adder(one.out, counter.out))}!
+  !\colorbox{yellow}{connect(counter.in, multiplexor.out)}!
 
   ;; Produce Verilog
   generate_verilog(counter)
@@ -515,9 +517,9 @@ defn main () :
 
   ;; Connect Components
   connect(counter.in, 
-    !\colorbox{red}{make\_multiplexor(reset,}!
-      !\colorbox{red}{zero.out}!
-      !\colorbox{red}{make\_adder(one.out, counter.out)))}!
+    !\colorbox{yellow}{make\_multiplexor(reset,}!
+      !\colorbox{yellow}{zero.out}!
+      !\colorbox{yellow}{make\_adder(one.out, counter.out)))}!
 
   ;; Produce Verilog
   generate_verilog(counter)
@@ -538,14 +540,14 @@ defn main () :
   ;; Create Components
   val reset   = Wire("reset")
   val counter = Register("counter")
-  !\colorbox{red}{val one     = UInt(1)}!
-  !\colorbox{red}{val zero    = UInt(0)}!
+  !\colorbox{yellow}{val one     = UInt(1)}!
+  !\colorbox{yellow}{val zero    = UInt(0)}!
 
   ; Connect Components
   connect(counter.in, 
     make_multiplexor(reset,
-      !\colorbox{red}{zero.out}!,
-      make_adder(!\colorbox{red}{one.out}!, counter.out)))
+      !\colorbox{yellow}{zero.out}!,
+      make_adder(!\colorbox{yellow}{one.out}!, counter.out)))
 
   ;; Produce Verilog
   generate_verilog(counter)
@@ -566,8 +568,8 @@ defn main () :
   ;; Connect Components
   connect(counter.in, 
     make_multiplexor(reset,
-      !\colorbox{red}{UInt(0)}!,
-      make_adder(!\colorbox{red}{UInt(1)}!, counter.out)))
+      !\colorbox{yellow}{UInt(0)}!,
+      make_adder(!\colorbox{yellow}{UInt(1)}!, counter.out)))
 
   ;; Produce Verilog
   generate_verilog(counter)
@@ -593,7 +595,7 @@ defn main () :
   connect(counter.in, 
     make_multiplexor(reset,
       UInt(0),
-      !\colorbox{red}{make\_adder(UInt(1), counter.out)}!))
+      !\colorbox{yellow}{make\_adder(UInt(1), counter.out)}!))
 
   ;; Produce Verilog
   generate_verilog(counter)
@@ -615,7 +617,7 @@ defn main () :
   connect(counter.in, 
     make_multiplexor(reset,
       UInt(0),
-      !\colorbox{red}{UInt(1) + counter.out}!))
+      !\colorbox{yellow}{UInt(1) + counter.out}!))
 
   ;; Produce Verilog
   generate_verilog(counter)
@@ -638,10 +640,10 @@ defn main () :
   val counter = Register("counter")
 
   ;; Connect Components
-  !\colorbox{red}{connect(}!counter.in, 
+  !\colorbox{yellow}{connect(}!counter.in, 
     make_multiplexor(reset,
       UInt(0),
-      UInt(1) + counter.out)!\colorbox{red}{)}!
+      UInt(1) + counter.out)!\colorbox{yellow}{)}!
 
   ;; Produce Verilog
   generate_verilog(counter)
@@ -660,7 +662,7 @@ defn main () :
   val counter = Register("counter")
 
   ;; Connect Components
-  counter.in !\colorbox{red}{:=}!
+  counter.in !\colorbox{yellow}{:=}!
     make_multiplexor(reset,
       UInt(0),
       UInt(1) + counter.out)
@@ -687,9 +689,9 @@ defn main () :
 
   ;; Connect Components
   counter.in :=
-    !\colorbox{red}{make\_multiplexor(reset,}!
+    !\colorbox{yellow}{make\_multiplexor(reset,}!
       UInt(0),
-      UInt(1) + counter.out!\colorbox{red}{)}!
+      UInt(1) + counter.out!\colorbox{yellow}{)}!
 
   ;; Produce Verilog
   generate_verilog(counter)
@@ -708,9 +710,9 @@ defn main () :
   val counter = Register("counter")
 
   ;; Connect Components
-  !\colorbox{red}{when reset :}!
+  !\colorbox{yellow}{when reset :}!
     counter.in := UInt(0)
-  !\colorbox{red}{else :}!
+  !\colorbox{yellow}{else :}!
     counter.in := UInt(1) + counter.out
 
   ;; Produce Verilog
@@ -719,7 +721,7 @@ defn main () :
 }
 \end{columns}
 \vspace{1cm}
-{\bf dynamic scoping, closures, object-orientation}
+{\bf macros}
 \end{frame}
 
 \begin{frame}[fragile]
@@ -730,8 +732,8 @@ defn main () :
 \begin{stanza}
 defn main () :
   ;; Create Components
-  !\colorbox{red}{val reset   = Wire("reset")}
-  !\colorbox{red}{val counter = Register("counter")}
+  !\colorbox{yellow}{val reset   = Wire("reset")}!
+  !\colorbox{yellow}{val counter = Register("counter")}!
 
   ;; Connect Components
   when reset :
@@ -752,8 +754,8 @@ $\Rightarrow$
 \begin{stanza}
 defn main () :
   ;; Create Components
-  wire reset  : UInt
-  reg counter : UInt
+  !\colorbox{yellow}{wire reset  : UInt}!
+  !\colorbox{yellow}{reg counter : UInt}!
 
   ;; Connect Components
   when reset :
@@ -767,112 +769,112 @@ defn main () :
 }
 \end{columns}
 \vspace{1cm}
-{\bf introspection}
+{\bf macros}
 \end{frame}
 
-\begin{frame}[fragile]
-\frametitle{Abstract Counter}
-\begin{columns}
-\column{0.4\textwidth}
-{\lstset{basicstyle={\tiny\ttfamily}, escapechar=!}
-\begin{stanza}
-defn main () :
-  ;; Create Components
-  wire reset  : UInt
-  reg counter : UInt
-
-  ;; Connect Components
-  when reset :
-    counter.in := UInt(0)
-  else :
-    counter.in := UInt(1) + counter.out
-
-  ;; Produce Verilog
-  generate_verilog(counter)
-\end{stanza}
-}
-\column{0.05\textwidth}
-\begin{center}
-$\Rightarrow$
-\end{center}
-\column{0.4\textwidth}
-{\lstset{basicstyle={\tiny\ttfamily}, escapechar=!}
-\begin{stanza}
-!\colorbox{red}{defn make\_counter(reset: UInt) :}!
-  reg counter : UInt
-  when reset :
-    counter.in := UInt(0)
-  else :
-    counter.in := UInt(1) + counter.out
-  counter
-!\colorbox{red}{\}}!
-
-defn main () :
-  ;; Create Components
-  wire reset  : UInt
-  wire counter = make_counter(reset)
-
-  ;; Produce Verilog
-  generate_verilog(counter)
-\end{stanza}
-}
-\end{columns}
-\vspace{1cm}
-{\it functional programming}
-\end{frame}
-
-\begin{frame}[fragile]
-\frametitle{Make Reset Implicit}
-\begin{columns}
-\column{0.4\textwidth}
-{\lstset{basicstyle={\tiny\ttfamily}, escapechar=!}
-\begin{stanza}
-defn make_counter(!\colorbox{red}{reset: UInt}!) :
-  reg counter : UInt
-  when reset :
-    counter.in := UInt(0)
-  else :
-    counter.in := UInt(1) + counter.out
-  counter
-
-defn main () :
-  ;; Create Components
-  wire reset  : UInt
-  wire counter = make_counter(!\colorbox{red}{reset}!)
-
-  ;; Produce Verilog
-  generate_verilog(counter)
-\end{stanza}
-}
-\column{0.05\textwidth}
-\begin{center}
-$\Rightarrow$
-\end{center}
-\column{0.4\textwidth}
-{\lstset{basicstyle={\tiny\ttfamily}, escapechar=!}
-\begin{stanza}
-defn make_counter() :
-  reg counter : UInt
-  when reset :
-    counter.in := UInt(0)
-  else :
-    counter.in := UInt(1) + counter.out
-  counter
-
-defn main () :
-  ;; Create Components
-  val reset   = Wire()
-  val counter = 
-    !\colorbox{red}{withReset(reset):}!
-      make_counter()
-  ;; Produce Verilog
-  generate_verilog(counter)
-\end{stanza}
-}
-\end{columns}
-\vspace{1cm}
-{\bf dynamic scoping}
-\end{frame}
+% \begin{frame}[fragile]
+% \frametitle{Abstract Counter}
+% \begin{columns}
+% \column{0.4\textwidth}
+% {\lstset{basicstyle={\tiny\ttfamily}, escapechar=!}
+% \begin{stanza}
+% defn main () :
+%   ;; Create Components
+%   wire reset  : UInt
+%   reg counter : UInt
+% 
+%   ;; Connect Components
+%   when reset :
+%     counter.in := UInt(0)
+%   else :
+%     counter.in := UInt(1) + counter.out
+% 
+%   ;; Produce Verilog
+%   generate_verilog(counter)
+% \end{stanza}
+% }
+% \column{0.05\textwidth}
+% \begin{center}
+% $\Rightarrow$
+% \end{center}
+% \column{0.4\textwidth}
+% {\lstset{basicstyle={\tiny\ttfamily}, escapechar=!}
+% \begin{stanza}
+% !\colorbox{yellow}{defn make\_counter(reset: UInt) :}!
+%   reg counter : UInt
+%   when reset :
+%     counter.in := UInt(0)
+%   else :
+%     counter.in := UInt(1) + counter.out
+%   counter
+% !\colorbox{yellow}{\}}!
+% 
+% defn main () :
+%   ;; Create Components
+%   wire reset  : UInt
+%   wire counter = make_counter(reset)
+% 
+%   ;; Produce Verilog
+%   generate_verilog(counter)
+% \end{stanza}
+% }
+% \end{columns}
+% \vspace{1cm}
+% {\it functional programming}
+% \end{frame}
+% 
+% \begin{frame}[fragile]
+% \frametitle{Make Reset Implicit}
+% \begin{columns}
+% \column{0.4\textwidth}
+% {\lstset{basicstyle={\tiny\ttfamily}, escapechar=!}
+% \begin{stanza}
+% defn make_counter(!\colorbox{yellow}{reset: UInt}!) :
+%   reg counter : UInt
+%   when reset :
+%     counter.in := UInt(0)
+%   else :
+%     counter.in := UInt(1) + counter.out
+%   counter
+% 
+% defn main () :
+%   ;; Create Components
+%   wire reset  : UInt
+%   wire counter = make_counter(!\colorbox{yellow}{reset}!)
+% 
+%   ;; Produce Verilog
+%   generate_verilog(counter)
+% \end{stanza}
+% }
+% \column{0.05\textwidth}
+% \begin{center}
+% $\Rightarrow$
+% \end{center}
+% \column{0.4\textwidth}
+% {\lstset{basicstyle={\tiny\ttfamily}, escapechar=!}
+% \begin{stanza}
+% defn make_counter() :
+%   reg counter : UInt
+%   when reset :
+%     counter.in := UInt(0)
+%   else :
+%     counter.in := UInt(1) + counter.out
+%   counter
+% 
+% defn main () :
+%   ;; Create Components
+%   val reset   = Wire()
+%   val counter = 
+%     !\colorbox{yellow}{withReset(reset):}!
+%       make_counter()
+%   ;; Produce Verilog
+%   generate_verilog(counter)
+% \end{stanza}
+% }
+% \end{columns}
+% \vspace{1cm}
+% {\bf dynamic scoping}
+% \end{frame}
 
 \begin{frame}[fragile]
 \frametitle{Looks ``Behavioral'' but ...}
@@ -880,20 +882,17 @@ defn main () :
 \column{0.50\textwidth}
 {\lstset{basicstyle={\tiny\ttfamily}}
 \begin{stanza}
-def make_counter() = {
+defn main () :
+  ;; Create Components
+  wire reset  : UInt
   reg counter : UInt
+
+  ;; Connect Components
   when reset :
     counter.in := UInt(0)
   else :
     counter.in := UInt(1) + counter.out
-  counter
 
-defn main () :
-  ;; Create Components
-  wire reset  : UInt
-  wire counter = 
-    withReset(reset) :
-      make_counter(reset)
   ;; Produce Verilog
   generate_verilog(counter)
 \end{stanza}
@@ -911,6 +910,43 @@ defn main () :
 \end{itemize}
 \end{frame}
 
+% \begin{frame}[fragile]
+% \frametitle{Looks ``Behavioral'' but ...}
+% \begin{columns}
+% \column{0.50\textwidth}
+% {\lstset{basicstyle={\tiny\ttfamily}}
+% \begin{stanza}
+% def make_counter() = {
+%   reg counter : UInt
+%   when reset :
+%     counter.in := UInt(0)
+%   else :
+%     counter.in := UInt(1) + counter.out
+%   counter
+% 
+% defn main () :
+%   ;; Create Components
+%   wire reset  : UInt
+%   wire counter = 
+%     withReset(reset) :
+%       make_counter(reset)
+%   ;; Produce Verilog
+%   generate_verilog(counter)
+% \end{stanza}
+% }
+% \column{0.40\textwidth}
+% \begin{center}
+% \includegraphics[width=0.9\textwidth]{figs/simple-counter.pdf}
+% \end{center}
+% \end{columns}
+% \begin{itemize}
+% \item every construct actually creates a concrete circuit
+% \item know cost of everything
+% \item layered and can choose level of abstraction
+% \item {\color{red}not ``stanza to hardware'' compiler}
+% \end{itemize}
+% \end{frame}
+
 \begin{frame}[fragile]{Hosting Language Ingredients}
 Crucial
 \begin{itemize}
@@ -918,14 +954,8 @@ Crucial
 \item Infix Operator Overloading
 \item Lightweight Closures
 \item Dynamic Scoping
-\item Introspection ( or Simple Macros )
+\item Macros
 \item Functional Programming
-\end{itemize}
-\vspace{0.5cm}
-Even Better with
-\begin{itemize}
-\item Object Orientation
-\item Powerful Macros
 \end{itemize}
 \end{frame}
 
@@ -947,7 +977,9 @@ Even Better with
 \begin{stanza}
 cd chipper-tutorial
 git pull
-git submodule update
+cd ../chipper
+git pull
+bin/install.sh
 \end{stanza}
 \end{frame}
 \setbeamercolor{frametitle}{bg=\frametitledefaultcolor}
@@ -1088,6 +1120,60 @@ surprisingly difficult to generate each.  for example, chipper has abstraction f
 \note{powerful combination of scipting and type safety, \\[1cm]
 includes powerful features to support abstraction, \\[1cm]
 as makes it easy to embed DSLs}
+\end{frame}
+
+\begin{frame}[fragile]{Stanza* Essence}
+\begin{itemize}
+\item best of scripting and production languages
+\begin{itemize}
+\item easy to understand and powerful to use
+\item gradual types -> easy parameteric types
+\end{itemize}
+\item orthogonal simple concepts
+\begin{itemize}
+\item functions, objects, pipes, and namespace separated
+\item use concepts in unlimited ways -- serendipity
+\item entire language including optimizing native compiler in 20K LOC
+\end{itemize}
+\item powerful macros for conventional syntax
+\begin{itemize}
+\item almost entire stanza syntax written as macros
+\item better DSL hosting language
+\end{itemize}
+\end{itemize}
+\vspace{0.25cm}
+\begin{center}
+\includegraphics[height=0.2\textheight]{figs/patrick.jpg} \\
+* developed by Patrick Li @ EECS Berkeley
+\end{center}
+\end{frame}
+
+\begin{frame}[fragile]{Stanza by Contrast}
+\begin{itemize}
+\item like Python but
+\begin{itemize}
+\item types and on and on and on ...
+\end{itemize}
+\item like Scala but
+\begin{itemize}
+\item thinner -- native compiler + runtime in 20K LOC
+\item simpler -- fewer base concepts
+\item more separated -- orthogonal functions / objects
+\end{itemize}
+\item like Clojure but
+\begin{itemize}
+\item conventional syntax -- love the parens but ...
+\item thinner -- native
+\item more powerful macro system -- not just name macros
+\end{itemize}
+\item like Dylan but
+\begin{itemize}
+\item improved gradual types -- parameteric types
+\item better multimethod namespaces -- fewer name clashes
+\item more powerful macros -- syntax written in it
+\item has pipes -- generalized control flow mechanism
+\end{itemize}
+\end{itemize}
 \end{frame}
 
 \include{stanza-intro}
@@ -1513,7 +1599,7 @@ endmodule
 \column{0.47\textwidth}
 
 \begin{stanza}
-defmodule ShiftRegister :
+defmodule ShiftRegisterCond :
   input in : UInt<1>
   input shift : UInt<1>
   output out : UInt<1>
@@ -1544,7 +1630,7 @@ defmodule ShiftRegister :
 \begin{frame}[fragile]{Conditional Register Update with Reset}
 
 \begin{stanza}
-defmodule EnableShiftRegister :
+defmodule ShiftRegisterCondInit :
   input in : UInt<1>
   input shift : UInt<1>
   output out : UInt<1>
@@ -1661,9 +1747,9 @@ Symbol & Operation \\ \hline
 \verb+*+ & Multiply \\ \hline
 \verb+/+ & UInt Divide \\ \hline
 \verb+%+ & Modulo \\ \hline
-\verb+~+ & Bitwise Negation \\ \hline
+\verb+!+ & Bitwise Negation \\ \hline
 \verb+^+ & Bitwise XOR \\ \hline
-\verb+&+ Bitwise AND & UInt \\ \hline
+\verb+&+ & Bitwise AND \\ \hline
 \verb+|+ & Bitwise OR \\ \hline
 {\color{red}\verb+===+} & Equal \\ \hline
 \verb+!==+ & Not Equal \\ \hline
@@ -1678,8 +1764,8 @@ Symbol & Operation \\ \hline
 
 \begin{frame}[fragile]{Bit Extraction}
 \begin{stanza}
-;; extracts the x through y bits of value
-wire x_to_y = value[x, y]
+;; extracts the lo through hi bits of value
+wire x_to_y = value[hi, lo]
 \end{stanza}
 
 \begin{stanza}
@@ -1765,7 +1851,7 @@ defmodule LFSR16 :
   out := UInt(0)
 \end{stanza}
 \begin{itemize}
-\item \verb+reg+, \verb+cat+, \verb+extract+, \verb+^+
+\item \verb+reg+, \verb+cat+, \verb+[]+, \verb+^+
 \item init reg to 1
 \item updates when \verb+inc+ asserted
 \end{itemize}
@@ -1824,18 +1910,18 @@ endmodule
 \begin{tabular}{| l | l | l | }
 \hline
 Operation & Result Bit Width \\ \hline
-\verb!Z = X + Y! & max(Width(X), Width(Y))  \\ \hline
-\verb+Z = X - Y+ & max(Width(X), Width(Y)) \\ \hline
-\verb+Z = X & Y+ & min(Width(X), Width(Y)) \\ \hline
-\verb+Z = X | Y+ & max(Width(X), Width(Y)) \\ \hline
-\verb+Z = X ^ Y+ & max(Width(X), Width(Y)) \\ \hline
-\verb+Z = ~X+ & Width(X) \\ \hline
-\verb+Z = mux(C, X, Y)+ & max(Width(X), Width (Y)) \\ \hline
-\verb+Z = X * Y+ & Width(X) + Width(Y) \\ \hline
-\verb+Z = X << n+ & Width(X) + n \\ \hline
-\verb+Z = X >> n+ & Width(X) - n \\ \hline
-\verb+Z = cat(X, Y)+ & Width(X) + Width(Y) \\ \hline
-\verb+Z = fill(n, x)+ & Width(X) + n \\ \hline
+\verb!Z = X + Y! & \verb!max(width(X), width(Y))!  \\ \hline
+\verb+Z = X - Y+ & \verb!max(width(X), width(Y))! \\ \hline
+\verb+Z = X & Y+ & \verb!min(width(X), width(Y))! \\ \hline
+\verb+Z = X | Y+ & \verb!max(width(X), width(Y))! \\ \hline
+\verb+Z = X ^ Y+ & \verb!max(width(X), width(Y))! \\ \hline
+\verb+Z = !(X)+ & \verb!width(X)! \\ \hline
+\verb+Z = mux(C, X, Y)+ & \verb!max(width(X), width (Y))! \\ \hline
+\verb+Z = X * Y+ & \verb!width(X)! + width(Y) \\ \hline
+\verb+Z = X << n+ & \verb!width(X)! + n \\ \hline
+\verb+Z = X >> n+ & \verb!width(X)! - n \\ \hline
+\verb+Z = cat(X, Y)+ & \verb!width(X)! + width(Y) \\ \hline
+\verb+Z = fill(n, x)+ & \verb!width(X)! + n \\ \hline
 \end{tabular}
 \end{center}
 
@@ -1872,9 +1958,9 @@ wire false_value = UInt(false)
 \column{0.55\textwidth}
 \begin{stanza}
 defbundle MyFloat :
-  output sign : UInt<1>
-  output exponent : UInt<8>
-  output significand : UInt<23>
+  sign : UInt<1>
+  exponent : UInt<8>
+  significand : UInt<23>
 
 wire x  : MyFloat
 wire xs = x.sign
@@ -1898,18 +1984,18 @@ wire xs = x.sign
 
 \begin{stanza}
 defbundle Decoupled :
-  output data : UInt<32>
-  output valid : UInt<1>
-  input ready : UInt<1>
+  data : UInt<32>
+  valid : UInt<1>
+  flip ready : UInt<1>
 \end{stanza}
 
 \textbf{Direction assigned at instantiation time}
 
 \begin{stanza}
 defbundle ScaleIO :
-  input in : MyFloat
-  input scale : MyFloat
-  output out : MyFloat
+  flip in : MyFloat
+  flip scale : MyFloat
+  out : MyFloat
 \end{stanza}
 
 \column{0.35\textwidth}
@@ -1967,8 +2053,7 @@ defmodule Adder4:
 \end{center}
 
 \begin{itemize}
-\item inherits from \verb+Module+ class,
-\item contains an interface stored in a port field named \verb+io+, and
+\item defines interface as series of ports,
 \item wires together subcircuits in its constructor.
 \end{itemize}
 
@@ -1980,7 +2065,7 @@ defmodule Adder4:
 constructing vecs
 \begin{stanza}
 wire myVec1 : <data type>[<number of elements>]
-wire myVec2 = Vec(<elt0>, <elt1>, ...)
+wire myVec2 = Vec([<elt0>, <elt1>, ...])
 \end{stanza}
 
 creating a vec of wires
@@ -2016,13 +2101,13 @@ wire reg5 = reg_vec[5]
 
 {\lstset{basicstyle={\scriptsize\ttfamily}}
 \begin{stanza}
-defmodule VecShiftRegister :
-  input ins: UInt<w>[4]
+defmodule ShiftRegisterVec :
+  input ins: UInt<1>[4]
   input load: UInt<1>
   input shift: UInt<1>
-  output out: UInt<w>
+  output out: UInt<1>
 
-  reg delays: UInt<w>[4]
+  reg delays: UInt<1>[4]
   when load :
     ;; fill in here ...
   else when shift :
@@ -2058,7 +2143,7 @@ defn bs-tests () :
     for i in 0 to 4 all? :
       poke(t, c.in,     test_in)
       poke(t, c.offset, t)
-      step(1)
+      step(t)
       val ref_out = (test_in >> (t * 8)) & 255
       expect(t, c.out, ref_out)
 \end{stanza}
@@ -2069,22 +2154,19 @@ defn bs-tests () :
 
 \column{0.55\textwidth}
 {\lstset{basicstyle={\tiny\ttfamily}}
+% defmulti reset (t:Tester, n:Int) -> Int
+% defmulti step (t:Tester, n:Int) -> Int
 \begin{stanza}
 defclass Tester
 defn Tester (dut:String) -> Tester
 defmulti dut (t:Tester) -> String
-defmulti reset (t:Tester, n:Int) -> Int
-defmulti step (t:Tester, n:Int) -> Int
+defmulti step (t:Tester) -> Int
 defmulti peek (t:Tester, data:Bits) -> Int
 defmulti peek (t:Tester, data:Bits, index:Int) -> Int
 defmulti poke (t:Tester, data:Bits, x:Int) -> Int
 defmulti poke (t:Tester, data:Bits, i:Int, x:Int) -> Int
 defmulti expect (t:Tester, data:Bits, target:Int) -> True|False
 defn expect (good:Boolean, msg: Streamable) -> True|False
-
-defn int(x: Boolean) -> BigInt
-defn int(x: Int) -> BigInt
-defn int(x: Bits) -> BigInt
 \end{stanza}
 }
 \begin{tiny}
@@ -2137,7 +2219,7 @@ SUCCESS
 
 \begin{frame}{Testbench Ingredients}
 
-In particular, users utilize:
+Users utilize:
 \begin{itemize}
 \item \code{poke} to set input port and state values,
 \item \code{step} to execute the circuit one time unit,
@@ -2168,7 +2250,7 @@ defmodule MaxN (n: Int, w: Int) :
 }
 \begin{stanza}
 ;; returns random int in 0..lim-1
-val x = rnd.nextInt(lim) 
+val x = rand(lim) 
 \end{stanza}
 
 \column{0.42\textwidth}
@@ -2192,21 +2274,22 @@ defn MaxNTests () :
 
 \begin{frame}[fragile]{Dynamically Accessed Vec}
 \begin{stanza}
-defmodule MemorySearch (inits:Streamable<Int>) :
+defmodule DynamicMemorySearch (n:Int, w:Int) :
+  input  isWr:   UInt<1>
+  input  wrAddr: UInt<sizeof(w)>
   input  isRd:   UInt<1>
-  input  data:   UInt<4>
+  input  data:   UInt<w>
   output done:   UInt<1>
-  output rdAddr: UInt<3>
+  output rdAddr: UInt<sizeof(w)>
 
-  wire vals: UInt<4>[7]
-  for (e in inits, i in 0 to false) do:
-    vals[i] := UInt(e)
-  reg index : UInt<4>
-  wire elt    = vals[index]
-  wire isDone = ! isRd & ((elt === data) | (index === UInt(7)))
+  reg index = UInt<sizeof(w)>(0)
+  ;; DEFINE MEM HERE
+  wire elt  = UInt(0)
+  wire isDone = !(isRd | isWr) & ((elt === data) | (index === UInt(n - 1)))
+  ;; FILL IN HERE
   when isRd :
     index := UInt(0)
-  else when ! isDone :
+  else when !(isDone) :
     index := index + UInt(1)
   done    := isDone
   rdAddr  := index
@@ -2259,11 +2342,11 @@ defmodule DynamicMemorySearch (n:Int, w:Int) :
   reg index = UInt<sizeof(w)>(0)
   ;; ...
   wire elt  = vals[index]
-  wire isDone = ! (isRd | isWr) & ((elt === data) | (index === UInt(n - 1)))
+  wire isDone = !(isRd | isWr) & ((elt === data) | (index === UInt(n - 1)))
   when isWr :
     vals[wrAddr] := data
   ;; ...
-  else when ! isDone :
+  else when !(isDone) :
     index := index + UInt(1)
   done    := isDone
   rdAddr  := index
@@ -2294,21 +2377,21 @@ wire rdata = ram1r1w[reg_raddr]
 
 {\lstset{basicstyle={\footnotesize\ttfamily}}
 \begin{stanza}
-defmodule Stack (n:Int) :
-  input push: UInt<1>
-  input pop: UInt<1>
-  input en: UInt<1>
-  input dataIn: UInt<32>
+defmodule Stack (depth:Int) :
+  input  push:    UInt<1>
+  input  pop:     UInt<1>
+  input  en:      UInt<1>
+  input  dataIn:  UInt<32>
   output dataOut: UInt<32>
-  cmem stack_mem : UInt<32>[n] ;; declare stack memory
-  reg sp : UInt<sizeof(n)> sp := UInt(0)
-  wire out : UInt<32> out := UInt(0)
+
+  cmem stack_mem : UInt<32>[depth]
+  reg sp = UInt<sizeof(depth)>(0)
+  reg out = UInt<32>(0)
+
   when en :
-    ;; Push condition - make sure stack isn't full
-    when push & (sp < UInt(depth)) :
+    when push & ((sp + UInt(1)) < UInt(depth)) :
       stack_mem[sp] := dataIn
       sp := sp + UInt(1)
-    ;; Pop condition - make sure the stack isn't empty
     else when pop & (sp > UInt(0)) :
       sp := sp - UInt(1)
     when sp > UInt(0) :
@@ -2327,29 +2410,26 @@ defmodule Stack (n:Int) :
 {\lstset{basicstyle={\tiny\ttfamily}}
 \begin{stanza}
 ;; A n-bit adder with carry in and carry out
-defmodule Adder (n: Int) :
-  input A : UInt<n>
-  input B : UInt<n>
-  input Cin : UInt<1>
-  output Sum : UInt<n>
-  output Cout : UInt<1>
-  ;; create a vector of FullAdders
-  inst FAs   : FullAdder[n]
-  wire carry = UInt<1>[n + 1]
-  wire sum   = UInt<1>[n]
+defmodule Adder (n:Int) :
+   input  a:    UInt<n>
+   input  b:    UInt<n>
+   input  cin:  UInt<1>
+   output sum:  UInt<n>
+   output cout: UInt<1>
 
-  ;; first carry is the top level carry in
-  carry[0] := Cin
+   wire carry: UInt<1>[n + 1]
+   wire sums: UInt<1>[n]
+   carry[0] := cin
+   for i in 0 to n do :
+      inst fa : FullAdder
+      fa.a := a[i]
+      fa.b := b[i]
+      fa.cin := carry[i]
+      carry[i + 1] := fa.cout
+      sums[i] := fa.sum
 
-  ;; wire up the ports of the full adders
-  for i in 0 to n do :
-    FAs[i].a     := A[i]
-    FAs[i].b     := B[i]
-    FAs[i].cin   := carry[i]
-    carry[i + 1] := FAs[i].cout
-    sum[i]       := FAs[i].sum
-  Sum  := to-uint(sum)
-  Cout := carry[n]
+   sum := reduce(cat, sums)
+   cout := carry[n]
 \end{stanza}
 }
 
@@ -2376,12 +2456,9 @@ defmodule Mul :
   output z : UInt<8>
   wire tab : UInt<8>[256]
 
-  ;; TODO: would like to do uint/cat here
-  for i in 0 to 16 do : 
-    for j in 0 to 16 do : 
-      tab[(i << 4) | j] := UInt(i * j)
+  ;; CALC Z := x * y BY FILLING IN TAB
 
-  z := tab[cat(x, y)]
+  z := UInt(0)
 \end{stanza}
 
 \end{frame}
@@ -2423,6 +2500,50 @@ now we can rewrite GCD using an interface using this valid wrapper for its outpu
 
 \end{frame}
 
+
+\begin{frame}[fragile]
+\frametitle{Decoupled Wrapper}
+
+\begin{columns}
+
+\column{0.65\textwidth}
+
+\begin{footnotesize}
+\begin{stanza}
+defbundle Decoupled<T> :
+  data : T
+  flip valid : UInt<1>
+  flip ready : UInt<1>
+
+defmodule DecoupledGCD :
+   input  a: DecoupledIO<UInt<16>>
+   input  b: DecoupledIO<UInt<16>>
+   output z: DecoupledIO<UInt<16>>
+
+   reg computing = UInt(false)
+   reg x: UInt<16>
+   reg y: UInt<16>
+
+   a.ready := !(computing)
+   b.ready := !(computing)
+   z.bits  := UInt(0)
+   z.valid := UInt(false)
+
+   ;; ...
+\end{stanza}
+\end{footnotesize}
+
+\column{0.3\textwidth}
+
+\begin{center}
+\includegraphics[width=0.9\textwidth]{figs/decoupled.pdf} 
+\end{center}
+
+\end{columns}
+\note{Often we need to handle backpressure.
+  Decoupled interface handles this.}
+
+\end{frame}
 
 \begin{frame}[fragile]{Chipper Standard Library -- \tt stdlib.stanza}
 \begin{center}

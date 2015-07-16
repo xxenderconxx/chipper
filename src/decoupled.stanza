@@ -23,7 +23,7 @@ public defbundle DecoupledIO<T> :
 public defn fired<?T> (d: DecoupledIO<?T>) -> UInt : d.ready & d.valid
  
 ;; TODO entries as getter
-public defmodule Fifo<T> (entries: Int, pipe: True|False, flow: True|False) : ;; , _reset: UInt = null
+public defmodule Fifo<T & Data> (entries: Int, pipe: True|False, flow: True|False) : ;; , _reset: UInt = null
   input enq: DecoupledIO<T>
   output deq: DecoupledIO<T>
   output count: UInt<log2Up(entries + 1)>
@@ -70,8 +70,48 @@ public defmodule Fifo<T> (entries: Int, pipe: True|False, flow: True|False) : ;;
 public defn FifoOf<?T> (enq: DecoupledIO<?T & Data>) -> DecoupledIO<T> : FifoOf(enq, 2)
 public defn FifoOf<?T> (enq: DecoupledIO<?T & Data>, entries: Int) -> DecoupledIO<T> : FifoOf(enq, entries, false)
 public defn FifoOf<?T> (enq: DecoupledIO<?T & Data>, entries: Int, pipe: True|False) -> DecoupledIO<T> :
-  inst q of Fifo(type(enq.bits), entries, pipe, false)
+  inst q : Fifo(type(enq.bits), entries, pipe, false)
   q.enq.valid := enq.valid ;; not using <> so that override is allowed
   q.enq.bits  := enq.bits
   enq.ready   := q.enq.ready
   q.deq
+
+defn ArbiterCtrl (request: Array<UInt>) -> Streamable<UInt> :
+  concat([ UInt(true) ], 
+         for i in 1 to length(request) stream :
+           !(reduce(bit-or, UInt(false), slice(request, 0, i))))
+
+public defmodule Arbiter<T&Data> (n:Int) : 
+  input in : DecoupledIO<T>[n]
+  output out : DecoupledIO<T>
+  output chosen : UInt<sizeof(n)>
+  val chosen-in = in[chosen]
+  out.valid := chosen-in.valid
+  out.bits  := chosen-in.bits
+  chosen-in.ready := UInt(false)
+  defn grant () : stream({ _.valid }, in)
+  for (g in grant(), i in 0 to false) do :
+    in[i].ready := g & out.ready
+  var choose = UInt(n - 1)
+  for i in (n - 2) through 0 by -1 do :
+    choose = mux(in[i].valid, UInt(i), choose)
+  chosen := choose
+
+public defn arbiter<?T> (iz:Streamable<DecoupledIO<?T&Data>>) -> [DecoupledIO<T>, UInt] :
+  val ins = to-array(iz)
+  inst arb : Arbiter<#{ins[0].T}>(length(ins))
+  for (ai in arb.in, i in ins) do :
+    ai := i
+  [arb.out, arb.chosen]
+
+;; wire rsps : DecoupledIO<MemResp>[2]
+;; rsps[0] := mrsp
+;; rsps[1] := sum.mrsp
+;; mem.rsp := rsps[mreqs.chosen]
+  
+public defn fan-out<?T> (chosen:UInt, i:DecoupledIO<?T&Data>, os:Streamable<DecoupledIO<T&Data>>) :
+  val outs = to-array(os)
+  for (o in outs, j in 0 to false) do :
+    o.bits := i.bits
+    o.valid := i.valid & (chosen === UInt(j))
+  i.ready := reduce(bit-or, UInt(false), map({ _.ready }, outs))    

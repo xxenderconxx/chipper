@@ -29,6 +29,13 @@ public defn mux<?T,?S> (p:UInt, c:?T&Data&S, a:?S&Data&T) -> T :
       w := c
    w   
 
+public defn Vec<?T> (elts:Streamable<?T&Data>) -> Vec<T> :
+  val arr = to-array(elts)
+  wire v : typeof(arr[0])[length(arr)]
+  for i in 0 to length(arr) do :
+    v[i] := arr[i]
+  v
+
 ;;; MATH
 
 public defn log2Up (in: Int) -> Int :
@@ -82,7 +89,7 @@ public defn Mux1H<?T> (sel: Streamable<UInt>, in: Streamable<?T&Data> & Lengthab
     next(sin)
   else :
     val masked = map(fn (s, i): mux(s, to-bits(i), UInt(0)), sel, in)
-    from-bits(next(sin), reduce(bit-or, masked))
+    from-bits!(next(sin), reduce(bit-or, masked))
 
 public defn Mux1H<?T> (in: Streamable<KeyValue<UInt,?T&Data>>) -> T :
   val [sel, data] = unzip(in)

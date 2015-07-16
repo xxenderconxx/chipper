@@ -1,0 +1,213 @@
+\begin{frame}[fragile]{Stanza in 5-10 Minutes}
+\begin{itemize}
+\item values
+\item types
+\item ...  
+\item macros
+\end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]{Stanza Values}
+\begin{stanza}
+;; Ints
+println(42)
+println(plus(32, 42))
+println(32 + 42)
+
+;; Int Type
+42 : Int
+
+;; Named Value
+val x : Int = 42
+val x = 42
+\end{stanza}
+\end{frame}
+
+\begin{frame}[fragile]{Chars and Strings}
+\begin{stanza}
+;; Chars
+println('A')
+to-int('A') ==> 65
+
+;; Strings
+println("ABC")
+length("ABC") ==> 3
+length: (String) -> Int
+val s = "ABC"
+get(s, 0) ==> 'A'
+s[0] ==> 'A'
+\end{stanza}
+\end{frame}
+
+\begin{frame}[fragile]{Stanza Variables and Control Flow}
+\begin{stanza}
+;; Variables
+var x = 42
+
+;; if statement
+if 10 < 20 :
+  x = 2
+else :
+  x = 4   
+
+;; while statement
+var i = 0
+while i < 10 :
+  println(i)
+  i = i + 1
+  
+;; for statement
+for i in 0 to 10 do :
+  println(i)
+\end{stanza}
+\end{frame}
+
+\begin{frame}[fragile]{Stanza Collections}
+\begin{columns}
+\column{0.45\textwidth}
+\begin{stanza}
+;; Range
+val els = Range(0, 5, 1, false)
+val els = 0 to 5
+
+;; Array's
+val tbl = Array(256, 0)
+tbl[0] = 32
+val y = tbl[0]
+val n = length(tbl)
+
+;; Vector's
+val buf = Vector()
+add(buf, 12)
+val z = buf[0]
+val l = length(buf)
+\end{stanza}
+\column{0.45\textwidth}
+\begin{stanza}
+;; Tuples
+val els = [1, 2, 3]
+val [a, b, c] = els
+val m = length(els)
+
+;; List's
+val els = list(1, 2, 3)
+val a = head(els)
+val b = head(tail(els))
+val m = length(els)
+\end{stanza}
+\end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Parametric Types}
+\begin{stanza}
+;; Parametric Array's
+val tbl = Array<Int>(256, 0)
+
+Array: <T> . (Int) -> Array<T>
+
+;; Captured types
+get: <?T> . (Array<?T>, Int) -> T
+set: <?T> . (Array<?T>, Int, T) -> T
+defn reverse<?T> (xs: Array<?T>) -> Array<T> : ...
+\end{stanza}
+\end{frame}
+
+\begin{frame}[fragile]{Streams}
+\begin{stanza}
+val s = to-stream(0 to 5)
+;; supports more? and next
+
+while (more?(s)) :
+println(next(s))
+
+;; Streamable === implements to-stream
+to-stream: (Range) -> Stream<Int>
+to-stream: (String) -> Stream<Char>
+to-stream: <?T> . (Array<T>) -> Stream<T>
+to-stream: <?T> . (Stream<T>) -> Stream<T>
+\end{stanza}
+\end{frame}
+
+\begin{frame}[fragile]{Streamable Iteration}
+\begin{stanza}
+val tbl = Array<Int>(256, 0)
+
+;; loop over all indices
+for i in 0 to length(tbl) do :
+  tbl[i] = i
+
+;; loop of each sequence element
+var sum = 0
+for e in tbl do :
+  sum = sum + e
+
+;; parallel loop
+for (e in tbl, i in 0 to false) do :
+  tbl[i] = e + 10
+
+;; create second table with doubled elements
+val tbl2 = generate<Int> :
+  for i in 0 to 16 do: yield(tbl[i] * 2)
+\end{stanza}
+\end{frame}
+
+\begin{frame}[fragile]{Stanza Functional}
+\begin{stanza}
+;; simple scaling function, e.g., x2(3) => 6
+defn x2 (x:Int): 2 * x
+\end{stanza}
+
+\begin{stanza}
+val xs = [1, 2, 3]
+;; produce list of 2 * elements
+map(x2, xs)            ==> [2, 4, 6]
+map(fn (x): 2 * x, xs) ==> [2, 4, 6]
+map({2 * _}, xs)       ==> [2, 4, 6]
+\end{stanza}
+
+\begin{stanza}
+;; sum all elements using pairwise reduction, e.g., sum([1, 2, 3]) => 6
+reduce(plus, 0, xs) ==> 6
+defn sum (xs: Streamable<Int>) : reduce(plus, 0, xs)
+\end{stanza}
+\end{frame}
+
+\begin{frame}[fragile]{Stanza Multis and Methods}
+\begin{scala}
+defmulti deposit (amount:Int, account:String|Int) -> Int
+
+defmethod deposit (amount:Int, account:Int) -> Int :
+  println-all(["DEPOSITING" amount " in " count])
+
+defmethod deposit (amount:Int, account:String) -> Int :
+  println-all(["DEPOSITING" amount " in " count])
+\end{scala}
+\end{frame}
+
+\begin{frame}[fragile]{Stanza Type Oriented}
+\begin{stanza}
+definterface Blimp
+defmulti rad (b:Blimp) -> Float
+defn Blimp (r:Float) :
+  println("Another Blimp")
+  new Blimp :
+    defmethod rad (this) : r
+
+definterface Zep <: Blimp
+defmulti hydogren? (b:Zep) -> True|False
+defn Zep (r:Float, h?:True|False) :
+  new Zep :
+    defmethod rad (this) : r
+    defmethod hydogren? (this) : h?
+\end{stanza}
+\end{frame}
+
+\begin{frame}[fragile]{More Stanza}
+for more information, check out
+\begin{itemize}
+\item ``stanza by example'' online by Patrick Li
+\item \verb+stanza/core/Core.stanza+ + \verb+stanza/core/Verse.stanza+ for API
+\item major release end of summer
+\end{itemize}
+\end{frame}
+

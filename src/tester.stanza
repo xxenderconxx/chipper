@@ -7,11 +7,14 @@
 ;;   import stz/lexer
 ;;   import core/stringeater
 
+#use-syntax(core, chipper)
+
 defpackage tester :
   import core
   import verse
   import chipper
   import firrtl/ir
+  import decoupled
 
 defn hw-open (filename:String) -> ? :
   ($do-prim ls hw-open-lo filename)
@@ -29,6 +32,7 @@ public defmulti peek (t:Tester, name: String) -> Int
 public defmulti peek (t:Tester, name: String, index: Int) -> Int
 public defmulti poke (t:Tester, name: String, value: Int) -> False
 public defmulti poke (t:Tester, name: String, index: Int, value: Int) -> False
+public defmulti add-ios (t:Tester, ios:Streamable<SmartIO<Data>>) -> False
 public defmulti step (t:Tester) -> False
 public defmulti reset (t:Tester) -> False
 public defmulti expect (t:Tester, name: String, value: Int) -> True|False
@@ -61,11 +65,50 @@ defn exe-path () :
       loop(i - 1)
   loop(length(exe) - 1)
   
+public definterface SmartIO<T> <: Lengthable & Streamable<T>
+defmulti queue (s:SmartIO) -> Vector<Array<Int>>
+public defmulti channel<?T> (s:SmartIO<?T&Data>) -> DecoupledIO<T>
+public defmulti step (s:SmartIO)
+
+public defn add<?T> (s:SmartIO<?T&Data>, d:Streamable<Int>) : add(queue(s), to-array(d))
+public defn pop<?T> (s:SmartIO<?T&Data>) -> Array<Int> : pop(queue(s))
+public defn peek<?T> (s:SmartIO<?T&Data>) -> Array<Int> : peek(queue(s))
+public defn clear (s:SmartIO) : clear(queue(s))
+defmethod length (s:SmartIO) : length(queue(s))
+defmethod to-stream (s:SmartIO) : to-stream(queue(s))
+
+public defclass Source<T> <: SmartIO<T>
+public defn Source<?T> (t:Tester, chan:DecoupledIO<?T&Data>) :
+  val q = Vector<Array<Int>>()
+  new Source<T&Data> :
+    defmethod queue (this) : q
+    defmethod channel (this) : chan
+    defmethod step (this) :
+      if length(q) > 0 :
+        poke(t, chan.valid, 1)
+        dpoke(t, chan.bits, peek(q))
+        if peek(t, chan.ready) == 1 :
+          pop(q)
+      else :
+        poke(t, chan.valid, 0)
+      
+public defclass Sink<T> <: SmartIO<T>
+public defn Sink<?T> (t:Tester, chan:DecoupledIO<?T&Data>) :
+  val q = Vector<Array<Int>>()
+  new Sink<T&Data> :
+    defmethod queue (this) : q
+    defmethod channel (this) : chan
+    defmethod step (this) :
+      poke(t, chan.ready, 1)
+      if peek(t, chan.valid) == 1 :
+        add(q, dpeek(t, chan.bits))
+
 public defn Tester (dut:String) -> Tester :
   val path   = exe-path()
   val so     = string-join([exe-path() "/lib" dut ".so"])
   val handle = hw-open(so)
   var cycles: Int = 0
+  val smart-ios = Vector<SmartIO<Data>>()
   defn to-hex-int (s:String) -> Int :
     init-hex-tbl()
     var res = 0
@@ -76,12 +119,14 @@ public defn Tester (dut:String) -> Tester :
     defmethod dut (this) -> String : dut
     defmethod cmd (this, args:Streamable) -> String :
       hw-eval(handle, string-join(args))
+    defmethod add-ios (this, ios:Streamable<SmartIO<Data>>) :
+      do(add{smart-ios, _}, ios)
     defmethod poke (this, name: String, value: Int) :
       val str = cmd(this, ["wire_poke " name " " value])
-      println-all(["WIRE-POKE " name " = " value " -> " str])
+      println-all(["WIRE-POKE " name " = " to-hex(value) " -> " str])
     defmethod poke (this, name: String, index: Int, value: Int) :
       val str = cmd(this, ["mem_poke " name " " index " " value])
-      println-all(["MEM-POKE " name "[" index "] = " value " -> " str])
+      println-all(["MEM-POKE " name "[" index "] = " to-hex(value) " -> " str])
     defmethod peek (this, name: String) :
       val str = cmd(this, ["wire_peek " name])
       println-all(["WIRE-PEEK " name " -> " str])
@@ -95,18 +140,19 @@ public defn Tester (dut:String) -> Tester :
       println-all(["RESET " 1 " -> " str])
       cycles = 0
     defmethod step (this) :
+      do(step, smart-ios)
       val str = cmd(this, ["step 1"])
-      println-all(["STEP " 1 " -> " str])
+      println-all(["STEP[" cycles "] " 1 " -> " str])
       cycles = cycles + 1
     defmethod expect (this, name: String, value: Int) -> True|False :
       val got = peek(this, name)
-      println-all(["EXPECT " name " VALUE " value " -> " got])
+      println-all(["EXPECT " name " VALUE " to-hex(value) " -> " got])
       got == value
     defmethod run (this, f:(Tester) -> True|False) -> True|False :
       reset(this)
       val res = f(this)
       hw-close(handle)
-      println-all(["SUCCESS" when res else "FAILURE"])
+      println-all([if res: "SUCCESS" else: "FAILURE"])
       res
     defmethod cycles (this) -> Int :
       cycles
@@ -126,15 +172,35 @@ public defn poke (t:Tester, e:Data, i:Int, v:Int) :
 public defn peek (t:Tester, e:Data, i:Int) :
   peek(t, to-string(debug-name(dut(t), e)), i)
 
-public defn poke (t:Tester, e:Data, v:Int) :
-  poke(t, to-string(debug-name(dut(t), e)), v)
+public defn poke (t:Tester, d:Data, v:Int) :
+  poke(t, to-string(debug-name(dut(t), d)), v)
 
-public defn peek (t:Tester, e:Data) :
-  peek(t, to-string(debug-name(dut(t), e)))
+public defn peek (t:Tester, d:Bits) -> Int :
+  peek(t, to-string(debug-name(dut(t), d)))
   
-public defn expect (t:Tester, e:Data, v:Int) :
-  expect(t, to-string(debug-name(dut(t), e)), v)
+public defn expect (t:Tester, d:Bits, v:Int) :
+  expect(t, to-string(debug-name(dut(t), d)), v)
+
+;; public defn dpoke<?T> (t:Tester, d:?T&Data, v:T&Data) :
+;;   for (ed in flatten(d), ev in flatten(v)) do :
+;;     poke(t, to-string(debug-name(dut(t), ed)), ev)
+;; 
+;; public defn dpeek<?T> (t:Tester, d:?T&Data) -> T :
+;;   val elts = for e in flatten(d) stream :
+;;     peek(t, to-string(debug-name(dut(t), e)))
+;;   unflatten-ints(d, elts)
   
+public defn dpoke<?T> (t:Tester, d:?T&Data, v:Streamable<Int>) :
+  for (ed in flatten(d), ev in v) do :
+    poke(t, to-string(debug-name(dut(t), ed)), ev)
+
+public defn dpeek<?T> (t:Tester, d:?T&Data) -> Array<Int> :
+  to-array(for e in flatten(d) stream :
+             peek(t, to-string(debug-name(dut(t), e))))
+  
+;; public defn expect (t:Tester, e:Data, v:Int) :
+;;   expect(t, to-string(debug-name(dut(t), e)), v)
+
 public defn expect (isGood:True|False, args:Streamable) :
   if not isGood :
     println-all(args)
