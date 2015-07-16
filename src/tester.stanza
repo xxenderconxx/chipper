@@ -39,16 +39,6 @@ public defmulti expect (t:Tester, name: String, value: Int) -> True|False
 public defmulti run (t:Tester, f: (Tester) -> True|False) -> True|False
 public defmulti cycles (t:Tester) -> Int
 
-val hex-tbl = Array<Int>(256)
-var hex-tbl-init? = false
-defn init-hex-tbl () :
-  if not hex-tbl-init? :
-    for i in 0 to 10 do :
-      hex-tbl[i + to-int('0')] = i
-    for i in 0 to 6 do :
-      hex-tbl[i + to-int('a')] = i + 10
-    hex-tbl-init? = true
-
 var tester-path = "generated"
 
 public defn set-tester-path (path:String) :
@@ -68,7 +58,7 @@ defn exe-path () :
 public definterface SmartIO<T> <: Lengthable & Streamable<T>
 defmulti queue (s:SmartIO) -> Vector<Array<Int>>
 public defmulti channel<?T> (s:SmartIO<?T&Data>) -> DecoupledIO<T>
-public defmulti step (s:SmartIO)
+defmulti step (s:SmartIO)
 
 public defn add<?T> (s:SmartIO<?T&Data>, d:Streamable<Int>) : add(queue(s), to-array(d))
 public defn pop<?T> (s:SmartIO<?T&Data>) -> Array<Int> : pop(queue(s))
@@ -86,7 +76,7 @@ public defn Source<?T> (t:Tester, chan:DecoupledIO<?T&Data>) :
     defmethod step (this) :
       if length(q) > 0 :
         poke(t, chan.valid, 1)
-        dpoke(t, chan.bits, peek(q))
+        poke*(t, chan.bits, peek(q))
         if peek(t, chan.ready) == 1 :
           pop(q)
       else :
@@ -101,7 +91,7 @@ public defn Sink<?T> (t:Tester, chan:DecoupledIO<?T&Data>) :
     defmethod step (this) :
       poke(t, chan.ready, 1)
       if peek(t, chan.valid) == 1 :
-        add(q, dpeek(t, chan.bits))
+        add(q, peek*(t, chan.bits))
 
 public defn Tester (dut:String) -> Tester :
   val path   = exe-path()
@@ -109,12 +99,6 @@ public defn Tester (dut:String) -> Tester :
   val handle = hw-open(so)
   var cycles: Int = 0
   val smart-ios = Vector<SmartIO<Data>>()
-  defn to-hex-int (s:String) -> Int :
-    init-hex-tbl()
-    var res = 0
-    for i in 2 to length(s) do :
-      res = 16 * res + hex-tbl[to-int(s[i])]
-    res
   new Tester :
     defmethod dut (this) -> String : dut
     defmethod cmd (this, args:Streamable) -> String :
@@ -123,10 +107,12 @@ public defn Tester (dut:String) -> Tester :
       do(add{smart-ios, _}, ios)
     defmethod poke (this, name: String, value: Int) :
       val str = cmd(this, ["wire_poke " name " " value])
-      println-all(["WIRE-POKE " name " = " to-hex(value) " -> " str])
+      val oks = if str != "ok": string-join([" -> " str]) else: ""
+      println-all(["WIRE-POKE " name " = " to-hex(value) oks])
     defmethod poke (this, name: String, index: Int, value: Int) :
       val str = cmd(this, ["mem_poke " name " " index " " value])
-      println-all(["MEM-POKE " name "[" index "] = " to-hex(value) " -> " str])
+      val oks = if str != "ok": string-join([" -> " str]) else: ""
+      println-all(["MEM-POKE " name "[" index "] = " to-hex(value) oks])
     defmethod peek (this, name: String) :
       val str = cmd(this, ["wire_peek " name])
       println-all(["WIRE-PEEK " name " -> " str])
@@ -146,7 +132,7 @@ public defn Tester (dut:String) -> Tester :
       cycles = cycles + 1
     defmethod expect (this, name: String, value: Int) -> True|False :
       val got = peek(this, name)
-      println-all(["EXPECT " name " VALUE " to-hex(value) " -> " got])
+      println-all(["EXPECT " name " " to-hex(value) " -> " got])
       got == value
     defmethod run (this, f:(Tester) -> True|False) -> True|False :
       reset(this)
@@ -181,11 +167,11 @@ public defn peek (t:Tester, d:Bits) -> Int :
 public defn expect (t:Tester, d:Bits, v:Int) :
   expect(t, to-string(debug-name(dut(t), d)), v)
 
-public defn dpoke<?T> (t:Tester, d:?T&Data, v:Streamable<Int>) :
+public defn poke*<?T> (t:Tester, d:?T&Data, v:Streamable<Int>) :
   for (ed in flatten(d), ev in v) do :
     poke(t, to-string(debug-name(dut(t), ed)), ev)
 
-public defn dpeek<?T> (t:Tester, d:?T&Data) -> Array<Int> :
+public defn peek*<?T> (t:Tester, d:?T&Data) -> Array<Int> :
   to-array(for e in flatten(d) stream :
              peek(t, to-string(debug-name(dut(t), e))))
   

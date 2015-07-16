@@ -26,6 +26,23 @@ public defn to-hex (num: Int) -> String :
     print(buf, to-char((to-int('0') + r) when r < 10 else (to-int('a') + r - 10)))
   to-string(buf)
 
+val hex-tbl = Array<Int>(256)
+var hex-tbl-init? = false
+defn init-hex-tbl () :
+  if not hex-tbl-init? :
+    for i in 0 to 10 do :
+      hex-tbl[i + to-int('0')] = i
+    for i in 0 to 6 do :
+      hex-tbl[i + to-int('a')] = i + 10
+    hex-tbl-init? = true
+
+public defn to-hex-int (s:String) -> Int :
+  init-hex-tbl()
+  var res = 0
+  for i in 2 to length(s) do :
+    res = 16 * res + hex-tbl[to-int(s[i])]
+  res
+
 public defn rand (lo:Int, hi:Int) -> Int :
    (rand() % (hi - lo + 1)) + lo
 
