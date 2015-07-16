@@ -181,15 +181,6 @@ public defn peek (t:Tester, d:Bits) -> Int :
 public defn expect (t:Tester, d:Bits, v:Int) :
   expect(t, to-string(debug-name(dut(t), d)), v)
 
-;; public defn dpoke<?T> (t:Tester, d:?T&Data, v:T&Data) :
-;;   for (ed in flatten(d), ev in flatten(v)) do :
-;;     poke(t, to-string(debug-name(dut(t), ed)), ev)
-;; 
-;; public defn dpeek<?T> (t:Tester, d:?T&Data) -> T :
-;;   val elts = for e in flatten(d) stream :
-;;     peek(t, to-string(debug-name(dut(t), e)))
-;;   unflatten-ints(d, elts)
-  
 public defn dpoke<?T> (t:Tester, d:?T&Data, v:Streamable<Int>) :
   for (ed in flatten(d), ev in v) do :
     poke(t, to-string(debug-name(dut(t), ed)), ev)

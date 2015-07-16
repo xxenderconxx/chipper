@@ -39,11 +39,7 @@ public definterface Data
 public defmulti firrtl-exp (e:Data) -> fExpression
 public defmulti type<?T> (e:?T&Data) -> Type<T>
 public defmulti flatten (e:Data) -> Streamable<UInt>
-public defmulti unflatten<?T> (e:?T&Data, v:Streamable<UInt>) -> T
 public defmulti width (x:Data) -> Int
-
-public defn unflatten-ints<?T> (e:?T&Data, v:Streamable<Int>) -> T :
-  unflatten(e, stream(UIntLit, v))
 
 public defn lit-value (d:Data) -> Int|False :
   match(firrtl-exp(d)) :
@@ -210,12 +206,6 @@ defn VecHandle<T> (T:Type<T&Data>, n:Int, e:fExpression) :
             this[i]
       defmethod flatten (this) -> Streamable<UInt> :
          concat-all(map(flatten, to-list(this)))
-      defmethod unflatten (this, v:Streamable<UInt>) :
-         val w = WireExp(gensym("T"), type(this))
-         val s = to-stream(v)
-         for (i in 0 to n) do :
-           unflatten(w[i], s)
-         w
 
 public defclass VecType<T> <: Type<Vec<T>>
 defn VecType<T> (T:Type<T&Data>, n:Int) :
@@ -234,15 +224,13 @@ public defn Vec<?T> (T:Type<?T&Data>, n:Int) :
 public definterface Bits <: Data
 
 ;================ UNSIGNED INTEGERS =========================
-;; public definterface UInt <: Bits
-;; defclass UIntC <: UInt
-public defclass UInt <: Bits
+public definterface UInt <: Bits
+defclass UIntC <: UInt
 defn UIntHandle (w:fWidth, e:fExpression) :
-   new UInt : ;; UIntC
+   new UIntC : 
       defmethod firrtl-exp (this) : e
-      defmethod type (this) : UIntType(w) as Type<UInt> ;; UIntC
+      defmethod type (this) : UIntType(w) as Type<UIntC>
       defmethod flatten (this) -> Streamable<UInt> : list(this)
-      defmethod unflatten (this, v:Streamable<UInt>) : next(to-stream(v))
       defmethod width (this) : value(w)
 
 public defclass UIntType <: Type<UInt>
@@ -266,15 +254,13 @@ public defn UIntLit (v:String) : UIntLit(to-lit-val(v))
 public defn UIntLit (v:String, w:Int) : UIntLit(to-lit-val(v), w)
 
 ;================ SIGNED INTEGERS =========================
-;; public definterface SInt <: Bits
-;; defclass SIntC <: SInt
-public defclass SInt <: Bits
+public definterface SInt <: Bits
+defclass SIntC <: SInt
 defn SIntHandle (w:fWidth, e:fExpression) :
-   new SInt : ;; SIntC
+   new SIntC : 
       defmethod firrtl-exp (this) : e
-      defmethod type (this) : SIntType(w) as Type<SInt> ;; SIntC
+      defmethod type (this) : SIntType(w) as Type<SIntC> 
       defmethod flatten (this) -> Streamable<UInt> : list(as-uint(this))
-      defmethod unflatten (this, v:Streamable<UInt>) : as-sint(next(to-stream(v)))
       defmethod width (this) : value(w)
 
 public defclass SIntType <: Type<SInt>
