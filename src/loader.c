@@ -1,3 +1,5 @@
+/* See License.txt for details about licensing. */
+
 typedef void open_t(void);
 typedef void close_t(void);
 typedef const char* eval_t(const char*);

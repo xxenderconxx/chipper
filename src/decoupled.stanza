@@ -1,3 +1,5 @@
+;See License.txt for details about licensing.
+
 #use-syntax(core, chipper)
 
 defpackage decoupled :

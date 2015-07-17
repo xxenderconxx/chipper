@@ -1,3 +1,5 @@
+;See License.txt for details about licensing.
+
 #if-defined(STANDALONE-CHIPPER) :
    #include<"core/stringeater.stanza">
    #include<"core/macro-utils.stanza">

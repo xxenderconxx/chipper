@@ -1,3 +1,5 @@
+;See License.txt for details about licensing.
+
 
 
 defn sint-delays (x: SInt, n: Int): List<T> :

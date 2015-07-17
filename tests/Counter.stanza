@@ -1,3 +1,5 @@
+;See License.txt for details about licensing.
+
 #include("src/use-chipper.stanza")
 #include("src/use-tester.stanza")
 #include("src/stdlib.stanza")

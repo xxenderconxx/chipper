@@ -1,3 +1,5 @@
+;See License.txt for details about licensing.
+
 defpackage firrtl/ir :
    import core
    import verse
