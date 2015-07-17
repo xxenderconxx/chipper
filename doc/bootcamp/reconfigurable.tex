@@ -1,0 +1,346 @@
+% \documentclass[xcolor=pdflatex,dvipsnames,table]{beamer}
+% \usepackage{epsfig,graphicx}
+% \usepackage{palatino}
+% \usepackage{fancybox}
+% \usepackage{relsize}
+% \usepackage[procnames]{listings}
+% 
+% \input{../style/scala.tex}
+% \input{../style/stanza.tex}
+% \input{../style/talk.tex}
+% 
+% \title{Reconfigurable Computing Landscape}
+% \author{Jonathan Bachrach}
+% \date{\today}
+% \institute[UC Berkeley]{EECS UC Berkeley}
+% 
+% \begin{document}
+% 
+% \begin{frame}
+% \titlepage
+% \end{frame}
+% \addtocounter{framenumber}{-1}
+
+\begin{frame}[fragile]{Reconfigurable Landscape}
+
+\begin{itemize}
+\item speed / cost / programmability
+\item what is Reconfigurable Computing?
+\item what are FPGAs?
+\item how to program FPGAs?
+\item FPGA strength and weaknesses
+\item FPGA system architectures
+\item how to speed up programmability?
+\item opportunities
+\end{itemize}
+
+\end{frame}
+
+\begin{frame}[fragile]{Speed / Cost / Power / Programmability}
+
+\begin{center}
+\begin{tabular}{|r|c|c|}
+\hline
+{\bf dim} & {\bf CPU} & {\bf ASIC} \\
+\hline
+{\bf speed} & 1 & 100-1000x \\
+\hline
+{\bf cost} & 1 & >1000000x \\
+\hline
+{\bf power} & 100-1000x & 1 \\
+\hline
+{\bf prog} & >1000x & 1 \\
+\hline
+\end{tabular}
+\end{center}
+
+\end{frame}
+
+\begin{frame}[fragile]{What is Reconfigurable Computing?}
+
+\begin{itemize}
+\item Reprogrammability
+\item Higher Speed Lower Power with Less Cost
+\item Offerings
+\begin{itemize}
+\item Programmable Logic
+\begin{itemize}
+\item CPLDs
+\item PLA
+\item FPGAs
+\end{itemize}
+\item Cellular Automata
+\item Coarse Grain Reconfigurable Arrays
+\end{itemize}
+\end{itemize}
+
+\end{frame}
+
+\begin{frame}[fragile]{What are FPGAs?}
+
+\begin{center}
+\begin{tabular}{|c|c|c|}
+\hline
+{\bf name} & {\bf implementation} & {\bf description} \\
+\hline
+\hline
+{\bf logic} & LUTs & 4 input lookup tables \\
+\hline
+{\bf state} & FLOPs & flip flops \\
+\hline
+{\bf wires} & CLBs & circuit switched network \\
+\hline
+{\bf io} & IO blocks & dir / voltage programmable \\
+\hline
+\end{tabular}
+\end{center}
+
+\begin{center}
+\includegraphics[height=0.4\textheight]{figs/lut2.png}
+\includegraphics[height=0.4\textheight]{figs/lut6.png}
+\end{center}
+
+\end{frame}
+
+\begin{frame}[fragile]{What are FPGAs?}
+
+\begin{center}
+\includegraphics[height=0.8\textheight]{figs/fpga-overview.png}
+\end{center}
+
+\end{frame}
+
+\begin{frame}[fragile]{Evolution of FPGAs}
+
+\begin{center}
+\begin{tabular}{|c|c|c|}
+\hline
+{\bf name} & {\bf implementation} & {\bf description} \\
+\hline
+\hline
+{\bf arith} & DSPs & add + mul (e.g., 48b) \\
+{\bf state} & Block Rams & larger memories (e.g., 20KB) \\
+{\bf logic} & Hard Blocks & memory controllers \\
+{\bf sla}   & CPUs & control fabric \\
+{\bf arith} & FPUs & floating point \\
+\hline
+\end{tabular}
+\end{center}
+
+\end{frame}
+
+\begin{frame}[fragile]{FPGA Programming}
+
+\begin{itemize}
+\item Design Circuit in Verilog
+\item Configure Chip with functions, clocks and pins
+\item Place and Map circuit elements on FPGA elements
+\item Route signals between elements 
+\end{itemize}
+
+\end{frame}
+
+\begin{frame}[fragile]{FPGA Strengths}
+
+Good for 
+\begin{itemize}
+\item lots of parallelism
+\item lots of memory access
+\item bit level manipulations or low bit width
+\item hard real time
+\item low power
+\item embedded
+\end{itemize}
+
+\end{frame}
+
+\begin{frame}[fragile]{FPGA Weaknesses}
+
+Bad because
+\begin{itemize}
+\item extremely slow to program
+\item painful to debug
+\item hard to interoperate with
+\item double floating point 
+\item bandwidth intensive compute
+\item proprietary and quirky tools 
+\end{itemize}
+
+\end{frame}
+
+\begin{frame}[fragile]{Speed / Cost / Power / Programmability}
+
+\begin{center}
+\begin{tabular}{|r|c|c|c|}
+\hline
+{\bf dim} & {\bf CPU} & {\bf FPGA} & {\bf ASIC} \\
+\hline
+{\bf speed} & 1 & 1-100x & 100-1000x \\
+\hline
+{\bf cost} & 1 & 10-100x & >1000000x \\
+\hline
+{\bf power} & 100-1000x & 10-100x & 1 \\
+\hline
+{\bf prog} & >1000x & >10x & 1 \\
+\hline
+\end{tabular}
+\end{center}
+
+\end{frame}
+
+\begin{frame}[fragile]{FPGA System Architectures}
+
+\begin{itemize}
+\item how do you control FPGA?
+\item how do you talk to FPGA?
+\end{itemize}
+
+\end{frame}
+
+\begin{frame}[fragile]{Raw FPGA}
+
+\begin{itemize}
+\item ingredients
+\begin{itemize}
+\item GPIO
+\item Mem Controller
+\item Serdes
+\end{itemize}
+\item how to control?
+\begin{itemize}
+\item you don't: just state machines
+\item connect with embedded controller
+\end{itemize}
+\end{itemize}
+
+\begin{center}
+\includegraphics[height=0.3\textheight]{figs/fpga-stick.jpg}
+\end{center}
+
+\end{frame}
+
+\begin{frame}[fragile]{PicoComputing FPGA}
+\begin{center}
+\includegraphics[width=0.9\textwidth]{figs/pico-computing-pcie.jpg} \\
+\end{center}
+\end{frame}
+
+\begin{frame}[fragile]{Soft Core FPGA}
+
+\begin{itemize}
+\item ingredients
+\begin{itemize}
+\item soft processor 
+\end{itemize}
+\item how to control?
+\begin{itemize}
+\item processor talks to fabric through various means
+\item vendor specific cores and tools
+\end{itemize}
+\end{itemize}
+
+\end{frame}
+
+\begin{frame}[fragile]{Hard Core FPGA}
+
+\begin{itemize}
+\item ingredients
+\begin{itemize}
+\item hard processor 
+\item FPGA
+\end{itemize}
+\item how to control?
+\begin{itemize}
+\item network
+\item memory
+\end{itemize}
+
+\end{itemize}
+
+\vspace{0.5cm}
+
+\begin{center}
+\begin{footnotesize}
+\begin{tabular}{|c|c|c|c|c|c|}
+\hline
+{\bf kind} & {\bf name} & {\bf throughput} &  {\bf latency} & {\bf coherent} & {\bf virtual} \\
+\hline
+\hline
+{\bf net} & AXI / ZYNQ & low & high & no & no \\
+\hline
+{\bf net} & PCIe / pico & high & high & no & no \\
+\hline
+{\bf mem} & ACP/L2 ZYNQ & high & lower & yes & no \\
+\hline
+{\bf mem} & ACP/DRAM ZYNQ & higher & low & yes & no \\
+\hline
+{\bf mem} & QPI / HARP & higher & lower & yes & yes \\
+\hline
+\end{tabular}
+\end{footnotesize}
+\end{center}
+
+\end{frame}
+
+\begin{frame}[fragile]{Xilinx ZYNQ FPGA}
+\begin{columns}
+\column{0.45\textwidth}
+\begin{center}
+\includegraphics[width=0.9\columnwidth]{figs/zedboard.jpg} \\
+\end{center}
+\column{0.45\textwidth}
+\begin{itemize}
+\item peek/poke interface with AXI lite
+\item DMA over streaming interface with device driver
+\item mem mapping with physical addresses
+\end{itemize}
+\end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Intel HARP FPGA}
+\begin{columns}
+\column{0.45\textwidth}
+\begin{itemize}
+\item write CSR words
+\item memory based locking primitives (AMOs)
+\item page pinning
+\item cache line access
+\item random access
+\end{itemize}
+\column{0.45\textwidth}
+\begin{center}
+\includegraphics[width=0.9\columnwidth]{figs/harp.jpg} \\
+\includegraphics[width=0.7\columnwidth]{figs/Altera_StratixIVGX_FPGA.jpg} 
+\end{center}
+\end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Programmability}
+
+\begin{columns}
+\column{0.35\textwidth}
+\begin{itemize}
+\item partial programming
+\item floor planning
+\item overlays
+\end{itemize}
+\column{0.55\textwidth}
+\begin{center}
+\includegraphics[width=0.9\columnwidth]{figs/floor-planning.jpg}
+\end{center}
+\end{columns}
+
+\end{frame}
+
+
+\begin{frame}[fragile]{Future Reconfigurable Computing?}
+
+\begin{itemize}
+\item Hard Core with QPI
+\item Coarse Grain Reconfigurable Arrays
+\item Open Source FPGA?
+\end{itemize}
+
+\end{frame}
+
+% \end{document}

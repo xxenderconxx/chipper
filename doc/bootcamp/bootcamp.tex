@@ -25,6 +25,7 @@
 
 \begin{itemize}
 \item introduction to reconfigurable computing
+\item introduction to hardware design
 \item introduce you to stanza
 \item get you started with Chipper
 \item get a basic working knowledge of Chipper
@@ -233,6 +234,8 @@ involves a couple intractable problems
 \note{wouldn't it be great if ...}
 \end{frame}
 
+\input{reconfigurable.tex}
+
 \begin{frame}[fragile]
 \frametitle{Status Quo Generators}
 \begin{enumerate}
@@ -284,758 +287,7 @@ ad hoc parameterized generation of circuits \\[0.5cm]
 when need more powerful construction people write perl scripts to write verilog}
 \end{frame}
 
-\begin{frame}[fragile]
-\frametitle{Chipper is a {\it Library}}
-\begin{itemize}
-\item Classes are provided for circuit components:
-\begin{itemize}
-\item \verb+Register(name)+
-\item \verb+Adder()+
-\item \verb+Multiplexor()+
-\item \verb+Wire(name)+
-\item \verb+Constant(value)+
-\end{itemize}
-
-\noindent
-and \verb+new+ used to construct components and \verb+connect+ used to wire them together:
-\begin{itemize}
-\item \verb+new Register(name)+
-\item ...
-\item \verb+connect(input, output)+
-\end{itemize}
-\end{itemize}
-\end{frame}
-
-\begin{frame}[fragile]
-\frametitle{What if Chipper was a Stanza Library?}
-\begin{columns}
-\column{0.50\textwidth}
-{\lstset{basicstyle={\tiny\ttfamily}}
-\begin{stanza}
-defn main () :
-  ;; Create Components
-  val reset       = Wire("reset")
-  val counter     = Register("counter")
-  val adder       = Adder()
-  val multiplexor = Multiplexor()
-  val one         = UInt(1)
-  val zero        = UInt(0)
-
-  ;; Connect Components
-  connect(multiplexor.choice, reset)
-  connect(multiplexor.in_a, zero.out)
-  connect(multiplexor.in_b, adder.out)
-  connect(counter.in, multiplexor.out)
-  connect(adder.in_a, counter.out)
-  connect(adder.in_b, one.out)
-
-  ;; Produce Verilog
-  generate_verilog(counter)
-\end{stanza}
-}
-\column{0.40\textwidth}
-\begin{center}
-\includegraphics[width=0.9\textwidth]{figs/simple-counter.pdf}
-\end{center}
-\end{columns}
-\end{frame}
-
-\begin{frame}[fragile]
-\frametitle{What if Chipper was a Stanza Library?}
-\begin{columns}
-\column{0.50\textwidth}
-{\lstset{basicstyle={\tiny\ttfamily}}
-\begin{stanza}
-defn main () :
-  ;; Create Components
-  val reset       = Wire("reset")
-  val counter     = Register("counter")
-  val adder       = Adder()
-  val multiplexor = Multiplexor()
-  val one         = UInt(1)
-  val zero        = UInt(0)
-
-  ;; Connect Components
-  connect(multiplexor.choice, reset)
-  connect(multiplexor.in_a, zero.out)
-  connect(multiplexor.in_b, adder.out)
-  connect(counter.in, multiplexor.out)
-  connect(adder.in_a, counter.out)
-  connect(adder.in_b, one.out)
-
-  ;; Produce Verilog
-  generate_verilog(counter)
-\end{stanza}
-}
-\column{0.40\textwidth}
-\begin{center}
-\includegraphics[width=0.9\textwidth]{figs/simple-counter.pdf}
-\end{center}
-\end{columns}
-\begin{itemize}
-\item using Stanza to programmatically generate hardware
-\item can use full power of Stanza (loops, arrays, conditionals, ...)
-\item zero cost abstraction
-\end{itemize}
-\end{frame}
-
-\begin{frame}[fragile]
-\frametitle{What if Chipper was a Stanza Library?}
-\begin{columns}
-\column{0.50\textwidth}
-{\lstset{basicstyle={\tiny\ttfamily}}
-\begin{stanza}
-defn main () :
-  ;; Create Components
-  val reset       = Wire("reset")
-  val counter     = Register("counter")
-  val adder       = Adder()
-  val multiplexor = Multiplexor()
-  val one         = UInt(1)
-  val zero        = UInt(0)
-
-  ;; Connect Components
-  connect(multiplexor.choice, reset)
-  connect(multiplexor.in_a, zero.out)
-  connect(multiplexor.in_b, adder.out)
-  connect(counter.in, multiplexor.out)
-  connect(adder.in_a, counter.out)
-  connect(adder.in_b, one.out)
-
-  ;; Produce Verilog
-  generate_verilog(counter)
-\end{stanza}
-}
-\column{0.40\textwidth}
-\begin{center}
-\includegraphics[width=0.9\textwidth]{figs/simple-counter.pdf}
-\end{center}
-\end{columns}
-\begin{itemize}
-\item but Stanza is pretty Verbose, how can we do better?
-\end{itemize}
-\end{frame}
-
-\begin{frame}[fragile]
-\frametitle{Functional Composition of Adder}
-\begin{columns}
-\column{0.4\textwidth}
-{\lstset{basicstyle={\tiny\ttfamily}, escapechar=!}
-\begin{stanza}
-defn main () :
-  ;; Create Components
-  val reset       = Wire("reset")
-  val counter     = Register("counter")
-  !\colorbox{yellow}{val adder       = Adder()}!
-  val multiplexor = Multiplexor()
-  val one         = UInt(1)
-  val zero        = UInt(0)
-
-  ;; Connect Components
-  connect(multiplexor.choice, reset)
-  connect(multiplexor.in_a, zero.out)
-  !\colorbox{yellow}{connect(multiplexor.in\_b, adder.out)}!
-  connect(counter.in, multiplexor.out)
-  !\colorbox{yellow}{connect(adder.in\_a, counter.out)}!
-  !\colorbox{yellow}{connect(adder.in\_b, one.out)}!
-
-  ;; Produce Verilog
-  generate_verilog(counter)
-\end{stanza}
-}
-
-\column{0.05\textwidth}
-\begin{center}
-$\Rightarrow$
-\end{center}
-\column{0.4\textwidth}
-
-{\lstset{basicstyle={\tiny\ttfamily}, escapechar=!}
-\begin{stanza}
-defn main () :
-  ;; Create Components
-  val reset       = Wire("reset")
-  val counter     = Register("counter")
-  val multiplexor = Multiplexor()
-  val one         = UInt(1)
-  val zero        = UInt(0)
-
-  ;; Connect Components
-  connect(multiplexor.choice, reset)
-  connect(multiplexor.in_a, zero.out)
-  connect(multiplexor.in_b, 
-          !\colorbox{yellow}{make\_adder(one.out, counter.out))}!
-  connect(counter.in, multiplexor.out)
-
-  ;; Produce Verilog
-  generate_verilog(counter)
-\end{stanza}
-}
-\end{columns}
-\vspace{1cm}
-{\it functional programming}
-\end{frame}
-
-\begin{frame}[fragile]
-\frametitle{Functional Composition of Multiplexor}
-\begin{columns}
-\column{0.4\textwidth}
-{\lstset{basicstyle={\tiny\ttfamily}, escapechar=!}
-\begin{stanza}
-defn main () :
-  ;; Create Components
-  val reset       = Wire("reset")
-  val counter     = Register("counter")
-  !\colorbox{yellow}{val multiplexor = Multiplexor()}!
-  val one         = UInt(1)
-  val zero        = UInt(0)
-
-  ;; Connect Components
-  !\colorbox{yellow}{connect(multiplexor.choice, reset)}!
-  !\colorbox{yellow}{connect(multiplexor.in\_a, zero.out)}!
-  !\colorbox{yellow}{connect(multiplexor.in\_b,}!
-          !\colorbox{yellow}{make\_adder(one.out, counter.out))}!
-  !\colorbox{yellow}{connect(counter.in, multiplexor.out)}!
-
-  ;; Produce Verilog
-  generate_verilog(counter)
-\end{stanza}
-}
-\column{0.05\textwidth}
-\begin{center}
-$\Rightarrow$
-\end{center}
-\column{0.4\textwidth}
-{\lstset{basicstyle={\tiny\ttfamily}, escapechar=!}
-\begin{stanza}
-defn main () :
-  ;; Create Components
-  val reset   = Wire("reset")
-  val counter = Register("counter")
-  val one     = UInt(1)
-  val zero    = UInt(0)
-
-  ;; Connect Components
-  connect(counter.in, 
-    !\colorbox{yellow}{make\_multiplexor(reset,}!
-      !\colorbox{yellow}{zero.out}!
-      !\colorbox{yellow}{make\_adder(one.out, counter.out)))}!
-
-  ;; Produce Verilog
-  generate_verilog(counter)
-\end{stanza}
-}
-\end{columns}
-\vspace{1cm}
-{\it functional programming}
-\end{frame}
-
-\begin{frame}[fragile]
-\frametitle{Functional Composition of UInt Creation}
-\begin{columns}
-\column{0.4\textwidth}
-{\lstset{basicstyle={\tiny\ttfamily}, escapechar=!}
-\begin{stanza}
-defn main () :
-  ;; Create Components
-  val reset   = Wire("reset")
-  val counter = Register("counter")
-  !\colorbox{yellow}{val one     = UInt(1)}!
-  !\colorbox{yellow}{val zero    = UInt(0)}!
-
-  ; Connect Components
-  connect(counter.in, 
-    make_multiplexor(reset,
-      !\colorbox{yellow}{zero.out}!,
-      make_adder(!\colorbox{yellow}{one.out}!, counter.out)))
-
-  ;; Produce Verilog
-  generate_verilog(counter)
-\end{stanza}
-}
-\column{0.05\textwidth}
-\begin{center}
-$\Rightarrow$
-\end{center}
-\column{0.4\textwidth}
-{\lstset{basicstyle={\tiny\ttfamily}, escapechar=!}
-\begin{stanza}
-defn main () :
-  ;; Create Components
-  val reset   = Wire("reset")
-  val counter = Register("counter")
-
-  ;; Connect Components
-  connect(counter.in, 
-    make_multiplexor(reset,
-      !\colorbox{yellow}{UInt(0)}!,
-      make_adder(!\colorbox{yellow}{UInt(1)}!, counter.out)))
-
-  ;; Produce Verilog
-  generate_verilog(counter)
-\end{stanza}
-}
-\end{columns}
-\vspace{1cm}
-{\it functional programming}
-\end{frame}
-
-\begin{frame}[fragile]
-\frametitle{Overload Addition Operator}
-\begin{columns}
-\column{0.4\textwidth}
-{\lstset{basicstyle={\tiny\ttfamily}, escapechar=!}
-\begin{stanza}
-defn main () :
-  ;; Create Components
-  val reset   = Wire("reset")
-  val counter = Register("counter")
-
-  ;; Connect Components
-  connect(counter.in, 
-    make_multiplexor(reset,
-      UInt(0),
-      !\colorbox{yellow}{make\_adder(UInt(1), counter.out)}!))
-
-  ;; Produce Verilog
-  generate_verilog(counter)
-\end{stanza}
-}
-\column{0.05\textwidth}
-\begin{center}
-$\Rightarrow$
-\end{center}
-\column{0.4\textwidth}
-{\lstset{basicstyle={\tiny\ttfamily}, escapechar=!}
-\begin{stanza}
-defn main () :
-  ;; Create Components
-  val reset   = Wire("reset")
-  val counter = Register("counter")
-
-  ;; Connect Components
-  connect(counter.in, 
-    make_multiplexor(reset,
-      UInt(0),
-      !\colorbox{yellow}{UInt(1) + counter.out}!))
-
-  ;; Produce Verilog
-  generate_verilog(counter)
-\end{stanza}
-}
-\end{columns}
-\vspace{1cm}
-{\bf operator overloading}
-\end{frame}
-
-\begin{frame}[fragile]
-\frametitle{Introduce Connect Infix Operator}
-\begin{columns}
-\column{0.4\textwidth}
-{\lstset{basicstyle={\tiny\ttfamily}, escapechar=!}
-\begin{stanza}
-defn main () :
-  ;; Create Components
-  val reset   = Wire("reset")
-  val counter = Register("counter")
-
-  ;; Connect Components
-  !\colorbox{yellow}{connect(}!counter.in, 
-    make_multiplexor(reset,
-      UInt(0),
-      UInt(1) + counter.out)!\colorbox{yellow}{)}!
-
-  ;; Produce Verilog
-  generate_verilog(counter)
-\end{stanza}
-}
-\column{0.05\textwidth}
-\begin{center}
-$\Rightarrow$
-\end{center}
-\column{0.4\textwidth}
-{\lstset{basicstyle={\tiny\ttfamily}, escapechar=!}
-\begin{stanza}
-defn main () :
-  ;; Create Components
-  val reset   = Wire("reset")
-  val counter = Register("counter")
-
-  ;; Connect Components
-  counter.in !\colorbox{yellow}{:=}!
-    make_multiplexor(reset,
-      UInt(0),
-      UInt(1) + counter.out)
-
-  ;; Produce Verilog
-  generate_verilog(counter)
-\end{stanza}
-}
-\end{columns}
-\vspace{1cm}
-{\bf operator overloading}
-\end{frame}
-
-\begin{frame}[fragile]
-\frametitle{Automatically Create Multiplexors}
-\begin{columns}
-\column{0.4\textwidth}
-{\lstset{basicstyle={\tiny\ttfamily}, escapechar=!}
-\begin{stanza}
-defn main () :
-  ;; Create Components
-  val reset   = Wire("reset")
-  val counter = Register("counter")
-
-  ;; Connect Components
-  counter.in :=
-    !\colorbox{yellow}{make\_multiplexor(reset,}!
-      UInt(0),
-      UInt(1) + counter.out!\colorbox{yellow}{)}!
-
-  ;; Produce Verilog
-  generate_verilog(counter)
-\end{stanza}
-}
-\column{0.05\textwidth}
-\begin{center}
-$\Rightarrow$
-\end{center}
-\column{0.4\textwidth}
-{\lstset{basicstyle={\tiny\ttfamily}, escapechar=!}
-\begin{stanza}
-defn main () :
-  ;; Create Components
-  val reset   = Wire("reset")
-  val counter = Register("counter")
-
-  ;; Connect Components
-  !\colorbox{yellow}{when reset :}!
-    counter.in := UInt(0)
-  !\colorbox{yellow}{else :}!
-    counter.in := UInt(1) + counter.out
-
-  ;; Produce Verilog
-  generate_verilog(counter)
-\end{stanza}
-}
-\end{columns}
-\vspace{1cm}
-{\bf macros}
-\end{frame}
-
-\begin{frame}[fragile]
-\frametitle{Grab Names of Wires Directly}
-\begin{columns}
-\column{0.4\textwidth}
-{\lstset{basicstyle={\tiny\ttfamily}, escapechar=!}
-\begin{stanza}
-defn main () :
-  ;; Create Components
-  !\colorbox{yellow}{val reset   = Wire("reset")}!
-  !\colorbox{yellow}{val counter = Register("counter")}!
-
-  ;; Connect Components
-  when reset :
-    counter.in := UInt(0)
-  else :
-    counter.in := UInt(1) + counter.out
-
-  ;; Produce Verilog
-  generate_verilog(counter)
-\end{stanza}
-}
-\column{0.05\textwidth}
-\begin{center}
-$\Rightarrow$
-\end{center}
-\column{0.4\textwidth}
-{\lstset{basicstyle={\tiny\ttfamily}, escapechar=!}
-\begin{stanza}
-defn main () :
-  ;; Create Components
-  !\colorbox{yellow}{wire reset  : UInt}!
-  !\colorbox{yellow}{reg counter : UInt}!
-
-  ;; Connect Components
-  when reset :
-    counter.in := UInt(0)
-  else :
-    counter.in := UInt(1) + counter.out
-
-  ;; Produce Verilog
-  generate_verilog(counter)
-\end{stanza}
-}
-\end{columns}
-\vspace{1cm}
-{\bf macros}
-\end{frame}
-
-% \begin{frame}[fragile]
-% \frametitle{Abstract Counter}
-% \begin{columns}
-% \column{0.4\textwidth}
-% {\lstset{basicstyle={\tiny\ttfamily}, escapechar=!}
-% \begin{stanza}
-% defn main () :
-%   ;; Create Components
-%   wire reset  : UInt
-%   reg counter : UInt
-% 
-%   ;; Connect Components
-%   when reset :
-%     counter.in := UInt(0)
-%   else :
-%     counter.in := UInt(1) + counter.out
-% 
-%   ;; Produce Verilog
-%   generate_verilog(counter)
-% \end{stanza}
-% }
-% \column{0.05\textwidth}
-% \begin{center}
-% $\Rightarrow$
-% \end{center}
-% \column{0.4\textwidth}
-% {\lstset{basicstyle={\tiny\ttfamily}, escapechar=!}
-% \begin{stanza}
-% !\colorbox{yellow}{defn make\_counter(reset: UInt) :}!
-%   reg counter : UInt
-%   when reset :
-%     counter.in := UInt(0)
-%   else :
-%     counter.in := UInt(1) + counter.out
-%   counter
-% !\colorbox{yellow}{\}}!
-% 
-% defn main () :
-%   ;; Create Components
-%   wire reset  : UInt
-%   wire counter = make_counter(reset)
-% 
-%   ;; Produce Verilog
-%   generate_verilog(counter)
-% \end{stanza}
-% }
-% \end{columns}
-% \vspace{1cm}
-% {\it functional programming}
-% \end{frame}
-% 
-% \begin{frame}[fragile]
-% \frametitle{Make Reset Implicit}
-% \begin{columns}
-% \column{0.4\textwidth}
-% {\lstset{basicstyle={\tiny\ttfamily}, escapechar=!}
-% \begin{stanza}
-% defn make_counter(!\colorbox{yellow}{reset: UInt}!) :
-%   reg counter : UInt
-%   when reset :
-%     counter.in := UInt(0)
-%   else :
-%     counter.in := UInt(1) + counter.out
-%   counter
-% 
-% defn main () :
-%   ;; Create Components
-%   wire reset  : UInt
-%   wire counter = make_counter(!\colorbox{yellow}{reset}!)
-% 
-%   ;; Produce Verilog
-%   generate_verilog(counter)
-% \end{stanza}
-% }
-% \column{0.05\textwidth}
-% \begin{center}
-% $\Rightarrow$
-% \end{center}
-% \column{0.4\textwidth}
-% {\lstset{basicstyle={\tiny\ttfamily}, escapechar=!}
-% \begin{stanza}
-% defn make_counter() :
-%   reg counter : UInt
-%   when reset :
-%     counter.in := UInt(0)
-%   else :
-%     counter.in := UInt(1) + counter.out
-%   counter
-% 
-% defn main () :
-%   ;; Create Components
-%   val reset   = Wire()
-%   val counter = 
-%     !\colorbox{yellow}{withReset(reset):}!
-%       make_counter()
-%   ;; Produce Verilog
-%   generate_verilog(counter)
-% \end{stanza}
-% }
-% \end{columns}
-% \vspace{1cm}
-% {\bf dynamic scoping}
-% \end{frame}
-
-\begin{frame}[fragile]
-\frametitle{Looks ``Behavioral'' but ...}
-\begin{columns}
-\column{0.50\textwidth}
-{\lstset{basicstyle={\tiny\ttfamily}}
-\begin{stanza}
-defn main () :
-  ;; Create Components
-  wire reset  : UInt
-  reg counter : UInt
-
-  ;; Connect Components
-  when reset :
-    counter.in := UInt(0)
-  else :
-    counter.in := UInt(1) + counter.out
-
-  ;; Produce Verilog
-  generate_verilog(counter)
-\end{stanza}
-}
-\column{0.40\textwidth}
-\begin{center}
-\includegraphics[width=0.9\textwidth]{figs/simple-counter.pdf}
-\end{center}
-\end{columns}
-\begin{itemize}
-\item every construct actually creates a concrete circuit
-\item know cost of everything
-\item layered and can choose level of abstraction
-\item {\color{red}not ``stanza to hardware'' compiler}
-\end{itemize}
-\end{frame}
-
-% \begin{frame}[fragile]
-% \frametitle{Looks ``Behavioral'' but ...}
-% \begin{columns}
-% \column{0.50\textwidth}
-% {\lstset{basicstyle={\tiny\ttfamily}}
-% \begin{stanza}
-% def make_counter() = {
-%   reg counter : UInt
-%   when reset :
-%     counter.in := UInt(0)
-%   else :
-%     counter.in := UInt(1) + counter.out
-%   counter
-% 
-% defn main () :
-%   ;; Create Components
-%   wire reset  : UInt
-%   wire counter = 
-%     withReset(reset) :
-%       make_counter(reset)
-%   ;; Produce Verilog
-%   generate_verilog(counter)
-% \end{stanza}
-% }
-% \column{0.40\textwidth}
-% \begin{center}
-% \includegraphics[width=0.9\textwidth]{figs/simple-counter.pdf}
-% \end{center}
-% \end{columns}
-% \begin{itemize}
-% \item every construct actually creates a concrete circuit
-% \item know cost of everything
-% \item layered and can choose level of abstraction
-% \item {\color{red}not ``stanza to hardware'' compiler}
-% \end{itemize}
-% \end{frame}
-
-\begin{frame}[fragile]{Hosting Language Ingredients}
-Crucial
-\begin{itemize}
-\item Type Inference
-\item Infix Operator Overloading
-\item Lightweight Closures
-\item Dynamic Scoping
-\item Macros
-\item Functional Programming
-\end{itemize}
-\end{frame}
-
-\setbeamercolor{frametitle}{bg=\frametitleproblemcolor}
-\begin{frame}[fragile]{Bootcamp Chipper Installation}
-\begin{stanza}
--Install VirtualBox
--File->Import appliance, chipper-vm.ova
--Start
--Login (username: chipper-bootcamp, password: chipper)
--GTKWave, Emacs, etc. all installed
-\end{stanza}
-\end{frame}
-\setbeamercolor{frametitle}{bg=\frametitledefaultcolor}
-
-\setbeamercolor{frametitle}{bg=\frametitleproblemcolor}
-\begin{frame}[fragile]{Updating the Chipper Tutorial}
-
-\begin{stanza}
-cd chipper-tutorial
-git pull
-cd ../chipper
-git pull
-bin/install.sh
-\end{stanza}
-\end{frame}
-\setbeamercolor{frametitle}{bg=\frametitledefaultcolor}
-
-\setbeamercolor{frametitle}{bg=\frametitleproblemcolor}
-\begin{frame}[fragile]{Chipper Tutorial Contents}
-\begin{FramedSemiVerb}
-chipper-tutorial/  
-  Makefile
-  generated/
-    examples/
-    problems/
-    solutions/
-  examples/   \comment{\# Contains chipper examples}
-    Makefile  
-    FullAdder.stanza ...
-  problems/   \comment{\# Contains skeletal files for tutorial problems}
-    Makefile
-    Accumulator.stanza ...
-  solutions/  \comment{\# Contains solutions to problems}
-    Makefile
-    Counter.stanza ...
-\end{FramedSemiVerb}
-\end{frame}
-\setbeamercolor{frametitle}{bg=\frametitledefaultcolor}
-
-\setbeamercolor{frametitle}{bg=\frametitleproblemcolor}
-\begin{frame}[fragile]{Test It}
-
-\begin{bash}
-cd $TUT_DIR
-make 
-\end{bash}
-
-% \begin{bash}
-% cd $TUT_DIR/examples
-% make check Parity.out
-% \end{bash}
-
-\vspace{1cm}
-\noindent
-If your system is set up correctly, you should see a messsage \verb+[success]+ followed by the total time of the run, and date and time of completion. 
-
-\end{frame}
-\setbeamercolor{frametitle}{bg=\frametitledefaultcolor}
-
-
-\setbeamercolor{frametitle}{bg=\frametitleproblemcolor}
-\begin{frame}[fragile]{Get This}
-
-\begin{bash}
-open chipper-tutorial/chipper/doc/bootcamp/bootcamp.pdf
-\end{bash}
-
-\end{frame}
-\setbeamercolor{frametitle}{bg=\frametitledefaultcolor}
+\input{chisel-overview.tex}
 
 \begin{frame}[fragile]
 \frametitle{Chipper}
@@ -1074,108 +326,7 @@ single source generates two different verilog outputs, one for fpga and one for 
 surprisingly difficult to generate each.  for example, chipper has abstraction for memories.}
 \end{frame}
 
-\begin{frame}[fragile]
-\frametitle{The Stanza Programming Language **}
-
-% \begin{columns}[c]
-
-% \column{0.75\textwidth}
-
-\begin{itemize}
-\item Object Oriented
-\begin{itemize}
-\item Factory Objects, Classes
-\item Traits, overloading etc
-\item Strongly typed with type inference
-\end{itemize}
-\item Functional
-\begin{itemize}
-\item Higher order functions
-\item Anonymous functions
-\item Currying etc
-\end{itemize}
-\item Extensible
-\begin{itemize}
-\item Macro System
-\item Domain Specific Languages (DSLs)
-\end{itemize}
-\item Fast
-\begin{itemize}
-\item Cooperative Coroutine System
-\item Native Optimizing Compiler
-\end{itemize}
-\end{itemize}
-
-** Invented by Patrick Li @ EECS Berkeley \\
-\url{http://www.lbstanza.org}
-
-% \column{0.25\textwidth}
-
-% \begin{center}
-% \includegraphics[height=0.4\textheight]{figs/programming-stanza.pdf} \\
-% \includegraphics[height=0.4\textheight]{figs/programming-in-stanza.pdf}
-% \end{center}
-
-% \end{columns}
-\note{powerful combination of scipting and type safety, \\[1cm]
-includes powerful features to support abstraction, \\[1cm]
-as makes it easy to embed DSLs}
-\end{frame}
-
-\begin{frame}[fragile]{Stanza* Essence}
-\begin{itemize}
-\item best of scripting and production languages
-\begin{itemize}
-\item easy to understand and powerful to use
-\item gradual types -> easy parameteric types
-\end{itemize}
-\item orthogonal simple concepts
-\begin{itemize}
-\item functions, objects, pipes, and namespace separated
-\item use concepts in unlimited ways -- serendipity
-\item entire language including optimizing native compiler in 20K LOC
-\end{itemize}
-\item powerful macros for conventional syntax
-\begin{itemize}
-\item almost entire stanza syntax written as macros
-\item better DSL hosting language
-\end{itemize}
-\end{itemize}
-\vspace{0.25cm}
-\begin{center}
-\includegraphics[height=0.2\textheight]{figs/patrick.jpg} \\
-* developed by Patrick Li @ EECS Berkeley
-\end{center}
-\end{frame}
-
-\begin{frame}[fragile]{Stanza by Contrast}
-\begin{itemize}
-\item like Python but
-\begin{itemize}
-\item types and on and on and on ...
-\end{itemize}
-\item like Scala but
-\begin{itemize}
-\item thinner -- native compiler + runtime in 20K LOC
-\item simpler -- fewer base concepts
-\item more separated -- orthogonal functions / objects
-\end{itemize}
-\item like Clojure but
-\begin{itemize}
-\item conventional syntax -- love the parens but ...
-\item thinner -- native
-\item more powerful macro system -- not just name macros
-\end{itemize}
-\item like Dylan but
-\begin{itemize}
-\item improved gradual types -- parameteric types
-\item better multimethod namespaces -- fewer name clashes
-\item more powerful macros -- syntax written in it
-\item has pipes -- generalized control flow mechanism
-\end{itemize}
-\end{itemize}
-\end{frame}
-
+\include{stanza-pitch}
 \include{stanza-intro}
 
 \begin{frame}[fragile]
@@ -1298,6 +449,91 @@ defmodule MaxN (n: Int, w: Int) :
 
 \end{frame}
 
+% \input{lib-to-langs-guts-in-stanza.tex}
+
+\setbeamercolor{frametitle}{bg=\frametitleproblemcolor}
+\begin{frame}[fragile]{Bootcamp Chipper Installation}
+\begin{stanza}
+-Install VirtualBox
+-File->Import appliance, chipper-vm.ova
+-Start
+-Login (username: chipper-bootcamp, password: chipper)
+-GTKWave, Emacs, etc. all installed
+\end{stanza}
+\end{frame}
+\setbeamercolor{frametitle}{bg=\frametitledefaultcolor}
+
+\setbeamercolor{frametitle}{bg=\frametitleproblemcolor}
+\begin{frame}[fragile]{Updating the Chipper Tutorial}
+
+\begin{stanza}
+cd chipper-tutorial
+git pull
+cd ../chipper
+git pull
+\end{stanza}
+% bin/install.sh
+\end{frame}
+\setbeamercolor{frametitle}{bg=\frametitledefaultcolor}
+
+\setbeamercolor{frametitle}{bg=\frametitleproblemcolor}
+\begin{frame}[fragile]{Chipper Tutorial Contents}
+{\lstset{basicstyle={\small\ttfamily}}
+\begin{FramedSemiVerb}
+chipper-tutorial/  
+  Makefile
+  generated/
+    examples/
+    problems/
+    solutions/
+  src/        \comment{\# Contains shared code}
+    use-chipper.stanza ...
+  examples/   \comment{\# Contains chipper examples}
+    Makefile  
+    FullAdder.stanza ...
+  problems/   \comment{\# Contains skeletal files for tutorial problems}
+    Makefile
+    Accumulator.stanza ...
+  solutions/  \comment{\# Contains solutions to problems}
+    Makefile
+    Counter.stanza ...
+\end{FramedSemiVerb}
+}
+\end{frame}
+\setbeamercolor{frametitle}{bg=\frametitledefaultcolor}
+
+\setbeamercolor{frametitle}{bg=\frametitleproblemcolor}
+\begin{frame}[fragile]{Test It}
+
+\begin{bash}
+cd $TUT_DIR/examples
+make ByteSelector.out
+\end{bash}
+
+% \begin{bash}
+% cd $TUT_DIR/examples
+% make check Parity.out
+% \end{bash}
+
+\vspace{1cm}
+\noindent
+If your system is set up correctly, you should see a messsage \verb+SUCCESS+
+% followed by the total time of the run, and date and time of completion. 
+
+\end{frame}
+\setbeamercolor{frametitle}{bg=\frametitledefaultcolor}
+
+
+\setbeamercolor{frametitle}{bg=\frametitleproblemcolor}
+\begin{frame}[fragile]{Get This}
+
+\begin{bash}
+open chipper-tutorial/chipper/doc/bootcamp/bootcamp.pdf
+\end{bash}
+
+\end{frame}
+\setbeamercolor{frametitle}{bg=\frametitledefaultcolor}
+
 \begin{frame}[fragile]
 \frametitle{Example}
 \begin{columns}
@@ -1342,9 +578,9 @@ make GCD.out
 {\lstset{basicstyle={\scriptsize\ttfamily}}
 \begin{bash}
 ...
-PASSED
-[success] Total time: 2 s, completed Feb 28, 2013 8:14:37 PM
+SUCCESS
 \end{bash}
+% [success] Total time: 2 s, completed Feb 28, 2013 8:14:37 PM
 }
 
 \end{frame}
@@ -1779,14 +1015,14 @@ wire x_of_value = value[x]
 \begin{stanza}
 defmodule ByteSelector :
   input in: UInt<32>
-  input offset: UInt<2>
+  input off: UInt<2>
   output out: UInt<8>
 
-  when offset === UInt(0) :
+  when off === UInt(0) :
     out := in[7,0]
-  else when offset === UInt(1) :
+  else when off === UInt(1) :
     out := in[15, 8]
-  else when offset === UInt(2) :
+  else when off === UInt(2) :
     out := in[23,16]
   else :
     out := in[31,24]
@@ -2130,32 +1366,33 @@ defmodule ShiftRegisterVec :
 \column{0.4\textwidth}
 {\lstset{basicstyle={\tiny\ttfamily}}
 \begin{stanza}
-class ByteSelector extends Module {
+defmodule ByteSelector :
   input in: UInt<32>
-  input offset: UInt<2>
+  input off: UInt<2>
   output out: UInt<8>
-  out := UInt<8>(0)
   ...
 
-defn bs-tests () :
+defn byte-selector-tests () :
   with-tester [t, c] = ByteSelector() :
-    val test_in = 12345678
-    for i in 0 to 4 all? :
-      poke(t, c.in,     test_in)
-      poke(t, c.offset, t)
+    for i in 0 to 8 all? :
+      val in  = rand(1 << 31)
+      val off = rand(4)
+      poke(t, c.in,  in)
+      poke(t, c.off, off)
       step(t)
-      val ref_out = (test_in >> (t * 8)) & 255
-      expect(t, c.out, ref_out)
+      expect(t, c.out, (in >> (off * 8)) & 255)
 \end{stanza}
 }
 \begin{center}
-\includegraphics[width=0.8\textwidth]{figs/DUT.pdf}
+\includegraphics[width=0.8\textwidth]{figs/DUTso.pdf}
 \end{center}
 
 \column{0.55\textwidth}
 {\lstset{basicstyle={\tiny\ttfamily}}
 % defmulti reset (t:Tester, n:Int) -> Int
 % defmulti step (t:Tester, n:Int) -> Int
+% defmulti peek* (t:Tester, data:Bits, index:Int) -> Streamable<Int>
+% defmulti poke* (t:Tester, data:Bits, index:Streamable<Int>) -> Streamable<Int>
 \begin{stanza}
 defclass Tester
 defn Tester (dut:String) -> Tester
@@ -2184,34 +1421,46 @@ and allows users to write tests using the given debug protocol.  In particular, 
 \end{columns}
 \end{frame}
 
+\begin{frame}[fragile]{Chipper Workflow}
+\begin{center}
+\includegraphics[width=0.9\textwidth]{figs/chipper-workflow.pdf} 
+\end{center}
+\end{frame}
+
 \begin{frame}[fragile]{Simulation Debug Output}
 
 {\lstset{basicstyle={\tiny\ttfamily}}
 \begin{stanza}
 > cd chipper-tutorial/examples
 > make ByteSelector.out
-STARTING ../emulator/problems/ByteSelector
----
 RESET 1 -> 1
-STARTING TESTS
-WIRE-POKE ByteSelector.in = 16807 -> ok
-WIRE-POKE ByteSelector.offset = 1 -> ok
-STEP 1 -> 0
+WIRE-POKE ByteSelector.in = 0x41a7
+WIRE-POKE ByteSelector.off = 0x1
+STEP[0] 1 -> 0
 WIRE-PEEK ByteSelector.out -> 0x41
-EXPECT ByteSelector.out VALUE 65 -> 65
-WIRE-POKE ByteSelector.in = 548908249 -> ok
-WIRE-POKE ByteSelector.offset = 2 -> ok
-STEP 1 -> 0
+EXPECT ByteSelector.out 0x41 -> 65
+WIRE-POKE ByteSelector.in = 0x60b7acd9
+WIRE-POKE ByteSelector.off = 0x2
+STEP[1] 1 -> 0
+WIRE-PEEK ByteSelector.out -> 0xb7
+EXPECT ByteSelector.out 0xb7 -> 183
+WIRE-POKE ByteSelector.in = 0x4431b782
+WIRE-POKE ByteSelector.off = 0x0
+STEP[2] 1 -> 0
+WIRE-PEEK ByteSelector.out -> 0x82
+EXPECT ByteSelector.out 0x82 -> 130
 ...
-WIRE-PEEK ByteSelector.out -> 0x35
-EXPECT ByteSelector.out VALUE 53 -> 53
-WIRE-POKE ByteSelector.in = 881157273 -> ok
-WIRE-POKE ByteSelector.offset = 2 -> ok
-STEP 1 -> 0
-WIRE-PEEK ByteSelector.out -> 0x85
-EXPECT ByteSelector.out VALUE 133 -> 133
+WIRE-POKE ByteSelector.in = 0x6a5d128c
+WIRE-POKE ByteSelector.off = 0x2
+STEP[6] 1 -> 0
+WIRE-PEEK ByteSelector.out -> 0x5d
+EXPECT ByteSelector.out 0x5d -> 93
+WIRE-POKE ByteSelector.in = 0x6d7d4b3
+WIRE-POKE ByteSelector.off = 0x3
+STEP[7] 1 -> 0
+WIRE-PEEK ByteSelector.out -> 0x06
+EXPECT ByteSelector.out 0x6 -> 6
 SUCCESS
-[success] Total time: 26 s, ...
 \end{stanza}
 }
 
@@ -2512,7 +1761,7 @@ now we can rewrite GCD using an interface using this valid wrapper for its outpu
 \begin{stanza}
 defbundle Decoupled<T> :
   data : T
-  flip valid : UInt<1>
+  valid : UInt<1>
   flip ready : UInt<1>
 
 defmodule DecoupledGCD :
@@ -2545,40 +1794,563 @@ defmodule DecoupledGCD :
 
 \end{frame}
 
-\begin{frame}[fragile]{Chipper Standard Library -- \tt stdlib.stanza}
-\begin{center}
-\begin{tabular}{rl}
-{\bf Bits Properities} & \code{log2Up}, \code{log2Down}, \code{isPow2}, \code{PopCount}\\
-{\bf Numeric Utilities} & \code{LFSR16}, \code{Reverse}, \code{FillInterleaved} \\
-{\bf Stateful Functions} & \code{ShiftRegister}, \code{Counter} \\
-{\bf Priority Encoding Functions} & \code{UIntToOH}, \code{OHToUInt}, \code{Mux1H} \\
-{\bf Priority Encoders} & \code{PriorityEncoder}, \code{PriorityEncoderOH}  \\
-{\bf Queues and Pipes} & \code{Decoupled}, \code{Queue}, \code{Valid}, \code{Pipe} \\
-{\bf Arbiters} & \code{ArbiterIO}, \code{Arbiter}, \code{RRArbiter} \\
-\end{tabular}
-\end{center}
-\end{frame}
+\begin{frame}[fragile]{Debugging Circuits with DecoupledIO}
 
-\begin{frame}[fragile]
-\frametitle{Queues}
 \begin{itemize}
-\item Required parameter \verb+entries+ controls depth
-\item The width is determined from the inputs.
-\end{itemize}
-\begin{stanza}
-defbundle QueueIO<T> (entries: Int) :
-  input enq    : DecoupledIO<T>
-  output deq   : DecoupledIO<T>
-  output count : UInt<log2Up(entries + 1)>
+\item map queues to DecoupledIO's
+\item sources pop from queue and push onto circuit  
+\item sinks pop data from circuit and push onto queue and 
+\item step now first does needed circuit peek/poke's and queue pop/add's
+\end{itemize}    
 
-defmodule Queue<T> (entries: Int) ...
-\end{stanza}
-\begin{stanza}
-inst q : Queue<UInt>(16)
-q.enq := producer.out
-consumer.in := q.deq
-\end{stanza}
+Sources and Sinks are created and added to tester
+\begin{scala}
+defn Source<?T> (t:Tester, d:DecoupledIO<?T&Data>) ...
+defn Sink<?T> (t:Tester, d:DecoupledIO<?T&Data>) ...
+defmulti add-ios (t:Tester, ios:Streamable<SmartIO<Data>>) 
+\end{scala}    
+
+Sources and Sinks support
+\begin{itemize}
+\item \verb+add+ -- push onto queue 
+\item \verb+pop+ -- pop and return top of queue
+\item \verb+peek+ -- return top of queue
+\item \verb+clear+ -- remove all queue elements
+\item \verb+length+ -- size of queue
+\end{itemize}    
+
 \end{frame}
 
+\begin{frame}[fragile]{Decoupled GCD Tester}
+
+{\lstset{basicstyle={\scriptsize\ttfamily}}
+\begin{stanza}
+defn decoupled-gcd-tests (n:Int) :
+  defn gcd (a:Int, b:Int) -> Int :
+    if b == 0: a else: gcd(b, a % b)
+  with-tester [t, c] = DecoupledGCD() :
+    ;; connect queues to decoupled io
+    val as = Source(t, c.a)
+    val bs = Source(t, c.b)
+    val zs = Sink(t, c.z)
+    add-ios(t, [as, bs, zs])
+    ;; tests and remember correct answers
+    val ezs = Vector<Int>()
+    for i in 0 to n do :
+      val [a, b] = [rand(2, 256), rand(2, 256)]
+      add(ezs, gcd(a, b))
+      add(as, [a])
+      add(bs, [b])
+    ;; wait for circuit to consume inputs and produce all answers
+    while length(as) > 0 or length(bs) > 0 or length(zs) < length(ezs) :
+      step(t)
+    ;; check answers
+    for i in 0 to length(ezs) all? :
+      val rz = pop(zs)
+      expect(rz[0] == ezs[i], ["Sum " ezs[i] " GOT " rz[0]])
+\end{stanza}
+}
+
+\end{frame}
+
+\begin{frame}[fragile]{Sum Accelerator -- {\tt examples/Sum.stanza}}
+
+\begin{columns}
+\column{.45\textwidth}
+{\lstset{basicstyle={\scriptsize\ttfamily}}
+\begin{stanza}
+public defbundle SumReq  :
+  v   : UInt<32>
+  len : UInt<32>
+
+public defbundle SumResp  :
+  data : UInt<32>
+
+public defbundle MemReq :
+  wr   : UInt<1>
+  tag  : UInt<8>
+  addr : UInt<32>
+  data : UInt<32>
+
+public defbundle MemResp :
+  tag  : UInt<8>
+  data : UInt<32>
+\end{stanza}
+}
+
+\column{.45\textwidth}
+
+{\lstset{basicstyle={\tiny\ttfamily}}
+\begin{stanza}
+public defmodule Sum :
+  input  sreq: DecoupledIO<SumReq>
+  output srsp: DecoupledIO<SumResp>
+  input  mrsp: DecoupledIO<MemResp>
+  output mreq: DecoupledIO<MemReq>
+  reg a   : UInt<32>
+  reg ea  : UInt<32>
+  reg n   : UInt<32>
+  reg sum : UInt<32>
+  reg computing  = UInt(false)
+  ...
+  when computing :
+    sreq.ready := UInt(false)
+    when mrsp.valid :
+      sum := sum + mrsp.bits.data
+      n   := n - UInt(1)
+    when a < ea :
+      mreq.valid := UInt(true)
+      mreq.bits.addr := a
+      when mreq.ready :
+        a := a + UInt(1)
+    else when n === UInt(0) :
+      srsp.valid := UInt(true)
+      srsp.bits.data := sum
+      when srsp.ready :
+        sum       := UInt(0)
+        computing := UInt(false)
+  else when sreq.valid :
+    a  := sreq.bits.v
+    ea := sreq.bits.v + sreq.bits.len
+    n  := sreq.bits.len
+    computing := UInt(true)
+\end{stanza}
+}
+\end{columns}
+
+\end{frame}
+
+\begin{frame}[fragile]{SumCore -- {\tt examples/SumCore.stanza}}
+
+{\lstset{basicstyle={\small\ttfamily}}
+\begin{stanza}
+defmodule SumCore :
+  input  sreq: DecoupledIO<SumReq>
+  output srsp: DecoupledIO<SumResp>
+  input  mrsp: DecoupledIO<MemResp>
+  output mreq: DecoupledIO<MemReq>
+  inst sum : Sum
+  sum.sreq := sreq
+  srsp     := sum.srsp
+  mreq     := sum.mreq
+  sum.mrsp := mrsp
+\end{stanza}
+}
+
+\end{frame}
+
+\begin{frame}[fragile]{SumCore Tester -- {\tt examples/SumCore.stanza}}
+
+{\lstset{basicstyle={\tiny\ttfamily}}
+\begin{stanza}
+defn sum-core-tests (n:Int) :
+  with-tester [t, c] = SumCore() :
+    val mrsps = Source(t, c.mrsp)
+    val mreqs = Sink(t, c.mreq)
+    val sreqs = Source(t, c.sreq)
+    val srsps = Sink(t, c.srsp)
+    add-ios(t, [mreqs, mrsps, sreqs, srsps])
+    for i in 0 to 10 all? :
+      val v = to-array(stream({ rand(256) }, 0 to (rand(n - 1) + 1)))
+      val r = reduce(plus, 0, v)
+      add(sreqs, [0, length(v)])
+      while length(sreqs) > 0 or length(srsps) < 1 :
+        while length(mreqs) > 0 :
+          val mreq = pop(mreqs)
+          val [wr, tag, addr, data] = [mreq[0], mreq[1], mreq[2], mreq[3]]
+          if wr == 0 :
+            add(mrsps, [tag, v[addr]])
+        step(t)
+      val srsp = pop(srsps)
+      expect(srsp[0] == r, ["Sum " r " GOT " srsp[0]])
+\end{stanza}
+}
+
+\end{frame}
+
+\begin{frame}[fragile]{Memory -- {\tt examples/Memory.stanza}}
+
+\begin{columns}
+\column{.35\textwidth}
+{\lstset{basicstyle={\scriptsize\ttfamily}}
+\begin{stanza}
+public defbundle MemReq :
+  wr   : UInt<1>
+  tag  : UInt<8>
+  addr : UInt<32>
+  data : UInt<32>
+
+public defbundle MemResp :
+  tag  : UInt<8>
+  data : UInt<32>
+\end{stanza}
+}
+
+\column{.55\textwidth}
+{\lstset{basicstyle={\scriptsize\ttfamily}}
+\begin{stanza}
+public defmodule Memory (n: Int) :
+  input  req : DecoupledIO<MemReq>
+  output rsp : DecoupledIO<MemResp>
+  cmem mem : UInt<32>[n]
+  req.ready     := rsp.ready
+  rsp.valid     := UInt(false)
+  rsp.bits.data := UInt(0)
+  rsp.bits.tag  := UInt(0)
+  when req.valid :
+    rsp.valid    := UInt(true)
+    rsp.bits.tag := req.bits.tag
+    when req.bits.wr :
+      rsp.bits.data      := req.bits.data
+      mem[req.bits.addr] := req.bits.data
+    else :
+      rsp.bits.data := mem[req.bits.addr]
+\end{stanza}
+}
+\end{columns}
+
+\end{frame}
+
+\begin{frame}[fragile]{SumSys -- {\tt examples/SumSys.stanza}}
+
+{\lstset{basicstyle={\scriptsize\ttfamily}}
+\begin{stanza}
+defmodule SumSys (n:Int) :
+  input  sreq: DecoupledIO<SumReq>
+  output srsp: DecoupledIO<SumResp>
+  input  mreq: DecoupledIO<MemReq>
+  output mrsp: DecoupledIO<MemResp>
+  inst sum   : Sum
+  inst mem   : Memory(n)
+  val [req, chosen] = arbiter([mreq, sum.mreq])
+  fan-out(chosen, mem.rsp, [mrsp, sum.mrsp])
+  mem.req     := req
+  srsp        := sum.srsp
+  sum.sreq    := sreq
+\end{stanza}
+}
+\begin{center}
+\includegraphics[height=0.4\textheight]{figs/SumSys.pdf} 
+\end{center}
+
+\end{frame}
+
+
+\begin{frame}[fragile]{Borrowing from Compiler Field}
+\begin{columns}
+\column{0.45\textwidth}
+\begin{center}
+\includegraphics[width=0.9\columnwidth]{../talks/retreat-15-06/figs/llvm-logo.png}
+\end{center}
+\column{0.45\textwidth}
+\begin{itemize}
+\item Apple Programming Stack
+\item NVidia Cuda
+\item OpenCL  
+\item Cray Chapel
+\item Haskell
+\item Many backends
+\end{itemize}    
+\end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{LLVM IR}
+\begin{columns}
+\column{0.4\textwidth}
+\begin{bash}
+define i32 @mul_add
+    (i32 %x, i32 %y, i32 %z) {
+entry:
+  %tmp = mul i32 %x, %y
+  %tmp2 = add i32 %tmp, %z
+  ret i32 %tmp2
+} 
+\end{bash}
+\column{0.55\textwidth}
+\begin{itemize}
+\item SSA-based IR
+\item Primitive RISC ISA
+\begin{itemize}
+\item Regular instructions
+\item Easy to write backends  
+\end{itemize}
+\item Compiler organized as transformations that take LLVM IR and produce LLVM IR
+\item IR exposed as file format and API
+\item Supports User-defined Transformations
+\end{itemize}    
+\end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{FIRRTL (Li + Izraelevitz)}
+\begin{columns}
+\column{0.55\textwidth}
+\begin{itemize}
+\item {\bf F}lexible {\bf I}ntermediate {\bf R}epresentation for {\bf RTL}
+\item Focussed Synthesizable RTL
+\item Precise File Format and API
+\item Micro Passes for Robustness
+\item User defined passes
+\item Chew Off Biggest Piece of Chipper and make it modular
+\end{itemize}    
+\column{0.35\textwidth}
+{\lstset{basicstyle={\tiny\ttfamily}}
+\begin{stanza}
+circuit GCD :
+  module GCD :
+    input a : UInt<16>
+    input b : UInt<16>
+    input e : UInt<1>
+    output z : UInt<16>
+    output v : UInt<1>
+    reg x1 : UInt<16>
+    reg y2 : UInt<16>
+    node tmp3 = gt(x1, y2)
+    when tmp3 :
+      node tmp4 = sub-wrap(x1, y2)
+      x1 := tmp4      
+    else :
+      node tmp5 = sub-wrap(y2, x1)
+      y2 := tmp5
+    when e :
+      x1 := a
+      y2 := b      
+    z := x1
+    node tmp6 = eq(y2, UInt<1>(0))
+    v := tmp6   
+\end{stanza}
+}
+\end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{EDEN Ecosystem}
+\begin{columns}
+\column{0.4\textwidth}
+\begin{itemize}
+\item Modular
+\item Language Neutral
+\begin{itemize}
+\item SEJITS $\rightarrow$ FIRRTL
+\item Verilog $\rightarrow$ FIRRTL
+\item chisel3 $\rightarrow$ FIRRTL
+\end{itemize}    
+\item Backends
+\begin{itemize}
+\item LLVM
+\item verilog
+\item target code  
+\end{itemize}    
+\item Transformations
+\begin{itemize}
+\item FAME
+\item Rate Balancing  
+\item Coverage
+\item Snapshot
+\end{itemize}    
+\item Tools
+\begin{itemize}
+\item Coverage
+\item Visualization
+\end{itemize}    
+\end{itemize}    
+\column{0.5\textwidth}
+\begin{center}
+\includegraphics[width=0.9\columnwidth]{../talks/retreat-15-06/figs/eden.pdf} \\[1cm]
+{\footnotesize{\bf E}lectronic {\bf D}esign of {\bf E}verything {\bf N}icer}
+\end{center}
+\end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Chipper Approach}
+\begin{itemize}
+\item macros
+\begin{itemize}
+\item creates elegant representation
+\item creates scaffolding
+\end{itemize}
+\item handles with AST IR
+\begin{itemize}
+\item handles are typed and also point to IR
+\item IR collected in circuits and modules
+\item IR tree data structure easy to print, read, walk
+\item explicit file format
+\end{itemize}
+\end{itemize}
+
+\end{frame}
+
+\begin{frame}[fragile]{Embedding Interface}
+\begin{columns}
+
+\column{0.45\textwidth}
+
+chipper
+{\lstset{basicstyle={\tiny\ttfamily}}
+\begin{scala}
+definterface CHExp
+defmulti firrtl-exp (e:CHExp) -> fExpression
+defmulti type<?T> (e:?T&CHExp) -> Type<T>
+
+definterface Type<T>
+defmulti firrtl-type (t:Type) -> fType
+defmulti handle<?T> (t:Type<?T>, e:fExpression) -> T
+\end{scala}
+}
+
+\column{0.45\textwidth}
+
+firrtl
+{\lstset{basicstyle={\tiny\ttfamily}}
+\begin{scala}
+defstruct Circuit :
+   modules: List<Module>
+   main: Symbol
+defstruct Module :
+   name: Symbol
+   ports: List<Port>
+   body: Stmt
+definterface Stmt
+defstruct DefWire <: Stmt :
+   name: Symbol
+   type: Type
+...
+defstruct Connect <: Stmt :
+   loc: Expression
+   exp: Expression
+...
+definterface Expression
+defmulti type (e:Expression) -> Type
+defstruct Ref <: Expression :
+   name: Symbol
+   type: Type
+defstruct Subfield <: Expression :
+   exp: Expression
+   name: Symbol
+   type: Type
+...
+definterface Type
+defstruct UIntType <: Type :
+   width: Width
+...
+\end{scala}
+}
+\end{columns}
+
+\end{frame}
+
+\begin{frame}[fragile]{Bundle Expansions}
+
+\begin{stanza}
+defbundle Double :
+   a: UInt
+   b: UInt
+\end{stanza}
+
+... expands to ...
+
+{\lstset{basicstyle={\tiny\ttfamily}}
+\begin{stanza}
+defclass Double <: CHExp
+defmulti a (d:Double) -> UInt
+defmulti b (d:Double) -> UInt
+
+defn Double (e:Expression) :
+   new Double :
+      defmethod firrtl-exp (this) : e
+      defmethod a (this) :
+         UInt(Subfield(e, `a))
+      defmethod b (this) :
+         UInt(Subfield(e, `b))
+
+defclass DoubleType <: CHType
+defn DoubleType () :
+   new DoubleType :
+      defmethod handle (this, e:Expression) :
+         Double(e)
+\end{stanza}
+}
+\end{frame}
+
+\begin{frame}[fragile]{Module Expansions}
+
+\begin{stanza}
+defmodule Dual :
+   input a: UInt
+   output b: UInt
+   mybody
+\end{stanza}
+
+... expands to ...
+
+{\lstset{basicstyle={\tiny\ttfamily}}
+\begin{stanza}
+defclass Dual <: CHExp
+defmulti a (d:Dual) -> UInt
+defmulti b (d:Dual) -> UInt
+
+defn Dual (e:Expression) :
+   new Dual :
+      defmethod firrtl-exp (this) : e
+      defmethod a (this) :
+         UInt(Subfield(e, `a))
+      defmethod b (this) :
+         UInt(Subfield(e, `b))
+
+defclass DualModule <: CHModule
+defn DualModule () :
+   new DualModule :
+      defmethod handle (this, e:Expression) :
+         Dual(e)
+      defmethod firrtl-module (this) :
+         ModuleExp(
+            `Dual,
+            fn () : mybody)
+\end{stanza}
+}
+\end{frame}
+
+\begin{frame}[fragile]{Chipper vs LMS}
+\begin{itemize}
+\item hardware types are different than software ones
+\item no type complexity
+\item no perfect symmetry between compile-time run-time
+\end{itemize}
+\begin{tabular}{|c|c|}
+\hline
+{\bf HW} & {\bf SW} \\
+\hline
+\hline
+UInt & BigInt \\
+\hline
+SInt & BigInt \\
+\hline
+Vec & Array \\
+\hline
+Bundle & ??? \\
+\hline
+\end{tabular}
+\end{frame}
+
+\begin{frame}[fragile]{DSL Open Problems}
+\begin{itemize}
+\item seamlessness
+\begin{itemize}
+\item looks like domain
+\item no leakage 
+\item good error reporting
+\end{itemize}
+\item embedded plus eclipse support
+\begin{itemize}
+\item want embedding to leverage facilities
+\item want automatic tooling
+\end{itemize}
+\item better hosting language
+\begin{itemize}
+\item easy to understand
+\item powerful
+\item base
+\item easy/powerful to embed
+\end{itemize}
+\end{itemize}
+\end{frame}
 
 \end{document}
