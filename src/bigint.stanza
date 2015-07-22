@@ -2,7 +2,7 @@ defpackage bigint :
    import core
    import verse
 
-val val-n-bytes = 1
+val val-n-bytes = 4
 val val-n-bits = val-n-bytes * 8
 val val-all-ones = (1 << val-n-bits) - 1 ;; TODO
 val val-n-half-bits = val-n-bits / 2
