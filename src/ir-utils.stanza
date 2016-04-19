@@ -1,6 +1,6 @@
 defpackage firrtl/ir-utils :
    import core
-   import verse
+   import collections
    import firrtl/ir
 
 ;============== PRINTERS ===================================
@@ -76,46 +76,46 @@ defmethod print (o:OutputStream, e:Expression) :
    print{o, _} $
    match(e) :
       (e:Ref) : name(e)
-      (e:Subfield) : "~.~" << [exp(e), name(e)]
-      (e:Index) : "~[~]" << [exp(e), value(e)]
-      (e:FloValue) : "Flo(~)" << [value(e)]
-      (e:UIntValue) : "UInt<~>(~)" << [width(e), value(e)]
-      (e:SIntValue) : "SInt<~>(~)" << [width(e), value(e)]
-      (e:DoPrim) : "~(~@)" << [op(e), join(concat(args(e), consts(e)), ", ")]
-      (e:ReadPort) : "ReadPort(~, ~, ~)" << [mem(e), index(e), enable(e)]
-      (e:WritePort) : "WritePort(~, ~, ~)" << [mem(e), index(e), enable(e)]
-      (e:Pad) : "Pad(~, ~)" << [arg(e), width(e)]
-      (e:Register) : "Register(~, ~)" << [value(e), enable(e)]
+      (e:Subfield) : "%_.%_" % [exp(e), name(e)]
+      (e:Index) : "%_[%_]" % [exp(e), value(e)]
+      (e:FloValue) : "Flo(%_)" % [value(e)]
+      (e:UIntValue) : "UInt<%_>(%_)" % [width(e), value(e)]
+      (e:SIntValue) : "SInt<%_>(%_)" % [width(e), value(e)]
+      (e:DoPrim) : "%_(%,)" % [op(e), cat(args(e), consts(e))]
+      (e:ReadPort) : "ReadPort(%_, %_, %_)" % [mem(e), index(e), enable(e)]
+      (e:WritePort) : "WritePort(%_, %_, %_)" % [mem(e), index(e), enable(e)]
+      (e:Pad) : "Pad(%_, %_)" % [arg(e), width(e)]
+      (e:Register) : "Register(%_, %_)" % [value(e), enable(e)]
 
 defmethod print (o:OutputStream, c:Stmt) :
    val io = IndentedStream(o, 3)
    match(c) :
       (c:DefWire) :
-         print(o, "wire ~ : ~" << [name(c), type(c)])
+         print(o, "wire %_ : %_" % [name(c), type(c)])
       (c:DefRegister) :
-         print(o, "reg ~ : ~" << [name(c), type(c)])
+         print(o, "reg %_ : %_" % [name(c), type(c)])
       (c:DefCMemory) :
-         print(o, "cmem ~ : ~" << [name(c), type(c)])
+         print(o, "cmem %_ : %_" % [name(c), type(c)])
       (c:DefSMemory) :
-         print(o, "smem ~ : ~" << [name(c), type(c)])
+         print(o, "smem %_ : %_" % [name(c), type(c)])
       (c:DefInstance) :
-         print(o, "inst ~ of ~" << [name(c), module(c)])
+         print(o, "inst %_ of %_" % [name(c), module(c)])
       (c:DefNode) :
-         print(o, "node ~ = ~" << [name(c), value(c)])
+         print(o, "node %_ = %_" % [name(c), value(c)])
       (c:DefAccessor) :
-         print(o, "accessor ~ = ~[~]" << [name(c), source(c), index(c)])
+         print(o, "accessor %_ = %_[%_]" % [name(c), source(c), index(c)])
       (c:Conditionally) :
-         println(o, "when ~ :" << [pred(c)])
+         println(o, "when %_ :" % [pred(c)])
          print(io,conseq(c))
-         if alt(c) not-typeof EmptyStmt :
+         if not alt(c) is EmptyStmt :
             print(o, "\nelse :")
-            print(io, "\n~" << [alt(c)])
+            print(io, "\n%_" % [alt(c)])
       (c:Begin) :
          print-all(o, join(body(c), "\n"))
       (c:Connect) :
-         print(o, "~ := ~" << [loc(c), exp(c)])
+         print(o, "%_ := %_" % [loc(c), exp(c)])
       (c:OnReset) :
-         print(o, "on-reset ~ := ~" << [loc(c), exp(c)])
+         print(o, "on-reset %_ := %_" % [loc(c), exp(c)])
       (c:EmptyStmt) :
          print(o, "skip")
 
@@ -124,26 +124,26 @@ defmethod print (o:OutputStream, t:Type) :
    match(t) :
       (t:UnknownType) : "?"
       (t:FloType) : "Flo"
-      (t:UIntType) : "UInt<~>" << [width(t)]
-      (t:SIntType) : "SInt<~>" << [width(t)]
-      (t:BundleType) : "{~@}" << [join(fields(t), ", ")]
-      (t:VectorType) : "~[~]" << [type(t), size(t)]
+      (t:UIntType) : "UInt<%_>" % [width(t)]
+      (t:SIntType) : "SInt<%_>" % [width(t)]
+      (t:BundleType) : "{%,}" % [fields(t)]
+      (t:VectorType) : "%_[%_]" % [type(t), size(t)]
 
 defmethod print (o:OutputStream, f:Field) :
    val fstr = "flip " when flip(f) == REVERSE else ""
-   print(o, "~~ : ~" << [fstr, name(f), type(f)])
+   print(o, "%_%_ : %_" % [fstr, name(f), type(f)])
 
 defmethod print (o:OutputStream, p:Port) :
-   print(o, "~ ~ : ~" << [direction(p), name(p), type(p)])
+   print(o, "%_ %_ : %_" % [direction(p), name(p), type(p)])
 
 defmethod print (o:OutputStream, m:Module) :
-   println(o, "module ~ :" << [name(m)])
+   println(o, "module %_ :" % [name(m)])
    val io = IndentedStream(o, 3)
    do(println{io, _}, ports(m))
    print(io, body(m))
 
 defmethod print (o:OutputStream, c:Circuit) :
-   println(o, "circuit ~ :" << [main(c)])
+   println(o, "circuit %_ :" % [main(c)])
    val io = IndentedStream(o, 3)
    do(println{io, _}, modules(c))
 
@@ -193,6 +193,6 @@ defmethod map (f: Stmt -> Stmt, c:Stmt) -> Stmt :
 public defmulti children (c:Stmt) -> List<Stmt>
 defmethod children (c:Stmt) :
    match(c) :
-      (c:Conditionally) : list(conseq(c), alt(c))
+      (c:Conditionally) : List(conseq(c), alt(c))
       (c:Begin) : body(c)
       (c) : List()

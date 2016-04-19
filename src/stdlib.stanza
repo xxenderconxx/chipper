@@ -4,12 +4,12 @@
 
 defpackage stdlib :
    import core
-   import verse
+   import collections
    import chipper
 
 ;;; UTILS SHOULD BE ADDED TO STANZA
 
-public defn unzip<?S,?T> (keyvals: Streamable<KeyValue<?S,?T>>) -> [Vector<S>, Vector<T>] :
+public defn unzip<?S,?T> (keyvals: Seqable<KeyValue<?S,?T>>) -> [Vector<S>, Vector<T>] :
   val keys = Vector<S>()
   val vals = Vector<T>()
   for kv in keyvals do :
@@ -17,7 +17,7 @@ public defn unzip<?S,?T> (keyvals: Streamable<KeyValue<?S,?T>>) -> [Vector<S>, V
     add(vals, value(kv))
   [keys, vals]
 
-public defn map<?S,?T,?U> (f: (S,T) -> ?U, xs: Streamable<?S>, ys: Streamable<?T>) -> Streamable<U> :
+public defn map<?S,?T,?U> (f: (S,T) -> ?U, xs: Seqable<?S>, ys: Seqable<?T>) -> Seqable<U> :
    generate<U> :
      do({ yield(f(_,_) as U) }, xs, ys)
 
@@ -31,8 +31,8 @@ public defn mux<?T,?S> (p:UInt, c:?T&Data&S, a:?S&Data&T) -> T :
       w := c
    w   
 
-public defn Vec<?T> (elts:Streamable<?T&Data>) -> Vec<T> :
-  val arr = to-array(elts)
+public defn Vec<?T> (elts:Seqable<?T&Data>) -> Vec<T> :
+  val arr = to-tuple(elts)
   wire v : typeof(arr[0])[length(arr)]
   for i in 0 to length(arr) do :
     v[i] := arr[i]
@@ -55,24 +55,24 @@ public defn log2Floor (in: Int) -> Int :
 public defn is-pow2 (in: Int) -> True|False :
   in > 0 and ((in & (in - 1)) == 0)
 
-public defn to-bools (in: UInt) -> Streamable<UInt> :
+public defn to-bools (in: UInt) -> Seqable<UInt> :
   stream({ in[_] }, 0 to width(in))
 
 public defn fill-interleaved (n: Int, in: UInt) -> UInt :
   fill-interleaved(n, to-list(to-bools(in)))
 
 ;; todo Vec from elts
-public defn fill-interleaved (n: Int, elts: Streamable<UInt> & Lengthable) -> UInt :
+public defn fill-interleaved (n: Int, elts: Seqable<UInt> & Lengthable) -> UInt :
   wire r : UInt<1>[n]
   for (e in elts, i in 0 to false) do : r[i] := e
   to-bits(r)
 
-public defn slice<?T> (x:Streamable<?T>, start:Int, end:Int) -> Streamable<T> :
+public defn slice<?T> (x:Seqable<?T>, start:Int, end:Int) -> Seqable<T> :
   select(x, stream(fn (i:Int): i >= start and i < end, (0 to false)))
 
 ;; Returns the number of bits set (i.e value is 1) in the input signal.
 public defmulti pop-count (in) -> UInt
-public defmethod pop-count (in: Streamable<UInt>) -> UInt : pop-count(to-list(in))
+public defmethod pop-count (in: Seqable<UInt>) -> UInt : pop-count(to-list(in))
 public defmethod pop-count (in: List<UInt>) -> UInt :
   if length(in) == 0 :
      UInt(0)
@@ -85,7 +85,7 @@ public defmethod pop-count (in: UInt) -> UInt : pop-count(to-bools(in))
 
 ;; Builds a Mux tree out of the input signal vector using a one hot encoded
 ;; select signal. Returns the output of the Mux tree.
-public defn Mux1H<?T> (sel: Streamable<UInt>, in: Streamable<?T&Data> & Lengthable) -> T :
+public defn Mux1H<?T> (sel: Seqable<UInt>, in: Seqable<?T&Data> & Lengthable) -> T :
   val sin = to-stream(in)
   if length(in) == 1 :
     next(sin)
@@ -93,11 +93,11 @@ public defn Mux1H<?T> (sel: Streamable<UInt>, in: Streamable<?T&Data> & Lengthab
     val masked = map(fn (s, i): mux(s, to-bits(i), UInt(0)), sel, in)
     from-bits!(next(sin), reduce(bit-or, masked))
 
-public defn Mux1H<?T> (in: Streamable<KeyValue<UInt,?T&Data>>) -> T :
+public defn Mux1H<?T> (in: Seqable<KeyValue<UInt,?T&Data>>) -> T :
   val [sel, data] = unzip(in)
   Mux1H(sel, data)
 
-public defn Mux1H<?T> (sel: UInt, in: Streamable<?T & Data> & Lengthable) -> T :
+public defn Mux1H<?T> (sel: UInt, in: Seqable<?T & Data> & Lengthable) -> T :
   Mux1H(to-bools(sel), in)
 
 public defn Mux1H (sel: UInt, in: UInt) -> UInt :
@@ -113,25 +113,25 @@ public defn priority-mux<?T> (in: List<KeyValue<UInt,?T&Bits>>) -> T :
   else :
     mux(key(head(in)), value(head(in)), priority-mux(tail(in)))
 
-public defn priority-mux<?T> (sel: Streamable<UInt>, in: Streamable<?T & Bits>) -> T :
+public defn priority-mux<?T> (sel: Seqable<UInt>, in: Seqable<?T & Bits>) -> T :
   priority-mux(to-list(map(KeyValue, sel, in)))
 
-public defn priority-mux<?T> (sel: UInt, in: Streamable<?T & Bits>) -> T :
+public defn priority-mux<?T> (sel: UInt, in: Seqable<?T & Bits>) -> T :
   priority-mux(to-bools(sel), in)
 
-;; public defn mux-lookup<?S,?T> (k: ?S & Bits, default: ?T & Data, mapping: Streamable<KeyValue<?S & (Bits|BitPat), ?T&Data>>) -> T :
+;; public defn mux-lookup<?S,?T> (k: ?S & Bits, default: ?T & Data, mapping: Seqable<KeyValue<?S & (Bits|BitPat), ?T&Data>>) -> T :
 ;;    mux-case(default, stream(fn (kv): KeyValue(key(kv) === k, value(kv)), mapping))
 
-public defn mux-lookup<?T> (k: UInt, default: ?T & Data, mapping: Streamable<KeyValue<BitPat, ?T&Data>>) -> T :
+public defn mux-lookup<?T> (k: UInt, default: ?T & Data, mapping: Seqable<KeyValue<BitPat, ?T&Data>>) -> T :
    mux-case(default, stream(fn (kv): KeyValue(key(kv) === k, value(kv)), mapping))
 
-public defn mux-lookup<?T> (k: UInt, default: ?T & Data, mapping: Streamable<KeyValue<UInt, ?T&Data>>) -> T :
+public defn mux-lookup<?T> (k: UInt, default: ?T & Data, mapping: Seqable<KeyValue<UInt, ?T&Data>>) -> T :
    mux-case(default, stream(fn (kv): KeyValue(key(kv) === k, value(kv)), mapping))
 
-public defn mux-lookup<?T> (k: SInt, default: ?T & Data, mapping: Streamable<KeyValue<SInt, ?T&Data>>) -> T :
+public defn mux-lookup<?T> (k: SInt, default: ?T & Data, mapping: Seqable<KeyValue<SInt, ?T&Data>>) -> T :
    mux-case(default, stream(fn (kv): KeyValue(key(kv) === k, value(kv)), mapping))
 
-public defn mux-case<?T> (default: ?T & Data, mapping: Streamable<KeyValue<UInt, ?T & Data>>) -> T :
+public defn mux-case<?T> (default: ?T & Data, mapping: Seqable<KeyValue<UInt, ?T & Data>>) -> T :
   ;; TODO: potentially order
   var res = default
   val kvs = reverse(to-list(mapping))
@@ -159,7 +159,7 @@ public defmethod fill (n: Int, y: UInt) -> UInt :
     error("Fill requires nonnegative integer")
   ;;    case _ => throw new IllegalArgumentException(s"n (=$n) must be nonnegative integer.")
 
-public defn list-lookup<?T> (addr: UInt, _default: Streamable<?T&Data>, _mapping: Streamable<KeyValue<BitPat, Streamable<?T&Data>>>) -> List<T> :
+public defn list-lookup<?T> (addr: UInt, _default: Seqable<?T&Data>, _mapping: Seqable<KeyValue<BitPat, Seqable<?T&Data>>>) -> List<T> :
   val default = to-list(_default)
   val mapping = to-list(_mapping)
   val [keys, _values] = unzip(mapping)
@@ -167,7 +167,7 @@ public defn list-lookup<?T> (addr: UInt, _default: Streamable<?T&Data>, _mapping
   val matches = map(fn (key:BitPat) : key === addr, keys)
   to-list(stream(fn (i:Int): mux-case(default[i], stream(KeyValue{_,_[i]}, matches, values)), 0 to length(default)))
 
-public defn lookup<?T> (addr: UInt, default: ?T & Data, mapping: Streamable<KeyValue<BitPat, ?T & Data>>) -> T :
+public defn lookup<?T> (addr: UInt, default: ?T & Data, mapping: Seqable<KeyValue<BitPat, ?T & Data>>) -> T :
   head(list-lookup(addr, list(default), stream(fn (m): KeyValue(key(m), list(value(m))), mapping)))
 
 ;; Litte/big bit endian convertion: reverse the order of the bits in a UInt.
@@ -213,7 +213,7 @@ public defn UInt-to-OH (in: UInt, width: Int) -> UInt :
   if width == -1 : UInt(1) << in
   else : (UInt(1) << in[log2Up(width) - 1,0])[width - 1, 0]
 
-public defclass Counter
+public deftype Counter
 public defmulti inc (c: Counter) -> UInt
 public defmulti num (c: Counter) -> Int
 public defmulti value (c: Counter) -> UInt

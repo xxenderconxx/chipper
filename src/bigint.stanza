@@ -1,6 +1,6 @@
 defpackage bigint :
    import core
-   import verse
+   import collections
 
 val val-n-bytes = 4
 val val-n-bits = val-n-bytes * 8
@@ -30,7 +30,7 @@ public defn BigInt (len: Int) :
        generate<Char> :
          defn* loop (pos:Int) :
            if (pos >= 0) :
-             yield(if (d[pos / val-n-bits] >> (pos % val-n-bits))&1 == 1: '1' else: '0')
+             yield(if (d[pos / val-n-bits] >> (pos % val-n-bits)) & 1 == 1: '1' else: '0')
              loop(pos - 1)
          loop(len - 1)
      defmethod to-string (this) : string-join(["BigInt<" len ">(" to-bin(this) ")"])
@@ -144,7 +144,7 @@ public defn BigIntLit (s: String) : BigIntLit(s, -1)
 public defn BigIntLit (s: String, w:Int) :
   val base    = s[0]
   val shamt   = if base == 'b': 1 else if base == 'x': 4 else: 2
-  val digits  = substring(s, 1)
+  val digits  = s[1 to false]
   val len     = if w == -1: length(digits) * shamt else: w
   val lit     = BigInt(len)
   ;; println-all(["BASE " base " SHAMT " shamt " DIGITS " digits])
@@ -200,7 +200,7 @@ public defn cat (x:BigInt, y:BigInt) -> BigInt :
   ;; println-all(["< CAT " x " " y " => " res])
   res
 
-public defn cat (args:Streamable<BigInt>) -> BigInt :
+public defn cat (args:Seqable<BigInt>) -> BigInt :
   reduce(cat, args)
 
 public defn sub! (d: BigInt, s0: BigInt, s1: BigInt) -> BigInt :
@@ -215,11 +215,11 @@ public defn sub (x:BigInt, y:BigInt) -> BigInt : op(sub!, x, y)
 public defn neg! (d: BigInt, s0: BigInt) -> BigInt :
   var borrow = false
   for i in 0 to num-words(d) do :
-    d[i] = neg(s0[i]) - int(borrow)
+    d[i] = negate(s0[i]) - int(borrow)
     borrow = (s0[i] > 0) or (d[i] > 0)
   d
 
-public defn neg (x:BigInt) -> BigInt : op(neg!, x)
+public defn negate (x:BigInt) -> BigInt : op(neg!, x)
 
 public defn rsha! (d:BigInt, s0:BigInt, amount:Int) -> BigInt :
   val w = length(s0)
@@ -363,7 +363,7 @@ defn check (msg:String, x:BigInt) :
 ;; check("B< ", BigIntLit("b1010") << 1, BigIntLit(10 << 1, 5))
 check("S1 ", BigIntLit("xfafa") << 16, BigIntLit("xfafa0000", 32))
 ;; check("B< ", BigIntLit(5, 3) << 64, BigIntLit(5 << 1, 67))
-;; check("BN ", neg(BigIntLit(2, 8)), BigIntLit(-2, 8))
+;; check("BN ", negate(BigIntLit(2, 8)), BigIntLit(-2, 8))
 check("S2 ", BigIntLit("b11111010") << 8, BigIntLit("b1111101000000000", 16))
 check("C1 ", cat(BigIntLit("b11111010", 8), BigIntLit("b10111100", 8)), BigIntLit("b1111101010111100", 16))
 check("C3 ", cat(cat(BigIntLit("b1111"), BigIntLit("b1010")), cat(BigIntLit("b1011"), BigIntLit("b1100"))), BigIntLit("b1111101010111100", 16))

@@ -1,6 +1,6 @@
 defpackage firrtl/parser :
    import core
-   import verse
+   import collections
    import firrtl/ir
    import stz/parser
    import stz/lexer
@@ -27,10 +27,10 @@ defn* apply-suffix-ops (x, fs:List) :
    else : apply-suffix-ops(head(fs)(x), tail(fs))
 
 ;======== Parser Utilities ==============
-defn atom? (x) : unwrap-token(x) not-typeof List
+defn atom? (x) : not unwrap-token(x) is List
 
 defn primop (x:Symbol) : get?(OPERATORS, x, false)
-val OPERATORS = HashTable<Symbol, PrimOp>(symbol-hash)
+val OPERATORS = HashTable<Symbol, PrimOp>()
 OPERATORS[`add] = ADD-OP
 OPERATORS[`add-uu] = ADD-UU-OP
 OPERATORS[`add-us] = ADD-US-OP
@@ -139,11 +139,11 @@ defsyntax firrtl :
             (x) : FPE(form, "Expected an identifier here. Got ~ instead." << [x])
 
       ;Parses next form if integer literal
-      int = (?x) when unwrap-token(x) typeof Int :
+      int = (?x) when unwrap-token(x) is Int :
          unwrap-token(x)
 
       ;Parses next form if symbol
-      sym = (?x) when unwrap-token(x) typeof Symbol :
+      sym = (?x) when unwrap-token(x) is Symbol :
          unwrap-token(x)
          
    ;Error Handling Productions
@@ -178,7 +178,7 @@ defsyntax firrtl :
 
       ;Error if not a vec type
       vectype! = (?t:#type!) :
-         FPE(form, "Expected a vector type here.") when t not-typeof VectorType
+         FPE(form, "Expected a vector type here.") when not t is VectorType
          t
 
       ;Error if not an expression
@@ -195,7 +195,7 @@ defsyntax firrtl :
 
       ;Error if not a reference expression
       ref! = (?e:#exp!) :
-         FPE(form, "Expected a reference expression here.") when e not-typeof Ref
+         FPE(form, "Expected a reference expression here.") when not e is Ref
          e
    
    ;Main Circuit Production

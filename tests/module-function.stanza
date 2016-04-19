@@ -1,12 +1,10 @@
 ;See License.txt for details about licensing.
 
-#include("src/use-chipper.stanza")
-
 #use-syntax(core, chipper)
 
 defpackage counter :
    import core
-   import verse
+   import collections
    import chipper
 
 defbundle Adder :

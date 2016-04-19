@@ -4,12 +4,12 @@
 
 defpackage Fix :
    import core
-   import verse
+   import collections
    import firrtl/ir with :
       prefix => f
    import chipper
 
-public definterface Fix<B> <: Data
+public deftype Fix<B> <: Data
 defmulti type<?T,?B> (f:?T&Fix<?B>, nexp:Int, nw:fWidth)
 defmulti get-sext<?T,?B> (f:?T&Fix<?B>, src:Bits) -> UInt
 defmulti to-raw<?T,?B> (f:?T&Fix<?B>, a:Bits) -> B&Bits
@@ -18,7 +18,7 @@ defmulti to-uint<?T,?B> (f:?T&Fix<?B>) -> UInt
 
 defn to-raw<?T,?B> (f:?T&Fix<?B>) -> B&Bits : to-raw(f, to-uint(f))
 
-defclass UFix <: Fix<UInt>
+deftype UFix <: Fix<UInt>
 
 defn UFix (_exp:Int, w:fWidth, e:fExpression|False) :
    new UFix :      

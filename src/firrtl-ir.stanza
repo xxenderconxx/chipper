@@ -2,70 +2,80 @@
 
 defpackage firrtl/ir :
    import core
-   import verse
+   import collections
    
-public definterface Direction
-public val INPUT = new Direction
-public val OUTPUT = new Direction
+public defstruct Direction <: Equalable  :
+  id: Int
+public val INPUT = Direction(0)
+public val OUTPUT = Direction(1)
 
-public definterface Flip
-public val DEFAULT = new Flip
-public val REVERSE = new Flip
+defmethod equal? (d0: Direction, d1: Direction) : equal?(id(d0), id(d1))
 
-public definterface Width
+public defstruct Flip <: Equalable  :
+  id: Int
+public val DEFAULT = Flip(0)
+public val REVERSE = Flip(1)
+
+defmethod equal? (f0: Flip, f1: Flip) : equal?(id(f0), id(f1))
+
+public deftype Width
 public defstruct UnknownWidth <: Width
 public defstruct IntWidth <: Width :
    width: Int
 
-public definterface PrimOp
-public val ADD-OP = new PrimOp
-public val SUB-OP = new PrimOp
-public val MUL-OP = new PrimOp
-public val DIV-OP = new PrimOp
-public val MOD-OP = new PrimOp
-public val QUO-OP = new PrimOp
-public val REM-OP = new PrimOp
-public val ADD-WRAP-OP = new PrimOp
-public val SUB-WRAP-OP = new PrimOp
-public val LESS-OP = new PrimOp
-public val LESS-EQ-OP = new PrimOp
-public val GREATER-OP = new PrimOp
-public val GREATER-EQ-OP = new PrimOp
-public val EQUAL-OP = new PrimOp
-public val NEQUAL-OP = new PrimOp
-public val MUX-OP = new PrimOp
-public val PAD-OP = new PrimOp
-public val AS-UINT-OP = new PrimOp
-public val AS-SINT-OP = new PrimOp
-public val SHIFT-LEFT-OP = new PrimOp
-public val DYN-SHIFT-LEFT-OP = new PrimOp
-public val SHIFT-RIGHT-OP = new PrimOp
-public val DYN-SHIFT-RIGHT-OP = new PrimOp
-public val TO-UINT-OP = new PrimOp
-public val TO-SINT-OP = new PrimOp
-public val BIT-AND-OP = new PrimOp
-public val BIT-OR-OP = new PrimOp
-public val BIT-XOR-OP = new PrimOp
-public val BIT-XOR-REDUCE-OP = new PrimOp
-public val BIT-NOT-OP = new PrimOp
-public val CONCAT-OP = new PrimOp
-public val BIT-SELECT-OP = new PrimOp
-public val BITS-SELECT-OP = new PrimOp
+public defstruct PrimOp <: Equalable :
+  id: Int
 
-public val POW-OP = new PrimOp
-public val SIN-OP = new PrimOp
-public val COS-OP = new PrimOp
-public val TAN-OP = new PrimOp
-public val ASIN-OP = new PrimOp
-public val ACOS-OP = new PrimOp
-public val ATAN-OP = new PrimOp
-public val SQRT-OP = new PrimOp
-public val FLOOR-OP = new PrimOp
-public val CEIL-OP = new PrimOp
-public val ROUND-OP = new PrimOp
-public val LOG-OP = new PrimOp
+defmethod equal? (p0: PrimOp, p1: PrimOp) : equal?(id(p0), id(p1))
 
-public definterface Expression
+public val ADD-OP = PrimOp(0)
+public val SUB-OP = PrimOp(1)
+public val MUL-OP = PrimOp(2)
+public val DIV-OP = PrimOp(3)
+public val MOD-OP = PrimOp(4)
+public val QUO-OP = PrimOp(5)
+public val REM-OP = PrimOp(6)
+public val ADD-WRAP-OP = PrimOp(7)
+public val SUB-WRAP-OP = PrimOp(8)
+public val LESS-OP = PrimOp(9)
+public val LESS-EQ-OP = PrimOp(10)
+public val GREATER-OP = PrimOp(11)
+public val GREATER-EQ-OP = PrimOp(12)
+public val EQUAL-OP = PrimOp(13)
+public val NEQUAL-OP = PrimOp(14)
+public val MUX-OP = PrimOp(15)
+public val PAD-OP = PrimOp(16)
+public val AS-UINT-OP = PrimOp(17)
+public val AS-SINT-OP = PrimOp(18)
+public val SHIFT-LEFT-OP = PrimOp(19)
+public val DYN-SHIFT-LEFT-OP = PrimOp(20)
+public val SHIFT-RIGHT-OP = PrimOp(21)
+public val DYN-SHIFT-RIGHT-OP = PrimOp(22)
+public val TO-UINT-OP = PrimOp(23)
+public val TO-SINT-OP = PrimOp(24)
+public val BIT-AND-OP = PrimOp(25)
+public val BIT-OR-OP = PrimOp(26)
+public val BIT-XOR-OP = PrimOp(27)
+public val BIT-XOR-REDUCE-OP = PrimOp(28)
+public val BIT-NOT-OP = PrimOp(29)
+public val CONCAT-OP = PrimOp(30)
+public val BIT-SELECT-OP = PrimOp(31)
+public val BITS-SELECT-OP = PrimOp(32)
+
+public val POW-OP = PrimOp(33)
+public val SIN-OP = PrimOp(34)
+public val COS-OP = PrimOp(35)
+public val TAN-OP = PrimOp(36)
+public val ASIN-OP = PrimOp(37)
+public val ACOS-OP = PrimOp(38)
+public val ATAN-OP = PrimOp(39)
+public val SQRT-OP = PrimOp(40)
+public val FLOOR-OP = PrimOp(41)
+public val CEIL-OP = PrimOp(42)
+public val ROUND-OP = PrimOp(43)
+public val LOG-OP = PrimOp(44)
+
+public deftype Expression
 public defmulti type (e:Expression) -> Type
 
 public defstruct NoExp <: Expression
@@ -126,7 +136,7 @@ public defmethod pad-to (x:UIntValue, w:Int, pad:Int) -> Expression :
   ;; println-all(["PAD-TO L " x " W " w " PAD " pad])
   if pad == -1: Pad(x,UnknownWidth()) else: if pad == 0: x else: UIntValue(value(x), IntWidth(pad))
 
-public definterface Stmt
+public deftype Stmt
 public defstruct DefWire <: Stmt :
    name: Symbol
    type: Type
@@ -164,7 +174,7 @@ public defstruct OnReset <: Stmt :
 public defstruct EmptyStmt <: Stmt
 
 
-public definterface Type
+public deftype Type
 public defstruct FloType <: Type 
 public defstruct UIntType <: Type :
    width: Width

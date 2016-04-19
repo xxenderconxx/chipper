@@ -1,15 +1,12 @@
 ;See License.txt for details about licensing.
 
-#include("src/use-chipper.stanza")
-#include("src/use-tester.stanza")
-
 #use-syntax(core, chipper)
 
 defpackage gcd :
   import core
-  import verse
-  import tester
+  import collections
   import chipper
+  import tester
 
 defmodule GCD :
    input a: UInt<16>

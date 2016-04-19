@@ -4,12 +4,12 @@
 
 defpackage Real :
    import core
-   import verse
+   import collections
    import firrtl/ir with :
       prefix => f
    import chipper
 
-public definterface Real <: Scalar
+public deftype Real <: Scalar
 public defmulti lit-of<?T> (type:?T & Real, x:Float) -> T
 public defmulti zero<?T> (x:?T & Real) -> T
 
@@ -28,7 +28,7 @@ defn cmpop (op:fPrimOp, x:Real, y:Real) -> Bool :
       val ex = firrtl-exp(x)
       val ey = firrtl-exp(y)
 
-public defn neg<?T> (x:?T & Real) -> T  :                            zero(x) - x
+public defn negate<?T> (x:?T & Real) -> T  :                         zero(x) - x
 public defn plus<?T> (x:?T & Real, y:?T & Real) -> T :               binop(fADD-OP, x, y)
 public defn minus<?T> (x:?T & Real, y:?T & Real) -> T  :             binop(fSUB-OP, x, y)
 public defn times<?T> (x:?T & Real, y:?T & Real) -> T  :             binop(fMUL-OP, x, y)
@@ -53,7 +53,7 @@ public defn ceil<?T> (x:?T & Real) -> T :                            unaryop(fCE
 public defn round<?T> (x:?T & Real) -> T :                           unaryop(fROUND-OP, x)
 public defn log<?T> (x:?T & Real) -> T :                             unaryop(fLOG-OP, x)
 
-public defclass Flo <: Real
+public deftype Flo <: Real
 
 public defmethod print (o:OutputStream, x:Flo) : print-all(["Flo()"])
 
@@ -85,7 +85,7 @@ defmodule FloAdder :
   input in :   Flo()
   output out : Flo()
   println("FLO 2.1 = ~" << [2.1])
-  out := pow(neg(in + in), FloLit(2.1))
+  out := pow(negate(in + in), FloLit(2.1))
 
 defn main () :
    circuit c of FloAdder

@@ -27,14 +27,14 @@ defn hw-eval (handle, cmd:String) -> String :
 defn hw-close (handle) -> ? :
   ($do-prim ls hw-close-lo handle)
   
-public defclass Tester
-defmulti cmd (this, args:Streamable) -> String
+public deftype Tester
+defmulti cmd (this, args:Seqable) -> String
 public defmulti dut (t:Tester) -> String
 public defmulti peek (t:Tester, name: String) -> Int
 public defmulti peek (t:Tester, name: String, index: Int) -> Int
 public defmulti poke (t:Tester, name: String, value: Int) -> False
 public defmulti poke (t:Tester, name: String, index: Int, value: Int) -> False
-public defmulti add-ios (t:Tester, ios:Streamable<SmartIO<Data>>) -> False
+public defmulti add-ios (t:Tester, ios:Seqable<SmartIO<Data>>) -> False
 public defmulti step (t:Tester) -> False
 public defmulti reset (t:Tester) -> False
 public defmulti expect (t:Tester, name: String, value: Int) -> True|False
@@ -52,24 +52,24 @@ defn exe-path () :
     if i == 0 :
       exe
     else if exe[i] == '/' :
-      substring(exe, 0, i)
+      exe[0 to i]
     else :
       loop(i - 1)
   loop(length(exe) - 1)
   
-public definterface SmartIO<T> <: Lengthable & Streamable<T>
+public deftype SmartIO<T> <: Lengthable & Seqable<T>
 defmulti queue (s:SmartIO) -> Vector<Array<Int>>
 public defmulti channel<?T> (s:SmartIO<?T&Data>) -> DecoupledIO<T>
 defmulti step (s:SmartIO)
 
-public defn add<?T> (s:SmartIO<?T&Data>, d:Streamable<Int>) : add(queue(s), to-array(d))
+public defn add<?T> (s:SmartIO<?T&Data>, d:Seqable<Int>) : add(queue(s), to-tuple(d))
 public defn pop<?T> (s:SmartIO<?T&Data>) -> Array<Int> : pop(queue(s))
 public defn peek<?T> (s:SmartIO<?T&Data>) -> Array<Int> : peek(queue(s))
 public defn clear (s:SmartIO) : clear(queue(s))
 defmethod length (s:SmartIO) : length(queue(s))
-defmethod to-stream (s:SmartIO) : to-stream(queue(s))
+defmethod to-seq (s:SmartIO) : to-seq(queue(s))
 
-public defclass Source<T> <: SmartIO<T>
+public deftype Source<T> <: SmartIO<T>
 public defn Source<?T> (t:Tester, chan:DecoupledIO<?T&Data>) :
   val q = Vector<Array<Int>>()
   new Source<T&Data> :
@@ -84,7 +84,7 @@ public defn Source<?T> (t:Tester, chan:DecoupledIO<?T&Data>) :
       else :
         poke(t, chan.valid, 0)
       
-public defclass Sink<T> <: SmartIO<T>
+public deftype Sink<T> <: SmartIO<T>
 public defn Sink<?T> (t:Tester, chan:DecoupledIO<?T&Data>) :
   val q = Vector<Array<Int>>()
   new Sink<T&Data> :
@@ -103,9 +103,9 @@ public defn Tester (dut:String) -> Tester :
   val smart-ios = Vector<SmartIO<Data>>()
   new Tester :
     defmethod dut (this) -> String : dut
-    defmethod cmd (this, args:Streamable) -> String :
+    defmethod cmd (this, args:Seqable) -> String :
       hw-eval(handle, string-join(args))
-    defmethod add-ios (this, ios:Streamable<SmartIO<Data>>) :
+    defmethod add-ios (this, ios:Seqable<SmartIO<Data>>) :
       do(add{smart-ios, _}, ios)
     defmethod poke (this, name: String, value: Int) :
       val str = cmd(this, ["wire_poke " name " " value])
@@ -169,18 +169,18 @@ public defn peek (t:Tester, d:Bits) -> Int :
 public defn expect (t:Tester, d:Bits, v:Int) :
   expect(t, to-string(debug-name(dut(t), d)), v)
 
-public defn poke*<?T> (t:Tester, d:?T&Data, v:Streamable<Int>) :
+public defn poke*<?T> (t:Tester, d:?T&Data, v:Seqable<Int>) :
   for (ed in flatten(d), ev in v) do :
     poke(t, to-string(debug-name(dut(t), ed)), ev)
 
 public defn peek*<?T> (t:Tester, d:?T&Data) -> Array<Int> :
-  to-array(for e in flatten(d) stream :
+  to-tuple(for e in flatten(d) seq :
              peek(t, to-string(debug-name(dut(t), e))))
   
 ;; public defn expect (t:Tester, e:Data, v:Int) :
 ;;   expect(t, to-string(debug-name(dut(t), e)), v)
 
-public defn expect (isGood:True|False, args:Streamable) :
+public defn expect (isGood:True|False, args:Seqable) :
   if not isGood :
     println-all(args)
   isGood
@@ -189,7 +189,7 @@ public defn int (x:True|False) -> Int :
   if x: 1 else: 0
 
 ;; defn parse-args (str:String) :
-;;    val args = to-stream(unwrap-all(lex(str)))
+;;    val args = to-seq(unwrap-all(lex(str)))
 ;;    val arg  = next(args)
 ;;    to-string(arg)
 ;; 

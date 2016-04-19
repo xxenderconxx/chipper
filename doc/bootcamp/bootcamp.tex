@@ -432,10 +432,18 @@ max2(x, y)
 
 {\lstset{basicstyle={\scriptsize\ttfamily}}
 \begin{stanza}
-defmodule MaxN (n: Int, w: Int) :
-  input in : UInt<w>[4]
+defmodule MaxN (n:Int, w:Int) :
+  input in : UInt<w>[n]
   output out : UInt<w>
   out := reduce(max2, in)
+
+...
+
+inst mx4 : Max4(4, w)
+mx4.in[0] := a
+mx4.in[1] := b
+mx4.in[2] := b
+mx4.in[3] := c
 \end{stanza}
 }
 
@@ -467,7 +475,7 @@ defmodule MaxN (n: Int, w: Int) :
 \begin{frame}[fragile]{Updating the Chipper Tutorial}
 
 \begin{stanza}
-cd chipper-tutorial
+cd ucb-bar/chipper-tutorial
 git pull
 cd ../chipper
 git pull
@@ -2213,9 +2221,9 @@ defstruct DefWire <: Stmt :
    name: Symbol
    type: Type
 ...
-defstruct Connect <: Stmt :
-   loc: Expression
-   exp: Expression
+defstruct Node <: Stmt :
+   name: Symbol
+   value: Expression
 ...
 definterface Expression
 defmulti type (e:Expression) -> Type
@@ -2233,6 +2241,51 @@ defstruct UIntType <: Type :
 ...
 \end{scala}
 }
+\end{columns}
+
+\end{frame}
+
+\begin{frame}[fragile]{Chipper/FIRRTL Construction}
+
+\begin{columns}
+
+\column{0.45\textwidth}
+chipper
+\begin{stanza}
+UIntVal(1) + UIntVal(1)
+\end{stanza}
+
+{\lstset{basicstyle={\tiny\ttfamily}}
+\begin{stanza}
+defn UIntVal (v:Int) :
+  val e = fUIntValue(v, fIntWidth(w))
+  handle(UInt(w), e)
+
+defn plus (x:UInt, y:UInt) -> UInt:
+  handle(UInt(),
+         DefNode(gensym("T"),
+                 fDoPrim(fADD-WRAP-OP,
+                         list(firrtl-exp(x),
+                              firrtl-exp(y)), 
+                         ...)
+\end{stanza}
+}
+
+\column{0.45\textwidth}
+
+firrtl
+{\lstset{basicstyle={\tiny\ttfamily}}
+\begin{stanza}
+public defstruct UIntValue <: Expression :
+  value: Int
+  width: Width
+
+public defstruct DefNode <: Stmt :
+   name: Symbol
+   value: Expression
+\end{stanza}
+}
+
 \end{columns}
 
 \end{frame}
